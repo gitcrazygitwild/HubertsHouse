@@ -18,15 +18,15 @@ body{
 
 #app{
   max-width: 1100px;
-  margin: 28px auto;
-  padding: 0 16px;
+  margin: 18px auto;
+  padding: 0 12px;
 }
 
 .card{
   background: rgba(17,26,51,0.92);
   border: 1px solid var(--border);
   border-radius: 14px;
-  padding: 18px;
+  padding: 14px;
   box-shadow: 0 20px 60px rgba(0,0,0,0.25);
 }
 
@@ -48,8 +48,8 @@ h1{ margin: 0 0 8px; font-size: 28px; }
   margin-top: 12px;
 }
 
-input{
-  flex:1;
+input, select, textarea{
+  width: 100%;
   padding: 12px 12px;
   border-radius: 10px;
   border: 1px solid var(--border);
@@ -57,7 +57,8 @@ input{
   color: var(--text);
   outline: none;
 }
-input:focus{
+textarea{ resize: vertical; }
+input:focus, select:focus, textarea:focus{
   border-color: rgba(122,162,255,0.6);
   box-shadow: 0 0 0 3px rgba(122,162,255,0.16);
 }
@@ -75,20 +76,28 @@ button.secondary{
   border-color: var(--border);
   background: rgba(255,255,255,0.06);
 }
+button.danger{
+  border-color: rgba(255,107,107,0.55);
+  background: rgba(255,107,107,0.15);
+}
 
 .topbar{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  margin-bottom: 14px;
+  gap: 10px;
+  margin-bottom: 12px;
 }
-
 .brand{
   display:flex;
   align-items:center;
   gap:10px;
 }
-
+.actions{
+  display:flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
 .pill{
   font-size: 12px;
   padding: 4px 8px;
@@ -97,9 +106,7 @@ button.secondary{
   background: rgba(255,255,255,0.05);
 }
 
-#calendarWrap{
-  padding: 12px;
-}
+#calendarWrap{ padding: 10px; }
 
 /* FullCalendar tweaks */
 .fc{
@@ -112,3 +119,90 @@ button.secondary{
 }
 .fc .fc-toolbar-title{ font-size: 18px; }
 .fc .fc-button{ border-radius: 10px; }
+
+/* Mobile: make toolbar more compact */
+@media (max-width: 720px){
+  #app{ margin: 10px auto; }
+  .fc .fc-toolbar{
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .fc .fc-toolbar-chunk{
+    display:flex;
+    justify-content:center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+/* Floating add button */
+#fab{
+  position: fixed;
+  right: 16px;
+  bottom: 18px;
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  font-size: 28px;
+  line-height: 0;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(122,162,255,0.55);
+  background: rgba(122,162,255,0.28);
+  box-shadow: 0 18px 44px rgba(0,0,0,0.35);
+}
+
+/* Modal */
+.modal-backdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  display:flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+}
+.modal{
+  width: min(560px, 100%);
+  padding: 14px;
+}
+.modal-header{
+  display:flex;
+  justify-content: space-between;
+  align-items:center;
+  margin-bottom: 10px;
+}
+.icon-btn{
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 10px;
+}
+.modal-body{ display:flex; flex-direction: column; gap: 10px; }
+.field span{ display:block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.row{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 520px){
+  .row{ grid-template-columns: 1fr; }
+}
+
+.check{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  user-select: none;
+}
+.check input{ width: auto; }
+
+.modal-actions{
+  display:flex;
+  gap: 10px;
+  align-items:center;
+  margin-top: 4px;
+}
+.spacer{ flex: 1; }
