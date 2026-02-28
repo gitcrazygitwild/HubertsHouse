@@ -1,8 +1,6 @@
-// Mack Calendar — FULL FEATURE VERSION
-// Firebase sync + mobile-friendly modal + notes + his/hers/both colors
-// Password gate required EVERY visit (no remember; not real security)
+// Mack Calendar — full features
+// Password required EVERY visit (no remembering; not real security)
 
-// ---------- Firebase (CDN module imports) ----------
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
 import {
   getFirestore,
@@ -17,7 +15,6 @@ import {
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
 
-// Your Firebase config
 const firebaseConfig = {
   apiKey: "AIzaSyBEXNyX6vIbHwGCpI3fpVUb5llubOjt9qQ",
   authDomain: "huberts-house.firebaseapp.com",
@@ -28,13 +25,13 @@ const firebaseConfig = {
   measurementId: "G-CX5MN6WBFP"
 };
 
-// ---------- Gate (required every visit) ----------
+// ---------- Gate ----------
 const PASSWORD = "Mack";
 const gate = document.getElementById("gate");
 const gateForm = document.getElementById("gateForm");
 const gateInput = document.getElementById("gateInput");
 
-// show gate by default (HTML should be <div id="gate" class="gate">)
+// gate starts visible by default
 gate?.classList.remove("hidden");
 
 gateForm?.addEventListener("submit", (e) => {
@@ -50,19 +47,17 @@ gateForm?.addEventListener("submit", (e) => {
   }
 });
 
-// Lock button re-opens gate (does NOT remember session)
 const logoutBtn = document.getElementById("logoutBtn");
 logoutBtn?.addEventListener("click", () => {
   gate.classList.remove("hidden");
   gateInput?.focus?.();
 });
 
-// ---------- UI elements ----------
+// ---------- Top buttons ----------
 const todayBtn = document.getElementById("todayBtn");
 const statusEl = document.getElementById("status");
-const fab = document.getElementById("fab");
 
-// Modal elements
+// ---------- Modal elements ----------
 const backdrop = document.getElementById("modalBackdrop");
 const modalClose = document.getElementById("modalClose");
 const cancelBtn = document.getElementById("cancelBtn");
@@ -77,7 +72,8 @@ const evtAllDay = document.getElementById("evtAllDay");
 const evtOwner = document.getElementById("evtOwner");
 const evtNotes = document.getElementById("evtNotes");
 
-// Ensure modal is hidden initially
+const fab = document.getElementById("fab");
+
 backdrop?.classList.add("hidden");
 
 // ---------- Owner colors ----------
@@ -88,11 +84,10 @@ const OWNER_STYLE = {
 };
 
 // ---------- App state ----------
-let db, eventsCol;
-let calendar;
+let db, eventsCol, calendar;
 let editingEventId = null;
 
-// ---------- Init Firebase + Calendar ----------
+// ---------- Init ----------
 initApp().catch((err) => {
   console.error(err);
   statusEl.textContent = "Sync: error";
@@ -101,6 +96,7 @@ initApp().catch((err) => {
 
 async function initApp() {
   statusEl.textContent = "Sync: connecting…";
+
   const app = initializeApp(firebaseConfig);
   db = getFirestore(app);
   eventsCol = collection(db, "events");
@@ -113,9 +109,7 @@ async function initApp() {
     snap.forEach((d) => events.push({ id: d.id, ...d.data() }));
 
     calendar.removeAllEvents();
-    for (const e of events) {
-      calendar.addEvent(normalizeEventForCalendar(e));
-    }
+    for (const e of events) calendar.addEvent(normalizeEventForCalendar(e));
 
     statusEl.textContent = "Sync: live";
   }, (err) => {
@@ -141,29 +135,17 @@ function initCalendarUI() {
     longPressDelay: 350,
     selectLongPressDelay: 350,
 
-    // Tap a day to create event @ 9am (month view feels like Google Calendar)
     dateClick: (info) => {
       const start = new Date(info.date);
       start.setHours(9, 0, 0, 0);
       const end = new Date(start.getTime() + 60 * 60 * 1000);
-      openModal({
-        mode: "create",
-        title: "",
-        start,
-        end,
-        allDay: false,
-        owner: "both",
-        notes: ""
-      });
+      openModal({ mode: "create", title: "", start, end, allDay: false, owner: "both", notes: "" });
     },
 
-    // Drag-select to create (works best in week/day views)
     select: (info) => openCreateModalFromSelection(info),
 
-    // Tap event to edit
     eventClick: (info) => openEditModalFromEvent(info.event),
 
-    // Persist move/resize
     eventDrop: async (info) => persistMovedEvent(info.event),
     eventResize: async (info) => persistMovedEvent(info.event),
   });
@@ -178,12 +160,11 @@ function initCalendarUI() {
     openModal({ mode: "create", title: "", start, end, allDay: false, owner: "both", notes: "" });
   });
 
-  // Modal close handlers
   modalClose?.addEventListener("click", closeModal);
   cancelBtn?.addEventListener("click", closeModal);
   backdrop?.addEventListener("click", (e) => { if (e.target === backdrop) closeModal(); });
 
-  // All-day toggle that preserves date value
+  // IMPORTANT FIX: all-day toggle preserves date/time values
   evtAllDay?.addEventListener("change", () => {
     const allDay = evtAllDay.checked;
 
@@ -197,13 +178,11 @@ function initCalendarUI() {
     evtEnd.value = prevEnd ? convertInputValue(prevEnd, allDay) : "";
   });
 
-  // Save
   eventForm?.addEventListener("submit", async (e) => {
     e.preventDefault();
     await handleSave();
   });
 
-  // Delete
   deleteBtn?.addEventListener("click", async () => {
     if (!editingEventId) return;
     if (!confirm("Delete this event?")) return;
@@ -215,8 +194,6 @@ function initCalendarUI() {
 function openCreateModalFromSelection(info) {
   const start = info.start;
   let end = info.end || null;
-
-  // Default +1h if end not provided and not all-day
   if (!end && !info.allDay) end = new Date(start.getTime() + 60 * 60 * 1000);
 
   openModal({
@@ -251,14 +228,14 @@ function openModal(payload) {
   modalTitle.textContent = isEdit ? "Edit event" : "New event";
   deleteBtn.classList.toggle("hidden", !isEdit);
 
-  // Default end time if creating a timed event with no end
+  // If creating a timed event without end, default +1h
   if (!isEdit && !payload.allDay && !payload.end) {
     payload.end = new Date(payload.start.getTime() + 60 * 60 * 1000);
   }
 
   evtTitle.value = payload.title ?? "";
-
   evtAllDay.checked = !!payload.allDay;
+
   setDateTimeInputMode(evtAllDay.checked);
 
   evtStart.value = toInputValue(payload.start, evtAllDay.checked);
@@ -283,11 +260,7 @@ function setDateTimeInputMode(isAllDay) {
 
 function convertInputValue(value, allDay) {
   if (!value) return "";
-  if (allDay) {
-    // datetime-local -> date
-    return value.includes("T") ? value.split("T")[0] : value;
-  }
-  // date -> datetime-local (default 9am)
+  if (allDay) return value.includes("T") ? value.split("T")[0] : value;
   if (!value.includes("T")) return `${value}T09:00`;
   return value;
 }
@@ -348,17 +321,14 @@ function normalizeEventForCalendar(e) {
     backgroundColor: style.backgroundColor,
     borderColor: style.borderColor,
     textColor: style.textColor,
-    extendedProps: {
-      owner: e.owner || "both",
-      notes: e.notes || ""
-    }
+    extendedProps: { owner: e.owner || "both", notes: e.notes || "" }
   };
 }
 
 function toInputValue(dateObj, allDay) {
   if (!(dateObj instanceof Date)) dateObj = new Date(dateObj);
-
   const pad = (n) => String(n).padStart(2, "0");
+
   const y = dateObj.getFullYear();
   const m = pad(dateObj.getMonth() + 1);
   const d = pad(dateObj.getDate());
