@@ -1,16 +1,3 @@
-<!-- index.html — Hubert’s House (UPDATED for your latest layout requests)
-     Changes:
-     - Theme + Log out moved into the TOP ROW with the cat
-     - "Hubert’s House" nudged up; "Sync: live" moved under it (stacked)
-     - Theme button label changed to dice 🎲
-     - Removed Dinner/Groceries/Weekend quick chips
-     - Owner/All moved up to align with Today + List range on one row
-     - Adds 3 "dealers choice" UI hooks (JS optional):
-         1) Compact "Quick Add" menu button (➕) near search (id="quickAddBtn")
-         2) Ambient "sparkle" badge next to title (span id="sparkleBadge")
-         3) Mini "Focus" toggle (id="focusToggle") to hide panels (JS can implement)
--->
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -20,11 +7,10 @@
 
   <!-- FullCalendar -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css">
-  <link rel="stylesheet" href="./styles.css?v=20260228_huberts_house_v5" />
+  <link rel="stylesheet" href="./styles.css?v=20260228_huberts_house_v7" />
 </head>
 
 <body>
-
   <!-- Gate overlay -->
   <div id="gate" class="gate">
     <div class="gate-card">
@@ -35,7 +21,7 @@
         <input
           id="gateInput"
           class="gate-input"
-          type="text"
+          type="password"
           inputmode="text"
           autocomplete="off"
           autocapitalize="none"
@@ -56,41 +42,33 @@
   </div>
 
   <div id="app">
-
     <!-- Top bar -->
     <header class="topbar">
-  <div class="topbar-row">
+      <div class="topbar-row">
+        <div class="brand">
+          <a class="catlink" href="https://gitcrazygitwild.github.io/Flapurr/" target="_blank" rel="noopener">🐈‍⬛</a>
 
-    <div class="brand">
-      <a class="catlink" href="https://gitcrazygitwild.github.io/Flapurr/" target="_blank" rel="noopener">🐈‍⬛</a>
+          <div class="brand-stack">
+            <div class="brand-title-row">
+              <div class="brand-title">Hubert’s House</div>
+              <span id="sparkleBadge" class="sparkle-badge" title="You’re crushing it">✨</span>
+              <span id="status" class="pill" data-status="connecting">Sync: connecting…</span>
+            </div>
+          </div>
+        </div>
 
-      <div class="brand-stack">
-        <div class="brand-title-row">
-          <div class="brand-title">Hubert’s House</div>
-          <span id="sparkleBadge" class="sparkle-badge" title="You’re crushing it">✨</span>
-
-          <!-- ✅ Sync pill now inline with ✨ -->
-          <span id="status" class="pill" data-status="connecting">Sync: connecting…</span>
+        <div class="actions actions-toprow">
+          <button id="focusBtn" class="btn btn-ghost btn-focus" type="button" aria-pressed="false" title="Toggle focus mode">Focus</button>
+          <button id="themeBtn" class="btn btn-ghost" type="button" title="Change theme & density">🎲</button>
+          <button id="logoutBtn" class="btn btn-ghost" type="button">Log out</button>
         </div>
       </div>
-    </div>
-
-    <!-- ✅ Top-row controls -->
-    <div class="actions actions-toprow">
-      <button id="focusBtn" class="btn btn-ghost btn-focus" type="button" aria-pressed="false" title="Toggle focus mode">Focus</button>
-      <button id="themeBtn" class="btn btn-ghost" type="button" title="Change theme & density">🎲</button>
-      <button id="logoutBtn" class="btn btn-ghost" type="button">Log out</button>
-    </div>
-
-  </div>
-</header>
+    </header>
 
     <!-- Search row -->
     <div class="search-row-wrap">
       <div class="search-row">
         <input id="searchInput" class="search" type="search" placeholder="Search events…" />
-
-        <!-- Dealers choice #2: quick add menu button (JS optional) -->
         <button id="quickAddBtn" class="btn btn-ghost" type="button" title="Quick add">＋</button>
 
         <div class="search-filters-wrap">
@@ -115,18 +93,12 @@
           </div>
         </div>
       </div>
-
-      <!-- Dealers choice #3: Focus toggle (JS optional; can hide panels) -->
-   
     </div>
 
     <!-- Calendar card -->
     <div id="calendarWrap" class="card">
-
-      <!-- Tools row: Today + List range + Owner all on ONE ROW -->
       <div class="calendar-tools">
         <div class="tools-left">
-
           <button id="todayBtn" class="btn btn-ghost" type="button">Today</button>
 
           <label class="mini-label">
@@ -149,11 +121,9 @@
               <option value="custom">Other</option>
             </select>
           </label>
-
         </div>
       </div>
 
-      <!-- Compact legend -->
       <div class="legend-inline">
         <div class="item"><span class="dot dot-hanry"></span>hanry</div>
         <div class="item"><span class="dot dot-karena"></span>Karena</div>
@@ -177,14 +147,12 @@
     <div id="outstanding" class="panel card">
       <div class="panel-header tight">
         <span>Events with unchecked items</span>
-
         <div class="panel-controls">
           <button id="outPrev" class="btn btn-ghost" type="button">‹</button>
           <span id="outPage" class="tiny muted">Page 1 / 1</span>
           <button id="outNext" class="btn btn-ghost" type="button">›</button>
         </div>
       </div>
-
       <div id="outstandingList" class="panel-list tiny muted">Loading…</div>
     </div>
 
@@ -211,7 +179,6 @@
             <span>Start</span>
             <input id="evtStart" type="datetime-local" required />
           </label>
-
           <label class="field">
             <span>End</span>
             <input id="evtEnd" type="datetime-local" />
@@ -333,18 +300,10 @@
           <label class="field">
             <span>Month</span>
             <select id="jumpMonthSelect">
-              <option value="0">January</option>
-              <option value="1">February</option>
-              <option value="2">March</option>
-              <option value="3">April</option>
-              <option value="4">May</option>
-              <option value="5">June</option>
-              <option value="6">July</option>
-              <option value="7">August</option>
-              <option value="8">September</option>
-              <option value="9">October</option>
-              <option value="10">November</option>
-              <option value="11">December</option>
+              <option value="0">January</option><option value="1">February</option><option value="2">March</option>
+              <option value="3">April</option><option value="4">May</option><option value="5">June</option>
+              <option value="6">July</option><option value="7">August</option><option value="8">September</option>
+              <option value="9">October</option><option value="10">November</option><option value="11">December</option>
             </select>
           </label>
 
@@ -365,6 +324,6 @@
 
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
-  <script type="module" src="./app.js?v=20260228_huberts_house_v5"></script>
+  <script type="module" src="./app.js?v=20260228_huberts_house_v7"></script>
 </body>
 </html>
