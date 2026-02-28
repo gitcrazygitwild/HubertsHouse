@@ -64,6 +64,36 @@ const logoutBtn = document.getElementById("logoutBtn");
 const todayBtn = document.getElementById("todayBtn");
 const themeBtn = document.getElementById("themeBtn");
 
+const LS_THEME = "huberts_house_theme_v1";
+const LS_DENSITY = "huberts_house_density_v1";
+
+const THEMES = ["aurora", "sunset", "mint", "grape", "mono"];
+const DENSITIES = ["compact", "cozy"];
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  localStorage.setItem(LS_THEME, theme);
+}
+function applyDensity(d) {
+  document.documentElement.dataset.density = d;
+  localStorage.setItem(LS_DENSITY, d);
+}
+
+function cycleThemeAndDensity() {
+  const curTheme = document.documentElement.dataset.theme || "aurora";
+  const curDensity = document.documentElement.dataset.density || "cozy";
+  const nextTheme = THEMES[(THEMES.indexOf(curTheme) + 1) % THEMES.length];
+  const nextDensity = DENSITIES[(DENSITIES.indexOf(curDensity) + 1) % DENSITIES.length];
+  applyTheme(nextTheme);
+  applyDensity(nextDensity);
+}
+
+themeBtn?.addEventListener("click", cycleThemeAndDensity);
+
+// initial (persisted)
+applyTheme(localStorage.getItem(LS_THEME) || "aurora");
+applyDensity(localStorage.getItem(LS_DENSITY) || "cozy");
+
 const searchInput = document.getElementById("searchInput");
 const searchFiltersBtn = document.getElementById("searchFiltersBtn");
 const searchFilters = document.getElementById("searchFilters");
@@ -97,14 +127,21 @@ clearDatesBtn?.addEventListener("click", () => {
   applySearchAndFilters();
 });
 
-focusToggle?.addEventListener("change", () => {
-  const on = !!focusToggle.checked;
+const focusBtn = document.getElementById("focusBtn");
+
+function setFocusMode(on) {
   document.body.classList.toggle("focus-on", on);
-  // In focus mode, hide panels
+  focusBtn?.setAttribute("aria-pressed", on ? "true" : "false");
+
   const upcoming = document.getElementById("upcoming");
   const outstanding = document.getElementById("outstanding");
   if (upcoming) upcoming.style.display = on ? "none" : "";
   if (outstanding) outstanding.style.display = on ? "none" : "";
+}
+
+focusBtn?.addEventListener("click", () => {
+  const on = document.body.classList.contains("focus-on");
+  setFocusMode(!on);
 });
 
 // ---------- Modal: event editor ----------
@@ -235,19 +272,12 @@ let ownerFilterValue = "all";
 
 // Theme
 const THEMES = ["aurora", "sunset", "mint", "grape", "mono"];
-function pickTheme() {
-  const t = THEMES[Math.floor(Math.random() * THEMES.length)];
-  document.documentElement.dataset.theme = t;
-  // turn on/off designs sometimes
-  document.documentElement.classList.toggle("designs-on", Math.random() < 0.75);
-}
-themeBtn?.addEventListener("click", () => pickTheme());
-pickTheme();
+
 
 // ---------- Init ----------
 async function initApp() {
   statusEl.textContent = "Sync: connecting…";
-
+statusEl.dataset.status = "connecting";
   const app = initializeApp(firebaseConfig);
   db = getFirestore(app);
   eventsCol = collection(db, "events");
@@ -266,9 +296,11 @@ async function initApp() {
     renderPanels();
 
     statusEl.textContent = "Sync: live";
+    statusEl.dataset.status = "live";
   }, (err) => {
     console.error(err);
     statusEl.textContent = "Sync: error (check rules)";
+    statusEl.dataset.status = "error";
   });
 }
 
