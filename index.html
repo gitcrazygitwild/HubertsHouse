@@ -59,27 +59,31 @@
 
     <!-- Top bar -->
     <header class="topbar">
+  <div class="topbar-row">
 
-      <!-- LEFT: cat + stacked title/status -->
-      <div class="brand">
-        <a class="catlink" href="https://gitcrazygitwild.github.io/Flapurr/" target="_blank" rel="noopener">🐈‍⬛</a>
+    <div class="brand">
+      <a class="catlink" href="https://gitcrazygitwild.github.io/Flapurr/" target="_blank" rel="noopener">🐈‍⬛</a>
 
-        <div class="brand-stack">
-          <div class="brand-title-row">
-            <div class="brand-title">Hubert’s House</div>
-            <!-- Dealers choice #1: tiny animated badge (optional JS/CSS) -->
-            <span id="sparkleBadge" class="sparkle-badge" title="You’re crushing it">✨</span>
-          </div>
-          <span id="status" class="pill">Sync: connecting…</span>
+      <div class="brand-stack">
+        <div class="brand-title-row">
+          <div class="brand-title">Hubert’s House</div>
+          <span id="sparkleBadge" class="sparkle-badge" title="You’re crushing it">✨</span>
+
+          <!-- ✅ Sync pill now inline with ✨ -->
+          <span id="status" class="pill" data-status="connecting">Sync: connecting…</span>
         </div>
       </div>
+    </div>
 
-      <!-- RIGHT: Theme + Log out aligned with cat row -->
-      <div class="actions actions-toprow">
-        <button id="themeBtn" class="btn btn-ghost" type="button" title="Randomize theme">🎲</button>
-        <button id="logoutBtn" class="btn btn-ghost" type="button">Log out</button>
-      </div>
-    </header>
+    <!-- ✅ Top-row controls -->
+    <div class="actions actions-toprow">
+      <button id="focusBtn" class="btn btn-ghost btn-focus" type="button" aria-pressed="false" title="Toggle focus mode">Focus</button>
+      <button id="themeBtn" class="btn btn-ghost" type="button" title="Change theme & density">🎲</button>
+      <button id="logoutBtn" class="btn btn-ghost" type="button">Log out</button>
+    </div>
+
+  </div>
+</header>
 
     <!-- Search row -->
     <div class="search-row-wrap">
@@ -113,12 +117,7 @@
       </div>
 
       <!-- Dealers choice #3: Focus toggle (JS optional; can hide panels) -->
-      <div class="focus-row">
-        <label class="check focus-toggle">
-          <input id="focusToggle" type="checkbox" />
-          <span>Focus mode</span>
-        </label>
-      </div>
+   
     </div>
 
     <!-- Calendar card -->
