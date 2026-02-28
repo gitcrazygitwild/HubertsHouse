@@ -1,13 +1,12 @@
-/* styles.css — Hubert’s House (v7)
-   Updates for your latest requests:
-   - Crisp UI: tighter spacing, cleaner borders, sharper typography
-   - Removed Sync pill styling (not used now)
-   - Search options popover only (Options button hidden by default; JS will show when searching)
-   - Removed redundant quick-add button styling (no longer in HTML)
-   - FAB always visible bottom-right with higher z-index
-   - Focus button compact + clear active state
+/* styles.css — Hubert’s House (v8)
+   Changes vs v7:
+   - Removed all focus-mode UI styling (focus button removed)
+   - Slightly crisper topbar spacing + prevents title overlap
+   - Keeps FAB fixed + high z-index
+   - Adds theme hooks: [data-theme="..."] can change fonts/colors/background/designs
 */
 
+/* ---------------- Base tokens ---------------- */
 :root{
   --bg:#0b1020;
   --bg2:#070b17;
@@ -26,14 +25,94 @@
   --shadow2: 0 18px 50px rgba(0,0,0,.50);
 
   --event-font: 11px;
+
+  /* Themeable font knobs (JS will toggle by theme) */
+  --font-ui: -apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+  --font-display: var(--font-ui);
 }
 
+/* ---------------- Theme presets (JS sets data-theme) ---------------- */
+/* AURORA (default-ish) */
+:root[data-theme="aurora"]{
+  --accent:#7aa2ff;
+  --blob1:rgba(122,162,255,.50);
+  --blob2:rgba(255,107,107,.38);
+  --blob3:rgba(116,217,155,.30);
+  --bg:#0b1020;
+  --bg2:#070b17;
+  --card:rgba(17,26,53,.72);
+  --font-display: var(--font-ui);
+}
+
+/* SUNSET */
+:root[data-theme="sunset"]{
+  --accent:#ff7a7a;
+  --blob1:rgba(255,122,122,.55);
+  --blob2:rgba(255,196,107,.42);
+  --blob3:rgba(122,162,255,.22);
+  --bg:#12070b;
+  --bg2:#0b0507;
+  --card:rgba(36,18,28,.72);
+  --font-display: var(--font-ui);
+}
+
+/* MINT */
+:root[data-theme="mint"]{
+  --accent:#74d99b;
+  --blob1:rgba(116,217,155,.55);
+  --blob2:rgba(122,162,255,.26);
+  --blob3:rgba(187,134,252,.20);
+  --bg:#061312;
+  --bg2:#04100f;
+  --card:rgba(12,34,30,.72);
+  --font-display: var(--font-ui);
+}
+
+/* GRAPE */
+:root[data-theme="grape"]{
+  --accent:#bb86fc;
+  --blob1:rgba(187,134,252,.55);
+  --blob2:rgba(122,162,255,.26);
+  --blob3:rgba(255,107,107,.18);
+  --bg:#0f0715;
+  --bg2:#09040e;
+  --card:rgba(26,16,40,.72);
+  --font-display: var(--font-ui);
+}
+
+/* MONO */
+:root[data-theme="mono"]{
+  --accent:#e9ecf1;
+  --blob1:rgba(233,236,241,.22);
+  --blob2:rgba(233,236,241,.16);
+  --blob3:rgba(233,236,241,.12);
+  --bg:#090b10;
+  --bg2:#05070b;
+  --card:rgba(16,18,24,.76);
+  --font-display: var(--font-ui);
+}
+
+/* Optional: “designs-on” can add subtle grain/shine */
+:root.designs-on body::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  background:
+    radial-gradient(circle at 15% 25%, rgba(255,255,255,.07), transparent 40%),
+    radial-gradient(circle at 85% 65%, rgba(255,255,255,.05), transparent 45%),
+    linear-gradient(180deg, rgba(255,255,255,.03), transparent 30%, rgba(0,0,0,.10));
+  mix-blend-mode:overlay;
+  opacity:.45;
+}
+
+/* ---------------- Global ---------------- */
 *{ box-sizing:border-box; }
 html,body{ height:100%; }
 
 body{
   margin:0;
-  font-family:-apple-system,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+  font-family:var(--font-ui);
   color:var(--text);
   background:
     radial-gradient(circle at 20% 30%, var(--blob1), transparent 45%),
@@ -60,7 +139,7 @@ body{ animation:floatBlobs 20s ease-in-out infinite; }
 /* Prevent iOS zoom on inputs */
 input, select, textarea{ font-size:16px; }
 
-/* Buttons */
+/* ---------------- Buttons ---------------- */
 .btn{
   padding:8px 14px;
   border-radius:14px;
@@ -96,7 +175,7 @@ input, select, textarea{ font-size:16px; }
   background:rgba(255,107,107,.16);
 }
 
-/* Cards */
+/* ---------------- Cards ---------------- */
 .card{
   background:var(--card);
   backdrop-filter:blur(18px);
@@ -107,14 +186,14 @@ input, select, textarea{ font-size:16px; }
   box-shadow: var(--shadow), inset 0 0 0 1px rgba(255,255,255,.05);
 }
 
-/* Layout */
+/* ---------------- Layout ---------------- */
 #app{
   max-width:1120px;
   margin:0 auto;
   padding:14px 12px 110px;
 }
 
-/* Topbar */
+/* ---------------- Topbar ---------------- */
 .topbar{ padding:10px 6px 2px; }
 .topbar-row{
   display:flex;
@@ -136,12 +215,14 @@ input, select, textarea{ font-size:16px; }
   display:inline-block;
   transform:translateY(1px);
   animation:bounce 2s infinite ease-in-out;
+  flex:0 0 auto;
 }
 @keyframes bounce{
   0%,100%{transform:translateY(1px);}
   50%{transform:translateY(-3px);}
 }
-.brand-stack{ display:flex; flex-direction:column; gap:0; min-width:0; }
+
+.brand-stack{ display:flex; flex-direction:column; min-width:0; }
 .brand-title-row{
   display:flex;
   align-items:center;
@@ -149,16 +230,21 @@ input, select, textarea{ font-size:16px; }
   min-width:0;
 }
 .brand-title{
+  font-family:var(--font-display);
   font-weight:950;
   font-size:20px;
   letter-spacing:.25px;
   line-height:1.05;
   white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  max-width: min(58vw, 520px);
 }
 .sparkle-badge{
   font-size:14px;
   transform:translateY(1px);
   filter:drop-shadow(0 10px 18px rgba(0,0,0,.35));
+  flex:0 0 auto;
 }
 
 /* Right actions */
@@ -170,37 +256,7 @@ input, select, textarea{ font-size:16px; }
 }
 #themeBtn{ width:46px; padding:8px 0; }
 
-/* Focus button (label-as-button, input hidden inline) */
-.focus-btn{
-  padding:7px 12px;
-  border-radius:999px;
-  font-weight:950;
-  display:inline-flex;
-  align-items:center;
-  gap:8px;
-  position:relative;
-  user-select:none;
-}
-.focus-btn::before{
-  content:"";
-  width:8px; height:8px;
-  border-radius:999px;
-  background:rgba(255,255,255,.35);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);
-}
-
-/* Active state (modern browsers) */
-.focus-btn:has(input:checked){
-  background:rgba(122,162,255,.18);
-  border-color:rgba(122,162,255,.55);
-  box-shadow:0 0 0 3px rgba(122,162,255,.16);
-}
-.focus-btn:has(input:checked)::before{
-  background:rgba(122,162,255,.95);
-  box-shadow:0 0 0 3px rgba(122,162,255,.22);
-}
-
-/* Search */
+/* ---------------- Search ---------------- */
 .search-row-wrap{ margin-top:10px; }
 .search-row{
   display:flex;
@@ -251,19 +307,20 @@ input, select, textarea{ font-size:16px; }
   align-items:center;
   gap:10px;
 }
-
 .search-filters-btn{
   border-radius:999px;
   padding:8px 12px;
 }
-
+.search-filters-btn.is-active{
+  box-shadow:0 0 0 3px rgba(122,162,255,.16);
+  border-color:rgba(122,162,255,.55);
+}
 .search-filters-title{
   font-weight:950;
   margin-bottom:10px;
   letter-spacing:.2px;
   opacity:.95;
 }
-
 .search-filters{
   position:absolute;
   right:0;
@@ -278,13 +335,11 @@ input, select, textarea{ font-size:16px; }
   box-shadow: var(--shadow2);
   z-index:50;
 }
-
 .search-filters .row{
   display:grid;
   grid-template-columns:1fr 1fr;
   gap:10px;
 }
-
 .search-date{
   width:100%;
   padding:10px 12px;
@@ -294,7 +349,7 @@ input, select, textarea{ font-size:16px; }
   color:var(--text);
 }
 
-/* Calendar tools */
+/* ---------------- Calendar tools ---------------- */
 #calendarWrap{ margin-top:12px; }
 
 .calendar-tools{
@@ -313,7 +368,6 @@ input, select, textarea{ font-size:16px; }
   gap:10px;
   align-items:center;
 }
-
 .mini-label{
   display:flex;
   align-items:center;
@@ -372,6 +426,7 @@ input, select, textarea{ font-size:16px; }
   border-radius:18px;
   padding:8px;
   background:rgba(0,0,0,.10);
+  min-height: 420px; /* so it doesn't look "missing" during load */
 }
 
 /* FullCalendar tweaks */
@@ -384,20 +439,14 @@ input, select, textarea{ font-size:16px; }
   color:var(--text);
   font-size:12px;
 }
-
-/* Crisp toolbar */
-.fc .fc-toolbar{
-  gap:10px;
-  align-items:center;
-}
+.fc .fc-toolbar{ gap:10px; align-items:center; }
 .fc .fc-toolbar-title{
   font-size:18px;
   font-weight:950;
   letter-spacing:.2px;
   cursor:pointer;
+  font-family:var(--font-display);
 }
-
-/* Buttons */
 .fc .fc-button{
   border-radius:12px;
   border:1px solid var(--border);
@@ -410,8 +459,6 @@ input, select, textarea{ font-size:16px; }
   background:rgba(122,162,255,.22);
   border-color:rgba(122,162,255,.55);
 }
-
-/* Events */
 .fc-event{
   border-radius:9px !important;
   font-size:11px;
@@ -424,15 +471,13 @@ input, select, textarea{ font-size:16px; }
   transform:scale(1.04);
   box-shadow:0 12px 20px rgba(0,0,0,.35);
 }
-
-/* Make grid lines a bit clearer */
 .fc .fc-scrollgrid,
 .fc .fc-scrollgrid-section > td,
 .fc .fc-scrollgrid-section > th{
   border-color: rgba(255,255,255,.12) !important;
 }
 
-/* Panels */
+/* ---------------- Panels ---------------- */
 .panel{ margin-top:12px; }
 .panel-header{
   display:flex;
@@ -441,6 +486,7 @@ input, select, textarea{ font-size:16px; }
   gap:10px;
   font-weight:950;
   margin-bottom:10px;
+  font-family:var(--font-display);
 }
 .panel-header.tight{ margin-bottom:8px; }
 .panel-controls{
@@ -453,8 +499,6 @@ input, select, textarea{ font-size:16px; }
   flex-direction:column;
   gap:10px;
 }
-
-/* JS outputs .panel-card */
 .panel-card{
   padding:12px 12px;
   border:1px solid rgba(255,255,255,.14);
@@ -468,7 +512,6 @@ input, select, textarea{ font-size:16px; }
   transform:translateY(-1px);
   border-color:rgba(255,255,255,.18);
 }
-
 .owner-pill{
   font-size:11px;
   font-weight:950;
@@ -488,7 +531,7 @@ input, select, textarea{ font-size:16px; }
   white-space:nowrap;
 }
 
-/* FAB — always visible bottom-right */
+/* ---------------- FAB (always visible) ---------------- */
 .fab{
   position:fixed;
   bottom:20px;
@@ -502,13 +545,13 @@ input, select, textarea{ font-size:16px; }
   color:#fff;
   cursor:pointer;
   box-shadow:0 22px 44px rgba(0,0,0,.55);
-  z-index:9996; /* ensure above cards and overlays (but below modals/gate) */
+  z-index:9996; /* above everything except modals/gate */
   transition:transform .15s ease, filter .15s ease;
 }
 .fab:hover{ transform:scale(1.07); }
 .fab:active{ transform:scale(1.02); filter:saturate(1.05); }
 
-/* Inputs */
+/* ---------------- Inputs ---------------- */
 input, select, textarea{
   width:100%;
   padding:10px 12px;
@@ -524,7 +567,7 @@ input:focus, select:focus, textarea:focus{
   box-shadow:0 0 0 3px rgba(122,162,255,.14);
 }
 
-/* Modals */
+/* ---------------- Modals ---------------- */
 .modal-backdrop{
   position:fixed;
   inset:0;
@@ -552,7 +595,11 @@ input:focus, select:focus, textarea:focus{
   gap:10px;
   margin-bottom:12px;
 }
-.modal-title{ font-weight:950; font-size:18px; }
+.modal-title{
+  font-weight:950;
+  font-size:18px;
+  font-family:var(--font-display);
+}
 .modal-body{ display:flex; flex-direction:column; gap:10px; }
 
 .field span{
@@ -582,13 +629,12 @@ input:focus, select:focus, textarea:focus{
 }
 .spacer{ flex:1; }
 
-/* Checklist */
+/* Checklist rows (JS uses .checkitem) */
 .checklist{
   display:flex;
   flex-direction:column;
   gap:8px;
 }
-/* JS creates .checkitem rows */
 .checkitem{
   display:grid;
   grid-template-columns:20px 1fr 44px;
@@ -597,7 +643,7 @@ input:focus, select:focus, textarea:focus{
 }
 .checkitem input[type="checkbox"]{ width:18px; height:18px; }
 
-/* Gate */
+/* ---------------- Gate ---------------- */
 .gate{
   position:fixed;
   inset:0;
@@ -618,7 +664,12 @@ input:focus, select:focus, textarea:focus{
   padding:18px;
   box-shadow: var(--shadow2);
 }
-.gate-title{ font-weight:950; font-size:22px; margin-bottom:4px; }
+.gate-title{
+  font-weight:950;
+  font-size:22px;
+  margin-bottom:4px;
+  font-family:var(--font-display);
+}
 .gate-sub{ color:rgba(233,236,241,.75); margin-bottom:12px; font-weight:900; }
 .gate-form{ display:flex; gap:10px; }
 .gate-input{ -webkit-text-security:disc; }
@@ -633,7 +684,7 @@ input:focus, select:focus, textarea:focus{
 }
 .gate-remember input{ width:auto; }
 
-/* Responsive */
+/* ---------------- Responsive ---------------- */
 @media (max-width:720px){
   .search-row{ align-items:stretch; }
   .search-shell{ width:100%; }
@@ -650,10 +701,4 @@ input:focus, select:focus, textarea:focus{
   }
 
   .top-actions{ gap:8px; }
-  .focus-btn{ padding:6px 10px; }
-}
-
-/* Focus mode: keep things calm */
-body.focus-on{
-  filter:saturate(.95) contrast(.99);
 }
