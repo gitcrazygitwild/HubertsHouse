@@ -1,30 +1,20 @@
-// app.js — Hubert’s House (v9)
-// Fixes:
-// ✅ Search works (calendar + panels)
-// ✅ Owner filter works (calendar + panels)
-// ✅ Month/Week/Day/List buttons work
-// ✅ Swipe left/right changes months (re-added)
-// ✅ Month + year centered (CSS will do most; JS ensures header structure is stable)
-// ✅ Dice changes THEME only (fonts/colors/background/designs hooks)
-// Notes:
-// - Requires FullCalendar global script loaded BEFORE this module
-// - Gate is client-side only (not real security)
+// app.js — Hubert’s House (v10)
+// Firebase sync + password gate + theme dice + search/list-range + owner filter
+// Upcoming + Outstanding checklist panels + checklist-focused modal
+// Month title tap = jump-to-month + swipe left/right to change months
+//
+// v10 changes:
+// - Month day tap opens Day view (instead of creating event)
+// - Event tap opens Details modal; Details -> Edit opens Edit modal
+// - List range affects List view duration (listCustom)
+// - Search + Owner filter reliably filter calendar + panels
+// - iOS modal scroll "stuck mid" fix (scroll-to-top on open)
+// - Theme dice ONLY changes theme (colors/fonts/designs) + persists
+// - Cat mode toggle hooks
+//
+// NOTE: Gate is client-side only (not real security).
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
-import {
-  getFirestore,
-  collection,
-  addDoc,
-  doc,
-  updateDoc,
-  deleteDoc,
-  onSnapshot,
-  query,
-  orderBy,
-  serverTimestamp
-} from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
-
-/* ---------------- Gate ---------------- */
+// ---------- Gate ----------
 const PASSWORD = "Mack"; // not real security
 const LS_UNLOCK = "huberts_house_unlocked_v1";
 
@@ -39,16 +29,19 @@ function isUnlocked() {
   if (sessionUnlocked) return true;
   return localStorage.getItem(LS_UNLOCK) === "1";
 }
+
 function unlock() {
   const remember = rememberDevice?.checked ?? true;
   if (remember) localStorage.setItem(LS_UNLOCK, "1");
   sessionUnlocked = true;
   gate?.classList.add("hidden");
 }
+
 function lock() {
   sessionUnlocked = false;
   localStorage.removeItem(LS_UNLOCK);
   gate?.classList.remove("hidden");
+  closeDetailsModal();
   closeModal();
   closeTaskModal();
   closeJumpModal();
@@ -69,20 +62,23 @@ gateForm?.addEventListener("submit", (e) => {
   }
 });
 
+// Show/hide gate immediately
 if (isUnlocked()) gate?.classList.add("hidden");
 else gate?.classList.remove("hidden");
 
-/* ---------------- Elements ---------------- */
+// ---------- Topbar / controls ----------
 const logoutBtn = document.getElementById("logoutBtn");
 const todayBtn = document.getElementById("todayBtn");
 const themeBtn = document.getElementById("themeBtn");
+const catModeBtn = document.getElementById("catModeBtn");
 
 const searchInput = document.getElementById("searchInput");
 const searchClearBtn = document.getElementById("searchClearBtn");
 const searchHint = document.getElementById("searchHint");
+
 const searchFiltersBtn = document.getElementById("searchFiltersBtn");
-const searchFilters = document.getElementById("searchFilters");
 const closeSearchFiltersBtn = document.getElementById("closeSearchFiltersBtn");
+const searchFilters = document.getElementById("searchFilters");
 const searchFrom = document.getElementById("searchFrom");
 const searchTo = document.getElementById("searchTo");
 const clearDatesBtn = document.getElementById("clearDatesBtn");
@@ -90,19 +86,169 @@ const clearDatesBtn = document.getElementById("clearDatesBtn");
 const listRangeSelect = document.getElementById("listRangeSelect");
 const ownerFilter = document.getElementById("ownerFilter");
 
-const upcomingListEl = document.getElementById("upcomingList");
-const outstandingListEl = document.getElementById("outstandingList");
-const outPrev = document.getElementById("outPrev");
-const outNext = document.getElementById("outNext");
-const outPage = document.getElementById("outPage");
-
 const fab = document.getElementById("fab");
 
-/* ---------------- Modal: event editor ---------------- */
+// Cat ambient layer (optional)
+const catLayer = document.getElementById("catLayer");
+const purrDot = document.getElementById("purrDot");
+
+logoutBtn?.addEventListener("click", lock);
+todayBtn?.addEventListener("click", () => calendar?.today());
+
+// ---------- iOS modal scroll fix ----------
+function scrollToTopSafely(el) {
+  if (!el) return;
+  requestAnimationFrame(() => {
+    try { el.scrollTop = 0; } catch {}
+  });
+}
+
+// ---------- Search UI state (cleaner) ----------
+function setSearchUIState() {
+  const hasText = !!(searchInput?.value || "").trim();
+  const hasDates = !!(searchFrom?.value || searchTo?.value);
+  const active = hasText || hasDates;
+
+  // Clear button
+  searchClearBtn?.classList.toggle("hidden", !hasText);
+
+  // Dates button only when searching (or already set)
+  searchFiltersBtn?.classList.toggle("hidden", !(hasText || hasDates));
+
+  // Optional hint line if you have one
+  searchHint?.classList.toggle("hidden", !active);
+}
+
+searchClearBtn?.addEventListener("click", () => {
+  if (searchInput) searchInput.value = "";
+  searchText = "";
+  setSearchUIState();
+  applySearchAndFilters(true);
+});
+
+searchFiltersBtn?.addEventListener("click", () => {
+  searchFilters?.classList.toggle("hidden");
+  searchFiltersBtn?.classList.toggle("is-active", !searchFilters?.classList.contains("hidden"));
+});
+
+closeSearchFiltersBtn?.addEventListener("click", () => {
+  searchFilters?.classList.add("hidden");
+  searchFiltersBtn?.classList.remove("is-active");
+});
+
+document.addEventListener("click", (e) => {
+  if (!searchFilters || searchFilters.classList.contains("hidden")) return;
+  const wrap = searchFilters.closest(".search-filters-wrap");
+  if (wrap && !wrap.contains(e.target)) {
+    searchFilters.classList.add("hidden");
+    searchFiltersBtn?.classList.remove("is-active");
+  }
+});
+
+clearDatesBtn?.addEventListener("click", () => {
+  if (searchFrom) searchFrom.value = "";
+  if (searchTo) searchTo.value = "";
+  setSearchUIState();
+  applySearchAndFilters(true);
+});
+
+// ---------- Details Modal (clean read-only) ----------
+const detailsBackdrop = document.getElementById("detailsBackdrop");
+const detailsClose = document.getElementById("detailsClose");
+const detailsEditBtn = document.getElementById("detailsEditBtn");
+const detailsDeleteBtn = document.getElementById("detailsDeleteBtn");
+const detailsScroll = document.getElementById("detailsScroll");
+
+const detailsOwnerPill = document.getElementById("detailsOwnerPill");
+const detailsTitle = document.getElementById("detailsTitle");
+const detailsWhen = document.getElementById("detailsWhen");
+const detailsType = document.getElementById("detailsType");
+const detailsNotes = document.getElementById("detailsNotes");
+const detailsChecklist = document.getElementById("detailsChecklist");
+
+let detailsDocId = null;
+let detailsOccurrenceStart = null;
+
+function openDetailsModal(payload) {
+  detailsDocId = payload.id;
+  detailsOccurrenceStart = payload.occurrenceStart || null;
+
+  const owner = normalizeOwner(payload.owner);
+  const ownerLabel = owner === "custom" ? (payload.ownerCustom || "Other") : owner;
+
+  if (detailsOwnerPill) detailsOwnerPill.textContent = ownerLabel;
+  if (detailsTitle) detailsTitle.textContent = payload.title || "";
+  if (detailsWhen) detailsWhen.textContent = formatWhenForPanel({
+    start: payload.start ? new Date(payload.start) : null,
+    end: payload.end ? new Date(payload.end) : null,
+    allDay: !!payload.allDay
+  });
+
+  if (detailsType) detailsType.textContent = (payload.type || "general").replace(/^\w/, c => c.toUpperCase());
+
+  const notesVal = (payload.notes || "").trim();
+  if (detailsNotes) detailsNotes.textContent = notesVal ? notesVal : "—";
+
+  const items = Array.isArray(payload.checklist) ? payload.checklist : [];
+  if (detailsChecklist) {
+    if (!items.length) detailsChecklist.textContent = "—";
+    else detailsChecklist.textContent = items.map(it => `${it.done ? "✅" : "⬜️"} ${it.text}`).join("\n");
+  }
+
+  detailsBackdrop?.classList.remove("hidden");
+  scrollToTopSafely(detailsScroll);
+}
+
+function closeDetailsModal() {
+  detailsDocId = null;
+  detailsOccurrenceStart = null;
+  detailsBackdrop?.classList.add("hidden");
+}
+
+detailsClose?.addEventListener("click", closeDetailsModal);
+detailsBackdrop?.addEventListener("click", (e) => {
+  if (e.target === detailsBackdrop) closeDetailsModal();
+});
+
+detailsEditBtn?.addEventListener("click", () => {
+  if (!detailsDocId) return;
+  const docData = rawDocs.find(d => d.id === detailsDocId);
+  if (!docData) return;
+
+  closeDetailsModal();
+  openEventModal({
+    mode: "edit",
+    id: detailsDocId,
+    occurrenceStart: detailsOccurrenceStart,
+    title: docData.title || "",
+    start: docData.start ? new Date(docData.start) : detailsOccurrenceStart,
+    end: docData.end ? new Date(docData.end) : null,
+    allDay: !!docData.allDay,
+    owner: normalizeOwner(docData.owner),
+    ownerCustom: docData.ownerCustom || "",
+    type: docData.type || "general",
+    repeat: docData.repeat || "none",
+    repeatUntil: docData.repeatUntil || "",
+    notes: docData.notes || "",
+    checklist: Array.isArray(docData.checklist) ? docData.checklist : []
+  });
+});
+
+detailsDeleteBtn?.addEventListener("click", async () => {
+  if (!detailsDocId) return;
+  if (!confirm("Delete this event?")) return;
+  await deleteDoc(doc(db, "events", detailsDocId));
+  closeDetailsModal();
+});
+
+// ---------- Modal: event editor ----------
 const backdrop = document.getElementById("modalBackdrop");
 const modalClose = document.getElementById("modalClose");
 const eventForm = document.getElementById("eventForm");
 const modalTitle = document.getElementById("modalTitle");
+
+// v10 expects a scroll wrapper inside the edit modal
+const editScroll = document.getElementById("editScroll");
 
 const evtTitle = document.getElementById("evtTitle");
 const evtStart = document.getElementById("evtStart");
@@ -127,7 +273,7 @@ const evtNotes = document.getElementById("evtNotes");
 const deleteBtn = document.getElementById("deleteBtn");
 const cancelBtn = document.getElementById("cancelBtn");
 
-/* ---------------- Checklist-focused modal ---------------- */
+// ---------- Checklist-focused modal ----------
 const taskBackdrop = document.getElementById("taskBackdrop");
 const taskClose = document.getElementById("taskClose");
 const taskDone = document.getElementById("taskDone");
@@ -135,7 +281,7 @@ const taskMeta = document.getElementById("taskMeta");
 const taskChecklist = document.getElementById("taskChecklist");
 const taskAddItem = document.getElementById("taskAddItem");
 
-/* ---------------- Jump-to-month modal ---------------- */
+// ---------- Jump-to-month modal ----------
 const jumpBackdrop = document.getElementById("jumpBackdrop");
 const jumpClose = document.getElementById("jumpClose");
 const jumpCancel = document.getElementById("jumpCancel");
@@ -143,78 +289,14 @@ const jumpGoBtn = document.getElementById("jumpGoBtn");
 const jumpMonthSelect = document.getElementById("jumpMonthSelect");
 const jumpYearSelect = document.getElementById("jumpYearSelect");
 
-/* ---------------- Theme (dice = theme changes) ---------------- */
-const THEMES = [
-  {
-    name: "aurora",
-    fontUI:
-      '-apple-system,system-ui,"SF Pro Display","SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif',
-    fontDisplay:
-      '-apple-system,system-ui,"SF Pro Display","Segoe UI",Roboto,Helvetica,Arial,sans-serif',
-    designs: 0.85
-  },
-  {
-    name: "sunset",
-    fontUI:
-      '-apple-system,system-ui,"Avenir Next","Segoe UI",Roboto,Helvetica,Arial,sans-serif',
-    fontDisplay:
-      '"Avenir Next","Avenir","SF Pro Display",-apple-system,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif',
-    designs: 0.9
-  },
-  {
-    name: "mint",
-    fontUI:
-      '-apple-system,system-ui,"Inter","Segoe UI",Roboto,Helvetica,Arial,sans-serif',
-    fontDisplay:
-      '"Inter","SF Pro Display",-apple-system,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif',
-    designs: 0.75
-  },
-  {
-    name: "grape",
-    fontUI:
-      '-apple-system,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif',
-    fontDisplay:
-      '"Trebuchet MS","SF Pro Display",-apple-system,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif',
-    designs: 0.85
-  },
-  {
-    name: "mono",
-    fontUI:
-      '-apple-system,system-ui,"SF Mono","Menlo",Consolas,monospace',
-    fontDisplay:
-      '"SF Mono","Menlo",Consolas,monospace',
-    designs: 0.35
-  }
-];
+// Panels
+const upcomingListEl = document.getElementById("upcomingList");
+const outstandingListEl = document.getElementById("outstandingList");
+const outPrev = document.getElementById("outPrev");
+const outNext = document.getElementById("outNext");
+const outPage = document.getElementById("outPage");
 
-let lastTheme = null;
-
-function applyThemeByName(name) {
-  const t = THEMES.find((x) => x.name === name) || THEMES[0];
-  const root = document.documentElement;
-
-  root.dataset.theme = t.name;
-  root.style.setProperty("--font-ui", t.fontUI);
-  root.style.setProperty("--font-display", t.fontDisplay);
-
-  const on = Math.random() < t.designs;
-  root.classList.toggle("designs-on", on);
-
-  lastTheme = t.name;
-}
-
-function randomTheme() {
-  let pick = THEMES[Math.floor(Math.random() * THEMES.length)].name;
-  if (THEMES.length > 1 && pick === lastTheme) {
-    pick = THEMES[(THEMES.findIndex((t) => t.name === pick) + 1) % THEMES.length].name;
-  }
-  applyThemeByName(pick);
-}
-
-themeBtn?.addEventListener("click", randomTheme);
-applyThemeByName("aurora");
-
-/* ---------------- Colors / owners ---------------- */
+// ---------- Colors / owners ----------
 const OWNER_STYLE = {
   hanry:  { bg: "rgba(122,162,255,0.35)", border: "rgba(122,162,255,0.85)" },
   karena: { bg: "rgba(255,107,107,0.28)", border: "rgba(255,107,107,0.85)" },
@@ -230,7 +312,7 @@ function normalizeOwner(rawOwner) {
   return "custom";
 }
 
-/* ---------------- Checklist presets ---------------- */
+// ---------- Checklist presets ----------
 const CHECKLIST_PRESETS = {
   general: [],
   wedding: ["RSVP", "Gift", "Travel", "Outfit", "Hotel"],
@@ -239,7 +321,22 @@ const CHECKLIST_PRESETS = {
   party: ["Invite list", "Food/drinks", "Music", "Supplies", "Cleanup plan"]
 };
 
-/* ---------------- Firebase ---------------- */
+// ---------- Firebase ----------
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  doc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+  query,
+  orderBy,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
+
+// Your Firebase config
 const firebaseConfig = {
   apiKey: "AIzaSyBEXNyX6vIbHwGCpI3fpVUb5llubOjt9qQ",
   authDomain: "huberts-house.firebaseapp.com",
@@ -254,72 +351,501 @@ let db, eventsCol;
 let calendar;
 
 // In-memory cache from Firestore
-let rawDocs = [];
-let expandedEvents = [];
+let rawDocs = [];         // [{id,...data}]
+let expandedEvents = [];  // normalized + expanded repeats (each has sourceId)
 
-// Editing
-let editingDocId = null;
+let editingDocId = null;          // Firestore doc id
 let editingOccurrenceStart = null;
 
 // Outstanding pagination
 let outstandingPage = 1;
 const OUT_PAGE_SIZE = 10;
 
-// Search/filter state
+// Search state
 let searchText = "";
+
+// Filter state
 let ownerFilterValue = "all";
 
-/* ---------------- Search helpers ---------------- */
-function getSearchBounds() {
-  const fromVal = searchFrom?.value || "";
-  const toVal = searchTo?.value || "";
-  if (!fromVal && !toVal) return null;
+// ---------- Theme (dice) ----------
+const LS_THEME = "huberts_house_theme_v1";
+const LS_DESIGNS = "huberts_house_designs_v1";
+const LS_FONT_DISPLAY = "huberts_house_font_display_v1";
 
-  const from = fromVal ? new Date(fromVal + "T00:00:00") : null;
-  const to = toVal ? new Date(toVal + "T23:59:59") : null;
-  return { from, to };
+const THEMES = ["aurora", "sunset", "mint", "grape", "mono"];
+const DISPLAY_FONTS = [
+  '-apple-system,system-ui,"SF Pro Display","Segoe UI",Roboto,Helvetica,Arial,sans-serif',
+  '"Avenir Next",-apple-system,system-ui,Roboto,Helvetica,Arial,sans-serif',
+  '"Trebuchet MS",-apple-system,system-ui,Roboto,Helvetica,Arial,sans-serif',
+  '"Georgia",-apple-system,system-ui,Roboto,Helvetica,Arial,sans-serif'
+];
+
+function applyTheme(theme, designsOn, fontDisplay) {
+  document.documentElement.dataset.theme = theme;
+  document.documentElement.classList.toggle("designs-on", !!designsOn);
+  if (fontDisplay) document.documentElement.style.setProperty("--font-display", fontDisplay);
 }
 
-function isSearchActive() {
-  const b = getSearchBounds();
-  return !!(searchText || b);
+function restoreTheme() {
+  const theme = localStorage.getItem(LS_THEME) || "aurora";
+  const designsOn = (localStorage.getItem(LS_DESIGNS) || "1") === "1";
+  const fontDisplay = localStorage.getItem(LS_FONT_DISPLAY) || DISPLAY_FONTS[0];
+  applyTheme(theme, designsOn, fontDisplay);
 }
 
-function setSearchUIState() {
-  const active = isSearchActive();
+function pickTheme() {
+  const theme = THEMES[Math.floor(Math.random() * THEMES.length)];
+  const designsOn = Math.random() < 0.8;
+  const fontDisplay = DISPLAY_FONTS[Math.floor(Math.random() * DISPLAY_FONTS.length)];
 
-  searchClearBtn?.classList.toggle("hidden", !searchText);
-  searchFiltersBtn?.classList.toggle("hidden", !active);
-  searchHint?.classList.toggle("hidden", !active);
+  localStorage.setItem(LS_THEME, theme);
+  localStorage.setItem(LS_DESIGNS, designsOn ? "1" : "0");
+  localStorage.setItem(LS_FONT_DISPLAY, fontDisplay);
 
-  if (!active) {
-    searchFilters?.classList.add("hidden");
-    searchFiltersBtn?.classList.remove("is-active");
+  applyTheme(theme, designsOn, fontDisplay);
+}
+
+themeBtn?.addEventListener("click", () => pickTheme());
+
+// ---------- Cat mode ----------
+const LS_CATMODE = "huberts_house_catmode_v1";
+let catInterval = null;
+
+function setCatMode(on) {
+  document.documentElement.classList.toggle("cat-mode", !!on);
+  document.documentElement.classList.toggle("purr-on", !!on);
+  localStorage.setItem(LS_CATMODE, on ? "1" : "0");
+  if (catLayer) catLayer.classList.toggle("hidden", !on);
+
+  if (on) startCatAmbient();
+  else stopCatAmbient();
+}
+
+catModeBtn?.addEventListener("click", () => {
+  const on = !document.documentElement.classList.contains("cat-mode");
+  setCatMode(on);
+});
+
+function startCatAmbient() {
+  if (!catLayer) return;
+  catLayer.classList.remove("hidden");
+  catLayer.innerHTML = "";
+
+  const makePaw = () => {
+    const paw = document.createElement("div");
+    paw.textContent = "🐾";
+    paw.style.position = "absolute";
+    paw.style.left = Math.round(Math.random() * 92) + "%";
+    paw.style.top = "110%";
+    paw.style.fontSize = (12 + Math.random() * 18).toFixed(0) + "px";
+    paw.style.opacity = (0.10 + Math.random() * 0.20).toFixed(2);
+    paw.style.transform = `rotate(${Math.round(Math.random() * 40 - 20)}deg)`;
+    paw.style.transition = "top 6.5s linear, opacity 6.5s linear";
+    catLayer.appendChild(paw);
+
+    requestAnimationFrame(() => {
+      paw.style.top = "-10%";
+      paw.style.opacity = "0";
+    });
+
+    setTimeout(() => paw.remove(), 7000);
+  };
+
+  if (catInterval) clearInterval(catInterval);
+  catInterval = setInterval(() => {
+    if (!document.documentElement.classList.contains("cat-mode")) return;
+    makePaw();
+  }, 900);
+}
+
+function stopCatAmbient() {
+  if (catInterval) clearInterval(catInterval);
+  catInterval = null;
+  if (catLayer) catLayer.innerHTML = "";
+}
+
+// ---------- Init ----------
+restoreTheme();
+setCatMode((localStorage.getItem(LS_CATMODE) || "0") === "1");
+setSearchUIState();
+
+async function initApp() {
+  const app = initializeApp(firebaseConfig);
+  db = getFirestore(app);
+  eventsCol = collection(db, "events");
+
+  initCalendarUI();
+  initUIHooks();
+
+  const q = query(eventsCol, orderBy("start", "asc"));
+  onSnapshot(q, (snap) => {
+    const docs = [];
+    snap.forEach((d) => docs.push({ id: d.id, ...d.data() }));
+    rawDocs = docs;
+
+    expandedEvents = expandRepeats(normalizeDocs(rawDocs));
+    renderCalendarFromCache();
+    renderPanels();
+  }, (err) => {
+    console.error(err);
+    alert("Firebase sync error. Check rules + config.");
+  });
+}
+
+// ---------- UI hooks ----------
+function initUIHooks() {
+  // Search debounce
+  let t = null;
+  searchInput?.addEventListener("input", () => {
+    clearTimeout(t);
+    t = setTimeout(() => {
+      searchText = (searchInput.value || "").trim();
+      setSearchUIState();
+      applySearchAndFilters(true);
+    }, 160);
+  });
+
+  searchFrom?.addEventListener("change", () => {
+    setSearchUIState();
+    applySearchAndFilters(true);
+  });
+  searchTo?.addEventListener("change", () => {
+    setSearchUIState();
+    applySearchAndFilters(true);
+  });
+
+  ownerFilter?.addEventListener("change", () => {
+    ownerFilterValue = ownerFilter.value || "all";
+    applySearchAndFilters(false);
+  });
+
+  // List range affects List tab duration
+  listRangeSelect?.addEventListener("change", () => {
+    if (!calendar) return;
+
+    const days = Number(listRangeSelect.value || 7);
+
+    calendar.setOption("views", {
+      listCustom: { type: "list", duration: { days }, buttonText: "List" }
+    });
+
+    if (calendar.view?.type === "listCustom") {
+      calendar.changeView("listCustom");
+    }
+  });
+
+  fab?.addEventListener("click", () => {
+    const start = roundToNextHour(new Date());
+    const end = new Date(start.getTime() + 60 * 60 * 1000);
+    openEventModal({
+      mode: "create",
+      title: "",
+      start,
+      end,
+      allDay: false,
+      owner: "both",
+      ownerCustom: "",
+      type: "general",
+      repeat: "none",
+      repeatUntil: "",
+      notes: "",
+      checklist: []
+    });
+  });
+
+  modalClose?.addEventListener("click", closeModal);
+  cancelBtn?.addEventListener("click", closeModal);
+  backdrop?.addEventListener("click", (e) => {
+    if (e.target === backdrop) closeModal();
+  });
+
+  evtAllDay?.addEventListener("change", () => {
+    preserveDatesOnAllDayToggle(!!evtAllDay.checked);
+  });
+
+  evtOwner?.addEventListener("change", () => {
+    const v = evtOwner.value;
+    ownerCustomWrap?.classList.toggle("hidden", v !== "custom");
+    if (v !== "custom" && evtOwnerCustom) evtOwnerCustom.value = "";
+  });
+
+  evtRepeat?.addEventListener("change", () => {
+    const v = evtRepeat.value;
+    repeatUntilWrap?.classList.toggle("hidden", v === "none");
+  });
+
+  evtType?.addEventListener("change", () => {
+    maybeAutofillChecklist(evtType.value);
+  });
+
+  addCheckItemBtn?.addEventListener("click", () => {
+    addChecklistItemUI(checklistEl, { text: "", done: false }, true);
+  });
+
+  eventForm?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    await handleSave();
+  });
+
+  deleteBtn?.addEventListener("click", async () => {
+    if (!editingDocId) return;
+    if (!confirm("Delete this event?")) return;
+    await deleteDoc(doc(db, "events", editingDocId));
+    closeModal();
+  });
+
+  // Task modal
+  taskClose?.addEventListener("click", closeTaskModal);
+  taskDone?.addEventListener("click", closeTaskModal);
+  taskBackdrop?.addEventListener("click", (e) => {
+    if (e.target === taskBackdrop) closeTaskModal();
+  });
+  taskAddItem?.addEventListener("click", () => {
+    addChecklistItemUI(taskChecklist, { text: "", done: false }, true);
+  });
+
+  // Jump modal
+  jumpClose?.addEventListener("click", closeJumpModal);
+  jumpCancel?.addEventListener("click", closeJumpModal);
+  jumpBackdrop?.addEventListener("click", (e) => {
+    if (e.target === jumpBackdrop) closeJumpModal();
+  });
+  jumpGoBtn?.addEventListener("click", () => {
+    const month = Number(jumpMonthSelect?.value ?? 0);
+    const year = Number(jumpYearSelect?.value ?? new Date().getFullYear());
+    calendar?.gotoDate(new Date(year, month, 1));
+    closeJumpModal();
+  });
+
+  populateYearSelect();
+}
+
+// ---------- Calendar ----------
+function initCalendarUI() {
+  const calendarEl = document.getElementById("calendar");
+  if (!calendarEl) return;
+
+  const days = Number(listRangeSelect?.value || 7);
+
+  calendar = new FullCalendar.Calendar(calendarEl, {
+    initialView: "dayGridMonth",
+    headerToolbar: {
+      left: "prev,next",
+      center: "title",
+      right: "dayGridMonth,timeGridWeek,timeGridDay,listCustom"
+    },
+    views: {
+      listCustom: { type: "list", duration: { days }, buttonText: "List" }
+    },
+    selectable: true,
+    editable: true,
+    nowIndicator: true,
+    height: "auto",
+    longPressDelay: 350,
+    selectLongPressDelay: 350,
+
+    datesSet: () => hookMonthTitleClick(),
+
+    // v10: date tap in month view opens Day view instead of creating event
+    dateClick: (info) => {
+      if (calendar?.view?.type === "dayGridMonth") {
+        calendar.changeView("timeGridDay", info.date);
+      } else {
+        // In other views, create a new event on tap
+        const start = new Date(info.date);
+        const end = new Date(start.getTime() + 60 * 60 * 1000);
+        openEventModal({
+          mode: "create",
+          title: "",
+          start,
+          end,
+          allDay: false,
+          owner: "both",
+          ownerCustom: "",
+          type: "general",
+          repeat: "none",
+          repeatUntil: "",
+          notes: "",
+          checklist: []
+        });
+      }
+    },
+
+    // drag-select creates an event
+    select: (info) => {
+      const start = info.start;
+      const end = info.end || new Date(start.getTime() + 60 * 60 * 1000);
+      openEventModal({
+        mode: "create",
+        title: "",
+        start,
+        end,
+        allDay: info.allDay,
+        owner: "both",
+        ownerCustom: "",
+        type: "general",
+        repeat: "none",
+        repeatUntil: "",
+        notes: "",
+        checklist: []
+      });
+    },
+
+    // v10: event tap opens Details modal
+    eventClick: (info) => {
+      const ev = info.event;
+      const p = ev.extendedProps || {};
+      const sourceId = p.sourceId || ev.id;
+
+      const docData = rawDocs.find(d => d.id === sourceId);
+      if (!docData) return;
+
+      const occStart = ev.start ? new Date(ev.start) : (docData.start ? new Date(docData.start) : null);
+
+      openDetailsModal({
+        id: sourceId,
+        occurrenceStart: occStart,
+        title: docData.title || "",
+        start: occStart || (docData.start ? new Date(docData.start) : null),
+        end: docData.end ? new Date(docData.end) : (ev.end ? new Date(ev.end) : null),
+        allDay: !!docData.allDay,
+        owner: normalizeOwner(docData.owner),
+        ownerCustom: docData.ownerCustom || "",
+        type: docData.type || "general",
+        notes: docData.notes || "",
+        checklist: Array.isArray(docData.checklist) ? docData.checklist : []
+      });
+    },
+
+    eventDidMount: (arg) => {
+      const show = shouldShowEvent(arg.event);
+      if (!show) arg.el.style.display = "none";
+
+      const p = arg.event.extendedProps || {};
+      if (p.isRepeatOccurrence) {
+        arg.event.setProp("editable", false);
+        arg.event.setProp("durationEditable", false);
+        arg.event.setProp("startEditable", false);
+      }
+
+      arg.el.style.fontSize = "var(--event-font)";
+    },
+
+    eventDrop: async (info) => {
+      const p = info.event.extendedProps || {};
+      if (p.isRepeatOccurrence) {
+        info.revert();
+        alert("Repeating events: edit the series instead (no single-instance moves yet).");
+        return;
+      }
+      await persistMovedEvent(info.event);
+    },
+
+    eventResize: async (info) => {
+      const p = info.event.extendedProps || {};
+      if (p.isRepeatOccurrence) {
+        info.revert();
+        alert("Repeating events: edit the series instead (no single-instance resizes yet).");
+        return;
+      }
+      await persistMovedEvent(info.event);
+    }
+  });
+
+  calendar.render();
+  hookMonthTitleClick();
+  attachSwipe(calendarEl);
+}
+
+function hookMonthTitleClick() {
+  const title = document.querySelector(".fc-toolbar-title");
+  if (!title) return;
+  title.style.cursor = "pointer";
+  title.title = "Jump to month";
+  title.onclick = () => openJumpModalFromCalendar();
+}
+
+function openJumpModalFromCalendar() {
+  if (!calendar) return;
+  const d = calendar.getDate();
+  if (jumpMonthSelect) jumpMonthSelect.value = String(d.getMonth());
+  if (jumpYearSelect) jumpYearSelect.value = String(d.getFullYear());
+  jumpBackdrop?.classList.remove("hidden");
+  scrollToTopSafely(jumpBackdrop?.querySelector(".modal-scroll"));
+}
+
+function closeJumpModal() {
+  jumpBackdrop?.classList.add("hidden");
+}
+
+function populateYearSelect() {
+  if (!jumpYearSelect) return;
+  const now = new Date().getFullYear();
+  const years = [];
+  for (let y = now - 5; y <= now + 10; y++) years.push(y);
+  jumpYearSelect.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join("");
+  jumpYearSelect.value = String(now);
+}
+
+// Swipe left/right to change months (only in month view)
+function attachSwipe(el) {
+  let sx = 0, sy = 0, st = 0;
+  el.addEventListener("touchstart", (e) => {
+    if (!e.touches || e.touches.length !== 1) return;
+    sx = e.touches[0].clientX;
+    sy = e.touches[0].clientY;
+    st = Date.now();
+  }, { passive: true });
+
+  el.addEventListener("touchend", (e) => {
+    const dt = Date.now() - st;
+    if (dt > 650) return;
+
+    const touch = e.changedTouches?.[0];
+    if (!touch) return;
+    const dx = touch.clientX - sx;
+    const dy = touch.clientY - sy;
+
+    if (Math.abs(dx) < 60) return;
+    if (Math.abs(dy) > 45) return;
+
+    if (calendar?.view?.type !== "dayGridMonth") return;
+
+    if (dx < 0) calendar?.next();
+    else calendar?.prev();
+  }, { passive: true });
+}
+
+// ---------- Rendering ----------
+function renderCalendarFromCache() {
+  if (!calendar) return;
+
+  calendar.removeAllEvents();
+  for (const e of getVisibleEvents()) calendar.addEvent(e);
+}
+
+function renderPanels() {
+  renderUpcoming();
+  renderOutstanding();
+}
+
+function getVisibleEvents() {
+  let list = expandedEvents.slice();
+  list = list.filter(matchOwnerFilter);
+  list = list.filter(matchSearch);
+
+  const bounds = getSearchBounds();
+  if (bounds) {
+    const { from, to } = bounds;
+    list = list.filter((e) => {
+      const s = new Date(e.start).getTime();
+      if (from && s < from.getTime()) return false;
+      if (to && s > to.getTime()) return false;
+      return true;
+    });
   }
-}
 
-function openSearchOptions() {
-  if (!searchFilters || !searchFiltersBtn) return;
-  searchFilters.classList.remove("hidden");
-  searchFiltersBtn.classList.add("is-active");
-}
-function closeSearchOptions() {
-  if (!searchFilters || !searchFiltersBtn) return;
-  searchFilters.classList.add("hidden");
-  searchFiltersBtn.classList.remove("is-active");
-}
-
-/* ---------------- Calendar filter predicates ---------------- */
-function matchOwnerFilter(e) {
-  if (!ownerFilterValue || ownerFilterValue === "all") return true;
-  return normalizeOwner(e.extendedProps?.owner) === ownerFilterValue;
-}
-
-function matchSearch(e) {
-  if (!searchText) return true;
-  const p = e.extendedProps || {};
-  const hay = `${e.title} ${p.notes || ""} ${p.type || ""} ${p.ownerCustom || ""}`.toLowerCase();
-  return hay.includes(searchText.toLowerCase());
+  return list;
 }
 
 function shouldShowEvent(fcEvent) {
@@ -345,33 +871,44 @@ function shouldShowEvent(fcEvent) {
   return true;
 }
 
-function getVisibleEvents() {
-  let list = expandedEvents.slice();
-  list = list.filter(matchOwnerFilter);
-  list = list.filter(matchSearch);
+function matchOwnerFilter(e) {
+  if (!ownerFilterValue || ownerFilterValue === "all") return true;
+  return normalizeOwner(e.extendedProps?.owner) === ownerFilterValue;
+}
 
-  const bounds = getSearchBounds();
-  if (bounds) {
-    const { from, to } = bounds;
-    list = list.filter((e) => {
-      const s = new Date(e.start).getTime();
-      if (from && s < from.getTime()) return false;
-      if (to && s > to.getTime()) return false;
-      return true;
-    });
+function matchSearch(e) {
+  if (!searchText) return true;
+  const p = e.extendedProps || {};
+  const hay = `${e.title} ${p.notes || ""} ${p.type || ""} ${p.ownerCustom || ""}`.toLowerCase();
+  return hay.includes(searchText.toLowerCase());
+}
+
+function getSearchBounds() {
+  const fromVal = searchFrom?.value || "";
+  const toVal = searchTo?.value || "";
+  if (!fromVal && !toVal) return null;
+
+  const from = fromVal ? new Date(fromVal + "T00:00:00") : null;
+  const to = toVal ? new Date(toVal + "T23:59:59") : null;
+  return { from, to };
+}
+
+function isSearchActive() {
+  const b = getSearchBounds();
+  return !!(searchText || b);
+}
+
+function applySearchAndFilters(switchToListIfSearching) {
+  searchText = (searchInput?.value || "").trim();
+
+  renderCalendarFromCache();
+  renderPanels();
+
+  if (switchToListIfSearching && isSearchActive()) {
+    openListView();
   }
-  return list;
 }
 
-/* ---------------- Calendar rendering ---------------- */
-function renderCalendarFromCache() {
-  if (!calendar) return;
-
-  calendar.removeAllEvents();
-  for (const e of getVisibleEvents()) calendar.addEvent(e);
-}
-
-/* ---------------- List view ---------------- */
 function openListView() {
   if (!calendar) return;
 
@@ -387,12 +924,7 @@ function openListView() {
   else calendar.gotoDate(new Date());
 }
 
-/* ---------------- Panels ---------------- */
-function renderPanels() {
-  renderUpcoming();
-  renderOutstanding();
-}
-
+// ---------- Upcoming ----------
 function renderUpcoming() {
   if (!upcomingListEl) return;
 
@@ -402,17 +934,6 @@ function renderUpcoming() {
   let list = expandedEvents.slice();
   list = list.filter(matchOwnerFilter);
   list = list.filter(matchSearch);
-
-  const bounds = getSearchBounds();
-  if (bounds) {
-    const { from, to } = bounds;
-    list = list.filter((e) => {
-      const s = new Date(e.start).getTime();
-      if (from && s < from.getTime()) return false;
-      if (to && s > to.getTime()) return false;
-      return true;
-    });
-  }
 
   const upcoming = [];
   for (const e of list) {
@@ -434,17 +955,24 @@ function renderUpcoming() {
   }
 
   upcoming.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
-  const top = upcoming.slice(0, 5);
 
+  const top = upcoming.slice(0, 5);
   if (top.length === 0) {
     upcomingListEl.textContent = "No upcoming events.";
     return;
   }
 
   upcomingListEl.innerHTML = top.map(renderPanelCardHTML).join("");
-  wirePanelClicks(upcomingListEl, false);
+  upcomingListEl.querySelectorAll("[data-open-id]").forEach((el) => {
+    el.addEventListener("click", () => {
+      const id = el.getAttribute("data-open-id");
+      const occ = el.getAttribute("data-occ");
+      openFromPanel(id, occ, false);
+    });
+  });
 }
 
+// ---------- Outstanding ----------
 outPrev?.addEventListener("click", () => {
   outstandingPage = Math.max(1, outstandingPage - 1);
   renderOutstanding();
@@ -460,17 +988,6 @@ function renderOutstanding() {
   let list = expandedEvents.slice();
   list = list.filter(matchOwnerFilter);
   list = list.filter(matchSearch);
-
-  const bounds = getSearchBounds();
-  if (bounds) {
-    const { from, to } = bounds;
-    list = list.filter((e) => {
-      const s = new Date(e.start).getTime();
-      if (from && s < from.getTime()) return false;
-      if (to && s > to.getTime()) return false;
-      return true;
-    });
-  }
 
   const withUnchecked = list.filter((e) => {
     const items = e.extendedProps?.checklist || [];
@@ -493,54 +1010,11 @@ function renderOutstanding() {
   }
 
   outstandingListEl.innerHTML = pageItems.map(renderPanelCardHTMLWithProgress).join("");
-  wirePanelClicks(outstandingListEl, true);
-}
-
-function renderPanelCardHTML(e) {
-  const p = e.extendedProps || {};
-  const owner = normalizeOwner(p.owner);
-  const ownerLabel = owner === "custom" ? (p.ownerCustom || "Other") : owner;
-
-  const when = formatWhenForPanel({
-    start: new Date(e.start),
-    end: e.end ? new Date(e.end) : null,
-    allDay: !!e.allDay
-  });
-
-  const style = OWNER_STYLE[owner] || OWNER_STYLE.custom;
-  const pillColor = style.border;
-
-  return `
-    <div class="panel-card" data-open-id="${p.sourceId || e.id}" data-occ="${String(e.start)}" style="border-left: 5px solid ${pillColor};">
-      <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
-        <span class="owner-pill">${escapeHtml(ownerLabel)}</span>
-        <strong style="font-size: 16px;">${escapeHtml(e.title || "")}</strong>
-      </div>
-      <div class="tiny muted">${escapeHtml(when)}</div>
-    </div>
-  `;
-}
-
-function renderPanelCardHTMLWithProgress(e) {
-  const p = e.extendedProps || {};
-  const items = Array.isArray(p.checklist) ? p.checklist : [];
-  const done = items.filter(i => i.done).length;
-  const total = items.length;
-  const pct = total ? Math.round((done / total) * 100) : 0;
-
-  const base = renderPanelCardHTML(e);
-  return base.replace(
-    "</div>\n    </div>",
-    ` <span class="progress-pill">${done}/${total} (${pct}%)</span></div>\n    </div>`
-  );
-}
-
-function wirePanelClicks(container, checklistView) {
-  container.querySelectorAll("[data-open-id]").forEach((el) => {
+  outstandingListEl.querySelectorAll("[data-open-id]").forEach((el) => {
     el.addEventListener("click", () => {
       const id = el.getAttribute("data-open-id");
       const occ = el.getAttribute("data-occ");
-      openFromPanel(id, occ, checklistView);
+      openFromPanel(id, occ, true);
     });
   });
 }
@@ -554,48 +1028,23 @@ function openFromPanel(sourceId, occurrenceStartISO, checklistView) {
   if (checklistView) {
     openTaskModal(docData, occStart);
   } else {
-    openEventModal({
-      mode: "edit",
+    openDetailsModal({
       id: sourceId,
       occurrenceStart: occStart,
       title: docData.title || "",
-      start: docData.start ? new Date(docData.start) : occStart,
+      start: occStart || (docData.start ? new Date(docData.start) : null),
       end: docData.end ? new Date(docData.end) : null,
       allDay: !!docData.allDay,
       owner: normalizeOwner(docData.owner),
       ownerCustom: docData.ownerCustom || "",
       type: docData.type || "general",
-      repeat: docData.repeat || "none",
-      repeatUntil: docData.repeatUntil || "",
       notes: docData.notes || "",
       checklist: Array.isArray(docData.checklist) ? docData.checklist : []
     });
   }
 }
 
-/* ---------------- Jump modal ---------------- */
-function populateYearSelect() {
-  if (!jumpYearSelect) return;
-  const now = new Date().getFullYear();
-  const years = [];
-  for (let y = now - 5; y <= now + 10; y++) years.push(y);
-  jumpYearSelect.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join("");
-  jumpYearSelect.value = String(now);
-}
-
-function openJumpModalFromCalendar() {
-  if (!calendar) return;
-  const d = calendar.getDate();
-  if (jumpMonthSelect) jumpMonthSelect.value = String(d.getMonth());
-  if (jumpYearSelect) jumpYearSelect.value = String(d.getFullYear());
-  jumpBackdrop?.classList.remove("hidden");
-}
-
-function closeJumpModal() {
-  jumpBackdrop?.classList.add("hidden");
-}
-
-/* ---------------- Modal: event editor ---------------- */
+// ---------- Event modal ----------
 function openEventModal(payload) {
   const isEdit = payload.mode === "edit";
 
@@ -625,7 +1074,10 @@ function openEventModal(payload) {
   if (evtNotes) evtNotes.value = payload.notes || "";
 
   backdrop?.classList.remove("hidden");
-  evtTitle?.focus();
+
+  // iOS fix: force top
+  scrollToTopSafely(editScroll);
+  setTimeout(() => evtTitle?.focus(), 0);
 }
 
 function closeModal() {
@@ -708,19 +1160,18 @@ async function handleSave() {
 
 async function persistMovedEvent(fcEvent) {
   const p = fcEvent.extendedProps || {};
-  if (p.isRepeatOccurrence) {
-    throw new Error("repeat-occurrence");
-  }
+  const sourceId = p.sourceId || fcEvent.id;
+
   const patch = {
     start: fcEvent.start ? fcEvent.start.toISOString() : null,
     end: fcEvent.end ? fcEvent.end.toISOString() : null,
     allDay: fcEvent.allDay,
     updatedAt: serverTimestamp()
   };
-  await updateDoc(doc(db, "events", fcEvent.id), patch);
+  await updateDoc(doc(db, "events", sourceId), patch);
 }
 
-/* ---------------- Task modal ---------------- */
+// ---------- Task modal ----------
 let taskDocId = null;
 
 function openTaskModal(docData, occurrenceStart) {
@@ -740,24 +1191,18 @@ function openTaskModal(docData, occurrenceStart) {
   renderChecklistUI(taskChecklist, Array.isArray(docData.checklist) ? docData.checklist : []);
 
   taskBackdrop?.classList.remove("hidden");
+  scrollToTopSafely(taskBackdrop?.querySelector(".modal-scroll"));
 
-  // autosave on any change
   taskChecklist?.addEventListener("change", taskAutoSaveHandler, { once: true });
   taskChecklist?.addEventListener("blur", taskAutoSaveHandler, { once: true, capture: true });
 }
 
 async function taskAutoSaveHandler() {
-  try {
-    if (!taskDocId) return;
-    const checklist = readChecklistUI(taskChecklist);
-    await updateDoc(doc(db, "events", taskDocId), { checklist, updatedAt: serverTimestamp() });
-  } catch (e) {
-    console.error(e);
-    alert("Couldn’t save checklist (rules/network).");
-  } finally {
-    taskChecklist?.addEventListener("change", taskAutoSaveHandler, { once: true });
-    taskChecklist?.addEventListener("blur", taskAutoSaveHandler, { once: true, capture: true });
-  }
+  if (!taskDocId) return;
+  const checklist = readChecklistUI(taskChecklist);
+  await updateDoc(doc(db, "events", taskDocId), { checklist, updatedAt: serverTimestamp() });
+  taskChecklist?.addEventListener("change", taskAutoSaveHandler, { once: true });
+  taskChecklist?.addEventListener("blur", taskAutoSaveHandler, { once: true, capture: true });
 }
 
 function closeTaskModal() {
@@ -765,7 +1210,7 @@ function closeTaskModal() {
   taskBackdrop?.classList.add("hidden");
 }
 
-/* ---------------- Checklist UI helpers ---------------- */
+// ---------- Checklist UI helpers ----------
 function renderChecklistUI(container, items) {
   if (!container) return;
   const safe = Array.isArray(items) ? items : [];
@@ -824,7 +1269,7 @@ function maybeAutofillChecklist(type) {
   renderChecklistUI(checklistEl, preset.map(t => ({ text: t, done: false })));
 }
 
-/* ---------------- Repeat expansion ---------------- */
+// ---------- Normalize docs + expand repeats ----------
 function normalizeDocs(docs) {
   return docs.map((d) => {
     const owner = normalizeOwner(d.owner);
@@ -846,30 +1291,6 @@ function normalizeDocs(docs) {
       repeatUntil: d.repeatUntil || ""
     };
   }).filter(d => d.start instanceof Date && !isNaN(d.start));
-}
-
-function advanceRepeat(date, repeat) {
-  const d = new Date(date);
-  if (repeat === "daily") d.setDate(d.getDate() + 1);
-  else if (repeat === "weekly") d.setDate(d.getDate() + 7);
-  else if (repeat === "monthly") d.setMonth(d.getMonth() + 1);
-  else if (repeat === "yearly") d.setFullYear(d.getFullYear() + 1);
-  else d.setDate(d.getDate() + 1);
-  return d;
-}
-
-function makeFcEvent({ id, title, start, end, allDay, style, extra }) {
-  return {
-    id,
-    title,
-    start: start.toISOString(),
-    end: end ? end.toISOString() : undefined,
-    allDay: !!allDay,
-    backgroundColor: style.bg,
-    borderColor: style.border,
-    textColor: "#e9ecf1",
-    extendedProps: extra
-  };
 }
 
 function expandRepeats(norm) {
@@ -910,12 +1331,12 @@ function expandRepeats(norm) {
     let cur = new Date(d.start);
     let count = 0;
 
-    while (cur.getTime() <= stop.getTime() && count < 500) {
+    while (cur.getTime() <= stop.getTime() && count < 400) {
       const occStart = new Date(cur);
       const durMs = d.end ? (new Date(d.end).getTime() - new Date(d.start).getTime()) : 0;
       const occEndAdj = d.end ? new Date(occStart.getTime() + durMs) : null;
 
-      const occId = `${d.id}__${occStart.toISOString().slice(0, 10)}`;
+      const occId = `${d.id}__${occStart.toISOString().slice(0,10)}`;
 
       out.push(makeFcEvent({
         id: occId,
@@ -935,335 +1356,84 @@ function expandRepeats(norm) {
   return out;
 }
 
-/* ---------------- FullCalendar init ---------------- */
-function initCalendarUI() {
-  const calendarEl = document.getElementById("calendar");
-  if (!calendarEl) throw new Error("Missing #calendar element");
-
-  calendar = new FullCalendar.Calendar(calendarEl, {
-    initialView: "dayGridMonth",
-    headerToolbar: {
-      left: "prev,next",
-      center: "title",
-      right: "dayGridMonth,timeGridWeek,timeGridDay,listBtn"
-    },
-    customButtons: {
-      listBtn: { text: "List", click: () => openListView() }
-    },
-    views: {
-      listCustom: { type: "list", duration: { days: 7 }, buttonText: "List" }
-    },
-    selectable: true,
-    editable: true,
-    nowIndicator: true,
-    height: "auto",
-    longPressDelay: 350,
-    selectLongPressDelay: 350,
-
-    datesSet: () => hookMonthTitleClick(),
-
-    dateClick: (info) => {
-      const start = new Date(info.date);
-      start.setHours(9, 0, 0, 0);
-      const end = new Date(start.getTime() + 60 * 60 * 1000);
-      openEventModal({
-        mode: "create",
-        title: "",
-        start,
-        end,
-        allDay: false,
-        owner: "both",
-        ownerCustom: "",
-        type: "general",
-        repeat: "none",
-        repeatUntil: "",
-        notes: "",
-        checklist: []
-      });
-    },
-
-    select: (info) => {
-      const start = info.start;
-      const end = info.end || new Date(start.getTime() + 60 * 60 * 1000);
-      openEventModal({
-        mode: "create",
-        title: "",
-        start,
-        end,
-        allDay: info.allDay,
-        owner: "both",
-        ownerCustom: "",
-        type: "general",
-        repeat: "none",
-        repeatUntil: "",
-        notes: "",
-        checklist: []
-      });
-    },
-
-    eventClick: (info) => {
-      const ev = info.event;
-      const p = ev.extendedProps || {};
-      const sourceId = p.sourceId || ev.id;
-
-      const docData = rawDocs.find(d => d.id === sourceId);
-      if (!docData) return;
-
-      openEventModal({
-        mode: "edit",
-        id: sourceId,
-        occurrenceStart: ev.start ? new Date(ev.start) : null,
-        title: docData.title || "",
-        start: docData.start ? new Date(docData.start) : ev.start,
-        end: docData.end ? new Date(docData.end) : ev.end,
-        allDay: !!docData.allDay,
-        owner: normalizeOwner(docData.owner),
-        ownerCustom: docData.ownerCustom || "",
-        type: docData.type || "general",
-        repeat: docData.repeat || "none",
-        repeatUntil: docData.repeatUntil || "",
-        notes: docData.notes || "",
-        checklist: Array.isArray(docData.checklist) ? docData.checklist : []
-      });
-    },
-
-    eventDidMount: (arg) => {
-      const show = shouldShowEvent(arg.event);
-      if (!show) arg.el.style.display = "none";
-
-      const p = arg.event.extendedProps || {};
-      if (p.isRepeatOccurrence) {
-        arg.event.setProp("editable", false);
-        arg.event.setProp("durationEditable", false);
-        arg.event.setProp("startEditable", false);
-      }
-
-      arg.el.style.fontSize = "var(--event-font)";
-    },
-
-    eventDrop: async (info) => {
-      const p = info.event.extendedProps || {};
-      if (p.isRepeatOccurrence) {
-        info.revert();
-        alert("Repeating events: edit the series instead (no single-instance moves yet).");
-        return;
-      }
-      await persistMovedEvent(info.event);
-    },
-
-    eventResize: async (info) => {
-      const p = info.event.extendedProps || {};
-      if (p.isRepeatOccurrence) {
-        info.revert();
-        alert("Repeating events: edit the series instead (no single-instance resizes yet).");
-        return;
-      }
-      await persistMovedEvent(info.event);
-    }
-  });
-
-  calendar.render();
-  hookMonthTitleClick();
-  attachSwipe(calendarEl);
+function advanceRepeat(date, repeat) {
+  const d = new Date(date);
+  if (repeat === "daily") d.setDate(d.getDate() + 1);
+  else if (repeat === "weekly") d.setDate(d.getDate() + 7);
+  else if (repeat === "monthly") d.setMonth(d.getMonth() + 1);
+  else if (repeat === "yearly") d.setFullYear(d.getFullYear() + 1);
+  else d.setDate(d.getDate() + 1);
+  return d;
 }
 
-function hookMonthTitleClick() {
-  const title = document.querySelector(".fc-toolbar-title");
-  if (!title) return;
-  title.style.cursor = "pointer";
-  title.title = "Jump to month";
-  title.onclick = () => openJumpModalFromCalendar();
+function makeFcEvent({ id, title, start, end, allDay, style, extra }) {
+  return {
+    id,
+    title,
+    start: start.toISOString(),
+    end: end ? end.toISOString() : undefined,
+    allDay: !!allDay,
+    backgroundColor: style.bg,
+    borderColor: style.border,
+    textColor: "#e9ecf1",
+    extendedProps: extra
+  };
 }
 
-/* Re-add swipe left/right to change months */
-function attachSwipe(el) {
-  let sx = 0, sy = 0, st = 0;
-  el.addEventListener("touchstart", (e) => {
-    if (!e.touches || e.touches.length !== 1) return;
-    sx = e.touches[0].clientX;
-    sy = e.touches[0].clientY;
-    st = Date.now();
-  }, { passive: true });
+// ---------- Panel card rendering ----------
+function renderPanelCardHTML(e) {
+  const p = e.extendedProps || {};
+  const owner = normalizeOwner(p.owner);
+  const ownerLabel = owner === "custom" ? (p.ownerCustom || "Other") : owner;
 
-  el.addEventListener("touchend", (e) => {
-    const dt = Date.now() - st;
-    if (dt > 650) return;
+  const when = formatWhenForPanel({
+    start: new Date(e.start),
+    end: e.end ? new Date(e.end) : null,
+    allDay: !!e.allDay
+  });
 
-    const touch = e.changedTouches?.[0];
-    if (!touch) return;
-    const dx = touch.clientX - sx;
-    const dy = touch.clientY - sy;
+  const style = OWNER_STYLE[owner] || OWNER_STYLE.custom;
+  const pillColor = style.border;
 
-    if (Math.abs(dx) < 60) return;
-    if (Math.abs(dy) > 45) return;
-
-    if (dx < 0) calendar?.next();
-    else calendar?.prev();
-  }, { passive: true });
+  return `
+    <div class="panel-card" data-open-id="${p.sourceId || e.id}" data-occ="${String(e.start)}" style="border-left: 5px solid ${pillColor}; cursor: pointer;">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
+        <span class="owner-pill">${escapeHtml(ownerLabel)}</span>
+        <strong style="font-size: 16px;">${escapeHtml(e.title || "")}</strong>
+      </div>
+      <div class="tiny muted">${escapeHtml(when)}</div>
+    </div>
+  `;
 }
 
-/* ---------------- Init UI hooks ---------------- */
-function initUIHooks() {
-  logoutBtn?.addEventListener("click", lock);
-  todayBtn?.addEventListener("click", () => calendar?.today());
+function renderPanelCardHTMLWithProgress(e) {
+  const p = e.extendedProps || {};
+  const items = Array.isArray(p.checklist) ? p.checklist : [];
+  const done = items.filter(i => i.done).length;
+  const total = items.length;
+  const pct = total ? Math.round((done / total) * 100) : 0;
 
-  // Search debounce + actually apply
-  let t = null;
-  searchInput?.addEventListener("input", () => {
-    clearTimeout(t);
-    t = setTimeout(() => {
-      searchText = (searchInput.value || "").trim();
-      applySearchAndFilters(true);
-    }, 160);
-  });
-
-  searchClearBtn?.addEventListener("click", () => {
-    if (searchInput) searchInput.value = "";
-    searchText = "";
-    applySearchAndFilters(false);
-    searchInput?.focus();
-  });
-
-  // Dates button only useful when search active (UI state handles)
-  searchFiltersBtn?.addEventListener("click", () => {
-    if (!isSearchActive()) return;
-    if (searchFilters?.classList.contains("hidden")) openSearchOptions();
-    else closeSearchOptions();
-  });
-
-  closeSearchFiltersBtn?.addEventListener("click", closeSearchOptions);
-
-  // click-outside closes search filters
-  document.addEventListener("click", (e) => {
-    if (!searchFilters || searchFilters.classList.contains("hidden")) return;
-    const wrap = searchFilters.closest(".search-filters-wrap");
-    if (wrap && !wrap.contains(e.target)) closeSearchOptions();
-  });
-
-  clearDatesBtn?.addEventListener("click", () => {
-    if (searchFrom) searchFrom.value = "";
-    if (searchTo) searchTo.value = "";
-    applySearchAndFilters(false);
-  });
-
-  searchFrom?.addEventListener("change", () => applySearchAndFilters(true));
-  searchTo?.addEventListener("change", () => applySearchAndFilters(true));
-
-  // Owner filter must re-render calendar + panels
-  ownerFilter?.addEventListener("change", () => {
-    ownerFilterValue = ownerFilter.value || "all";
-    applySearchAndFilters(false);
-  });
-
-  // List range affects List view duration
-  listRangeSelect?.addEventListener("change", () => {
-    if (calendar && calendar.view?.type === "listCustom") openListView();
-    else renderPanels();
-  });
-
-  // FAB opens modal
-  fab?.addEventListener("click", () => {
-    const start = roundToNextHour(new Date());
-    const end = new Date(start.getTime() + 60 * 60 * 1000);
-    openEventModal({
-      mode: "create",
-      title: "",
-      start,
-      end,
-      allDay: false,
-      owner: "both",
-      ownerCustom: "",
-      type: "general",
-      repeat: "none",
-      repeatUntil: "",
-      notes: "",
-      checklist: []
-    });
-  });
-
-  // Modal wiring
-  modalClose?.addEventListener("click", closeModal);
-  cancelBtn?.addEventListener("click", closeModal);
-  backdrop?.addEventListener("click", (e) => {
-    if (e.target === backdrop) closeModal();
-  });
-
-  evtAllDay?.addEventListener("change", () => {
-    preserveDatesOnAllDayToggle(!!evtAllDay.checked);
-  });
-
-  evtOwner?.addEventListener("change", () => {
-    const v = evtOwner.value;
-    ownerCustomWrap?.classList.toggle("hidden", v !== "custom");
-    if (v !== "custom" && evtOwnerCustom) evtOwnerCustom.value = "";
-  });
-
-  evtRepeat?.addEventListener("change", () => {
-    repeatUntilWrap?.classList.toggle("hidden", evtRepeat.value === "none");
-  });
-
-  evtType?.addEventListener("change", () => {
-    maybeAutofillChecklist(evtType.value);
-  });
-
-  addCheckItemBtn?.addEventListener("click", () => {
-    addChecklistItemUI(checklistEl, { text: "", done: false }, true);
-  });
-
-  eventForm?.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    await handleSave();
-  });
-
-  deleteBtn?.addEventListener("click", async () => {
-    if (!editingDocId) return;
-    if (!confirm("Delete this event?")) return;
-    await deleteDoc(doc(db, "events", editingDocId));
-    closeModal();
-  });
-
-  // Task modal wiring
-  taskClose?.addEventListener("click", closeTaskModal);
-  taskDone?.addEventListener("click", closeTaskModal);
-  taskBackdrop?.addEventListener("click", (e) => {
-    if (e.target === taskBackdrop) closeTaskModal();
-  });
-  taskAddItem?.addEventListener("click", () => {
-    addChecklistItemUI(taskChecklist, { text: "", done: false }, true);
-  });
-
-  // Jump modal wiring
-  jumpClose?.addEventListener("click", closeJumpModal);
-  jumpCancel?.addEventListener("click", closeJumpModal);
-  jumpBackdrop?.addEventListener("click", (e) => {
-    if (e.target === jumpBackdrop) closeJumpModal();
-  });
-  jumpGoBtn?.addEventListener("click", () => {
-    const month = Number(jumpMonthSelect?.value ?? 0);
-    const year = Number(jumpYearSelect?.value ?? new Date().getFullYear());
-    calendar?.gotoDate(new Date(year, month, 1));
-    closeJumpModal();
-  });
-
-  populateYearSelect();
-  setSearchUIState();
+  return renderPanelCardHTML(e).replace(
+    "</div>\n    </div>",
+    ` <span class="progress-pill">${done}/${total} (${pct}%)</span></div>\n    </div>`
+  );
 }
 
-/* ---------------- Apply filters (calendar + panels) ---------------- */
-function applySearchAndFilters(switchToListIfSearching) {
-  searchText = (searchInput?.value || "").trim();
+function formatWhenForPanel({ start, end, allDay }) {
+  if (!start) return "";
+  const optsDate = { weekday: "short", month: "short", day: "numeric" };
+  const optsTime = { hour: "numeric", minute: "2-digit" };
 
-  setSearchUIState();
-  renderCalendarFromCache();
-  renderPanels();
+  if (allDay) return `${start.toLocaleDateString(undefined, optsDate)} (all day)`;
 
-  // If searching, switch to list view for relevance (optional but nice)
-  if (switchToListIfSearching && isSearchActive()) {
-    openListView();
-  }
+  const d = start.toLocaleDateString(undefined, optsDate);
+  const t1 = start.toLocaleTimeString(undefined, optsTime);
+  if (!end) return `${d} • ${t1}`;
+  const t2 = end.toLocaleTimeString(undefined, optsTime);
+  return `${d} • ${t1}–${t2}`;
 }
 
-/* ---------------- Date helpers + escape ---------------- */
+// ---------- Date helpers ----------
 function toInputValue(dateObj, allDay) {
   let d = dateObj;
   if (!(d instanceof Date)) d = new Date(d);
@@ -1297,20 +1467,7 @@ function roundToNextHour(d) {
   return x;
 }
 
-function formatWhenForPanel({ start, end, allDay }) {
-  if (!start) return "";
-  const optsDate = { weekday: "short", month: "short", day: "numeric" };
-  const optsTime = { hour: "numeric", minute: "2-digit" };
-
-  if (allDay) return `${start.toLocaleDateString(undefined, optsDate)} (all day)`;
-
-  const d = start.toLocaleDateString(undefined, optsDate);
-  const t1 = start.toLocaleTimeString(undefined, optsTime);
-  if (!end) return `${d} • ${t1}`;
-  const t2 = end.toLocaleTimeString(undefined, optsTime);
-  return `${d} • ${t1}–${t2}`;
-}
-
+// ---------- Escape ----------
 function escapeHtml(s) {
   return String(s)
     .replaceAll("&", "&amp;")
@@ -1320,43 +1477,8 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
-/* ---------------- Start app ---------------- */
-async function initApp() {
-  // FullCalendar must be present
-  if (!window.FullCalendar?.Calendar) {
-    throw new Error("FullCalendar not found (script load order?)");
-  }
-
-  const app = initializeApp(firebaseConfig);
-  db = getFirestore(app);
-  eventsCol = collection(db, "events");
-
-  initCalendarUI();
-  initUIHooks();
-
-  const q = query(eventsCol, orderBy("start", "asc"));
-  onSnapshot(q, (snap) => {
-    const docs = [];
-    snap.forEach((d) => docs.push({ id: d.id, ...d.data() }));
-    rawDocs = docs;
-
-    expandedEvents = expandRepeats(normalizeDocs(rawDocs));
-    renderCalendarFromCache();
-    renderPanels();
-
-    // keep search state applied
-    setSearchUIState();
-  }, (err) => {
-    console.error(err);
-    alert("Sync error. Check Firestore rules/network.");
-  });
-}
-
+// ---------- Start ----------
 initApp().catch((err) => {
   console.error(err);
-  alert(
-    "App failed to initialize.\n\n" +
-    "Open DevTools console for details.\n" +
-    "Common causes: FullCalendar blocked, wrong script order, or a JS syntax error."
-  );
+  alert("Firebase failed to initialize. Check firebaseConfig + Firestore rules.");
 });
