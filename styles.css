@@ -28,7 +28,7 @@ body{
 #app{
   max-width: 1100px;
   margin: 18px auto;
-  padding: 0 12px 80px;
+  padding: 0 12px 90px;
 }
 
 .card{
@@ -44,13 +44,13 @@ body{
   align-items:center;
   justify-content:space-between;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .brand{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 .brand-title{ font-weight: 900; letter-spacing: 0.2px; }
 
-.actions{ display:flex; gap:10px; flex-wrap:wrap; }
+.actions{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
 
 .pill{
   font-size: 12px;
@@ -59,6 +59,16 @@ body{
   border: 1px solid var(--border);
   background: rgba(255,255,255,0.06);
   color: var(--muted);
+}
+
+/* Jump month picker */
+.jump{
+  display:flex;
+  gap:10px;
+  align-items:center;
+}
+.jump input[type="month"]{
+  width: 165px;
 }
 
 /* Buttons */
@@ -112,7 +122,35 @@ input:focus, select:focus, textarea:focus{
   box-shadow: 0 0 0 3px rgba(122,162,255,0.16);
 }
 
-/* FullCalendar smaller */
+/* Owner filter chips */
+.filters{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin: 0 0 12px;
+}
+.chip{
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 7px 10px;
+  font-weight: 800;
+  font-size: 13px;
+  cursor:pointer;
+}
+.chip.ghost{
+  opacity: 0.85;
+}
+.chip.active{
+  border-color: rgba(122,162,255,0.55);
+  background: rgba(122,162,255,0.18);
+}
+.chip:not(.active){
+  opacity: 0.65;
+}
+
+/* FullCalendar smaller overall */
 #calendarWrap{ padding: 10px; }
 .fc{
   --fc-page-bg-color: transparent;
@@ -137,8 +175,24 @@ input:focus, select:focus, textarea:focus{
   background: rgba(122,162,255,0.22);
 }
 
+/* 🔥 Smaller event text so more characters fit */
+.fc .fc-daygrid-event .fc-event-title,
+.fc .fc-daygrid-event .fc-event-time,
+.fc .fc-timegrid-event .fc-event-title,
+.fc .fc-timegrid-event .fc-event-time,
+.fc .fc-list-event-title {
+  font-size: 11px;
+  line-height: 1.15;
+}
+.fc .fc-daygrid-event {
+  padding: 1px 2px;
+}
+.fc .fc-daygrid-dot-event .fc-event-title{
+  font-size: 11px;
+}
+
 @media (max-width: 720px){
-  #app{ margin: 10px auto; padding-bottom: 90px; }
+  #app{ margin: 10px auto; padding-bottom: 100px; }
   .fc .fc-toolbar{
     flex-direction: column;
     align-items: stretch;
@@ -150,6 +204,7 @@ input:focus, select:focus, textarea:focus{
     flex-wrap: wrap;
     gap: 8px;
   }
+  .jump input[type="month"]{ width: 150px; }
 }
 
 /* Floating add button */
@@ -193,8 +248,6 @@ input:focus, select:focus, textarea:focus{
 }
 .gate-title{ font-size: 30px; font-weight: 900; margin-bottom: 4px; }
 .gate-sub{ color: var(--muted); margin-bottom: 14px; }
-
-/* Stacked on mobile so button stays visible */
 .gate-form{ display:flex; gap: 10px; }
 .gate-input{ -webkit-text-security: disc; font-size: 16px; }
 
