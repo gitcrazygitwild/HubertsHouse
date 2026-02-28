@@ -407,12 +407,15 @@ function attachSwipeNavigation(targetEl) {
   const MAX_Y = 80;
 
   targetEl.addEventListener("touchstart", (e) => {
-    if (!e.touches || e.touches.length !== 1) return;
-    tracking = true;
-    locked = false;
-    sx = e.touches[0].clientX;
-    sy = e.touches[0].clientY;
-  }, { passive: true });
+  // ✅ If the touch starts in the toolbar, don’t treat it as a swipe area
+  if (e.target && e.target.closest && e.target.closest(".fc-toolbar")) return;
+
+  if (!e.touches || e.touches.length !== 1) return;
+  tracking = true;
+  locked = false;
+  sx = e.touches[0].clientX;
+  sy = e.touches[0].clientY;
+}, { passive: true });
 
   targetEl.addEventListener("touchmove", (e) => {
     if (!tracking || !e.touches || e.touches.length !== 1) return;
