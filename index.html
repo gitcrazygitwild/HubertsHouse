@@ -99,25 +99,17 @@
       </div>
 
       <!-- Dealer’s choice POP: tiny legend -->
-.legend{
+<div class="legend">
+  <div class="legend-row"><span class="dot dot-hanry"></span><span class="legend-label">hanry</span></div>
+  <div class="legend-row"><span class="dot dot-karena"></span><span class="legend-label">Karena</span></div>
+  <div class="legend-row"><span class="dot dot-both"></span><span class="legend-label">Both</span></div>
+  <div class="legend-row"><span class="dot dot-custom"></span><span class="legend-label">Other</span></div>
+</div>
+
+.legend-row{
   display:flex;
-  flex-direction: column;   /* 👈 vertical */
-  gap: 8px;
-  align-items:flex-start;
-  margin: 6px 0 10px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-/* each legend row */
-.legend .legend-label{
-  margin-right: 0;
-}
-
-/* optional: keep dot+label nicely aligned */
-.legend > span{
-  display:inline-flex;
   align-items:center;
+  gap: 8px;
 }
 
       <div id="calendar"></div>
