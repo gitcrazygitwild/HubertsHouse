@@ -1,6 +1,8 @@
 // Mack Calendar — Firebase sync + mobile-friendly + time + notes + his/hers/both
 // Gate is client-side only (not real security).
 
+alert("APP.JS LOADED 20260227a");
+
 // ---------- Gate ----------
 const PASSWORD = "Mack";
 
