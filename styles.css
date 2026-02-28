@@ -748,13 +748,21 @@ input:focus, select:focus, textarea:focus{
 .gate-remember input{ width:auto; }
 
 /* ---------- Cat mode ambient layer ---------- */
+./* ---------- Cat mode ambient layer ---------- */
 .cat-layer{
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 2;
-  opacity: .55;
-  mix-blend-mode: screen;
+  overflow: hidden;        /* important */
+  display: none;           /* important */
+  z-index: 5;              /* above background + cards */
+  opacity: 1;              /* let each paw control its own opacity */
+  /* mix-blend-mode: screen;  <-- remove for now (can re-add later) */
+}
+
+html.cat-mode .cat-layer{
+  display: block !important;
+}
 }
 html.cat-mode .cat-layer{ display:block !important; }
 html.cat-mode body{ }
