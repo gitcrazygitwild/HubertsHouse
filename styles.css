@@ -1,10 +1,11 @@
-/* styles.css — Hubert’s House (v6)
-   Updates:
-   - New topbar-row layout: one row (cat/title/sync left, Focus+🎲+Logout right)
-   - Sync pill aligns inline with ✨
-   - Focus mode becomes a tiny top-row "pill button" that shows active state
-   - Removed/ignores old focus-row styling
-   - Dealers choice enhancement: subtle "sheen" layer + nicer header spacing
+/* styles.css — Hubert’s House (v7)
+   Updates for your latest requests:
+   - Crisp UI: tighter spacing, cleaner borders, sharper typography
+   - Removed Sync pill styling (not used now)
+   - Search options popover only (Options button hidden by default; JS will show when searching)
+   - Removed redundant quick-add button styling (no longer in HTML)
+   - FAB always visible bottom-right with higher z-index
+   - Focus button compact + clear active state
 */
 
 :root{
@@ -14,11 +15,15 @@
   --text:#e9ecf1;
   --muted:#9aa6c4;
   --border:rgba(255,255,255,0.18);
+  --border2:rgba(255,255,255,0.12);
   --accent:#7aa2ff;
 
-  --blob1:rgba(122,162,255,.55);
-  --blob2:rgba(255,107,107,.45);
-  --blob3:rgba(116,217,155,.40);
+  --blob1:rgba(122,162,255,.50);
+  --blob2:rgba(255,107,107,.40);
+  --blob3:rgba(116,217,155,.34);
+
+  --shadow: 0 30px 70px rgba(0,0,0,.45);
+  --shadow2: 0 18px 50px rgba(0,0,0,.50);
 
   --event-font: 11px;
 }
@@ -32,25 +37,27 @@ body{
   color:var(--text);
   background:
     radial-gradient(circle at 20% 30%, var(--blob1), transparent 45%),
-    radial-gradient(circle at 70% 60%, var(--blob2), transparent 50%),
-    radial-gradient(circle at 40% 80%, var(--blob3), transparent 55%),
+    radial-gradient(circle at 70% 60%, var(--blob2), transparent 52%),
+    radial-gradient(circle at 40% 84%, var(--blob3), transparent 56%),
     linear-gradient(180deg,var(--bg2),var(--bg));
   background-attachment:fixed;
   -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
 }
 
 @keyframes floatBlobs{
-  0%{background-position:20% 30%,70% 60%,40% 80%,0 0;}
-  50%{background-position:23% 27%,67% 63%,43% 77%,0 0;}
-  100%{background-position:20% 30%,70% 60%,40% 80%,0 0;}
+  0%{background-position:20% 30%,70% 60%,40% 84%,0 0;}
+  50%{background-position:23% 27%,67% 63%,43% 81%,0 0;}
+  100%{background-position:20% 30%,70% 60%,40% 84%,0 0;}
 }
 body{ animation:floatBlobs 20s ease-in-out infinite; }
 
 .hidden{ display:none !important; }
 .muted{ color:var(--muted); }
 .tiny{ font-size:11px; color:var(--muted); }
+.hint{ margin-top:8px; }
 
-/* Prevent iOS zoom on inputs (>=16px) */
+/* Prevent iOS zoom on inputs */
 input, select, textarea{ font-size:16px; }
 
 /* Buttons */
@@ -58,17 +65,24 @@ input, select, textarea{ font-size:16px; }
   padding:8px 14px;
   border-radius:14px;
   border:1px solid var(--border);
-  background:rgba(255,255,255,.08);
+  background:rgba(255,255,255,.07);
   color:var(--text);
   cursor:pointer;
-  font-weight:800;
+  font-weight:900;
   letter-spacing:.2px;
-  transition:transform .15s ease, background .15s ease, box-shadow .15s ease, border-color .15s ease;
+  transition:transform .15s ease, background .15s ease, box-shadow .15s ease, border-color .15s ease, filter .15s ease;
 }
-.btn:hover{ background:rgba(255,255,255,.14); transform:translateY(-1px); }
+.btn:hover{ background:rgba(255,255,255,.12); transform:translateY(-1px); }
+.btn:active{ transform:translateY(0); filter:saturate(1.05); }
 .btn:disabled{ opacity:.45; cursor:default; transform:none; }
-.btn-primary{ background:var(--accent); border-color:transparent; color:#fff; }
-.btn-ghost{ background:rgba(255,255,255,.08); }
+
+.btn-primary{
+  background:var(--accent);
+  border-color:transparent;
+  color:#fff;
+}
+.btn-ghost{ background:rgba(255,255,255,.06); }
+
 .btn-icon{
   width:40px; height:40px;
   padding:0;
@@ -76,6 +90,7 @@ input, select, textarea{ font-size:16px; }
   display:grid;
   place-items:center;
 }
+
 .btn-danger{
   border-color:rgba(255,107,107,.55);
   background:rgba(255,107,107,.16);
@@ -86,12 +101,10 @@ input, select, textarea{ font-size:16px; }
   background:var(--card);
   backdrop-filter:blur(18px);
   -webkit-backdrop-filter:blur(18px);
-  border:2px solid var(--border);
+  border:1.5px solid var(--border);
   border-radius:20px;
   padding:16px;
-  box-shadow:
-    0 30px 70px rgba(0,0,0,.45),
-    inset 0 0 0 1px rgba(255,255,255,.05);
+  box-shadow: var(--shadow), inset 0 0 0 1px rgba(255,255,255,.05);
 }
 
 /* Layout */
@@ -99,40 +112,21 @@ input, select, textarea{ font-size:16px; }
   max-width:1120px;
   margin:0 auto;
   padding:14px 12px 110px;
-  position:relative;
 }
-
-/* Dealers choice enhancement: subtle sheen layer */
-.sheen{
-  position:absolute;
-  inset:0;
-  pointer-events:none;
-  z-index:0;
-  opacity:.55;
-  background:
-    radial-gradient(900px 260px at 14% 0%, rgba(255,255,255,.18), transparent 60%),
-    radial-gradient(720px 220px at 86% 8%, rgba(122,162,255,.18), transparent 62%),
-    linear-gradient(180deg, rgba(255,255,255,.06), transparent 28%);
-  filter: blur(.2px);
-}
-#app > *:not(.sheen){ position:relative; z-index:1; }
 
 /* Topbar */
-.topbar{
-  padding:10px 6px 6px;
-}
-
+.topbar{ padding:10px 6px 2px; }
 .topbar-row{
   display:flex;
   justify-content:space-between;
-  align-items:flex-start; /* keeps title tight */
+  align-items:center;
   gap:12px;
 }
 
 /* Brand */
 .brand{
   display:flex;
-  align-items:flex-start;
+  align-items:center;
   gap:12px;
   min-width:0;
 }
@@ -142,81 +136,51 @@ input, select, textarea{ font-size:16px; }
   display:inline-block;
   transform:translateY(1px);
   animation:bounce 2s infinite ease-in-out;
-  flex:0 0 auto;
 }
 @keyframes bounce{
   0%,100%{transform:translateY(1px);}
   50%{transform:translateY(-3px);}
 }
-
-.brand-stack{
-  display:flex;
-  flex-direction:column;
-  gap:6px;
-  margin-top:-2px;
-  min-width:0;
-}
-
-/* Title row now contains: Title + ✨ + Sync pill inline */
+.brand-stack{ display:flex; flex-direction:column; gap:0; min-width:0; }
 .brand-title-row{
   display:flex;
   align-items:center;
   gap:8px;
   min-width:0;
-  flex-wrap:wrap; /* allows sync to wrap only if truly needed */
 }
-
 .brand-title{
   font-weight:950;
   font-size:20px;
-  letter-spacing:.3px;
+  letter-spacing:.25px;
   line-height:1.05;
   white-space:nowrap;
 }
-
 .sparkle-badge{
   font-size:14px;
+  transform:translateY(1px);
   filter:drop-shadow(0 10px 18px rgba(0,0,0,.35));
-  transform:translateY(1px);
 }
 
-/* Sync pill inline with ✨ */
-.pill{
-  font-size:12px;
-  padding:4px 10px;
-  border-radius:999px;
-  border:1px solid var(--border);
-  background:rgba(255,255,255,.07);
-  width:fit-content;
-  white-space:nowrap;
-  transform:translateY(1px);
-}
-
-/* Right side actions */
+/* Right actions */
 .top-actions{
   display:flex;
   gap:10px;
   align-items:center;
   flex:0 0 auto;
 }
-
-/* Dice button compact */
 #themeBtn{ width:46px; padding:8px 0; }
 
-/* Focus button (top-row) */
+/* Focus button (label-as-button, input hidden inline) */
 .focus-btn{
   padding:7px 12px;
   border-radius:999px;
   font-weight:950;
-  letter-spacing:.2px;
   display:inline-flex;
   align-items:center;
   gap:8px;
   position:relative;
   user-select:none;
 }
-
-/* Add a tiny "dot" inside focus button */
 .focus-btn::before{
   content:"";
   width:8px; height:8px;
@@ -225,49 +189,85 @@ input, select, textarea{ font-size:16px; }
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);
 }
 
-/* When checked, show active state (works because input is inside label) */
+/* Active state (modern browsers) */
 .focus-btn:has(input:checked){
-  background:rgba(122,162,255,.22);
+  background:rgba(122,162,255,.18);
   border-color:rgba(122,162,255,.55);
-  box-shadow:0 0 0 3px rgba(122,162,255,.18);
+  box-shadow:0 0 0 3px rgba(122,162,255,.16);
 }
 .focus-btn:has(input:checked)::before{
-  background:rgba(122,162,255,.9);
-  box-shadow:0 0 0 3px rgba(122,162,255,.25);
+  background:rgba(122,162,255,.95);
+  box-shadow:0 0 0 3px rgba(122,162,255,.22);
 }
 
 /* Search */
-.search-row-wrap{ margin-top:8px; }
+.search-row-wrap{ margin-top:10px; }
 .search-row{
   display:flex;
   gap:10px;
   align-items:center;
   flex-wrap:wrap;
 }
+
+/* Search input + clear */
+.search-shell{
+  position:relative;
+  flex:1 1 280px;
+}
 .search{
-  flex:1 1 260px;
-  padding:10px 14px;
-  border-radius:14px;
+  width:100%;
+  padding:11px 40px 11px 14px;
+  border-radius:16px;
   border:1px solid var(--border);
-  background:rgba(0,0,0,.25);
+  background:rgba(0,0,0,.24);
   color:var(--text);
+  outline:none;
 }
 .search::placeholder{ color:rgba(233,236,241,.55); }
+.search:focus{
+  border-color:rgba(122,162,255,.55);
+  box-shadow:0 0 0 3px rgba(122,162,255,.16);
+}
+.search-clear{
+  position:absolute;
+  right:10px;
+  top:50%;
+  transform:translateY(-50%);
+  width:30px;
+  height:30px;
+  border-radius:12px;
+  border:1px solid var(--border2);
+  background:rgba(255,255,255,.06);
+  color:rgba(233,236,241,.9);
+  cursor:pointer;
+  font-weight:950;
+}
+.search-clear:hover{ background:rgba(255,255,255,.10); }
 
+/* Search options popover */
 .search-filters-wrap{
   position:relative;
   display:flex;
   align-items:center;
   gap:10px;
 }
-.search-filters-btn.is-active{
-  box-shadow:0 0 0 3px rgba(122,162,255,.20);
-  border-color:rgba(122,162,255,.55);
+
+.search-filters-btn{
+  border-radius:999px;
+  padding:8px 12px;
 }
+
+.search-filters-title{
+  font-weight:950;
+  margin-bottom:10px;
+  letter-spacing:.2px;
+  opacity:.95;
+}
+
 .search-filters{
   position:absolute;
   right:0;
-  top:44px;
+  top:46px;
   width:min(420px, 92vw);
   padding:12px;
   border-radius:18px;
@@ -275,14 +275,16 @@ input, select, textarea{ font-size:16px; }
   border:1px solid var(--border);
   backdrop-filter:blur(14px);
   -webkit-backdrop-filter:blur(14px);
-  box-shadow:0 18px 50px rgba(0,0,0,.5);
+  box-shadow: var(--shadow2);
   z-index:50;
 }
+
 .search-filters .row{
   display:grid;
   grid-template-columns:1fr 1fr;
   gap:10px;
 }
+
 .search-date{
   width:100%;
   padding:10px 12px;
@@ -293,7 +295,7 @@ input, select, textarea{ font-size:16px; }
 }
 
 /* Calendar tools */
-#calendarWrap{ margin-top:10px; }
+#calendarWrap{ margin-top:12px; }
 
 .calendar-tools{
   display:flex;
@@ -303,7 +305,7 @@ input, select, textarea{ font-size:16px; }
   margin-bottom:10px;
 }
 
-/* Force Today/List range/Owner to one line on mobile */
+/* Today/List range/Owner — one line on mobile */
 .tools-left{
   width:100%;
   display:grid;
@@ -311,18 +313,19 @@ input, select, textarea{ font-size:16px; }
   gap:10px;
   align-items:center;
 }
+
 .mini-label{
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap:10px;
   font-size:13px;
-  font-weight:900;
-  color:rgba(233,236,241,.90);
+  font-weight:950;
+  color:rgba(233,236,241,.92);
 }
 .mini-label span{
-  color:rgba(233,236,241,.75);
-  font-weight:900;
+  color:rgba(233,236,241,.72);
+  font-weight:950;
 }
 .mini-select{
   width:100%;
@@ -330,8 +333,13 @@ input, select, textarea{ font-size:16px; }
   padding:8px 10px;
   border-radius:12px;
   border:1px solid var(--border);
-  background:rgba(0,0,0,.25);
+  background:rgba(0,0,0,.22);
   color:var(--text);
+  outline:none;
+}
+.mini-select:focus{
+  border-color:rgba(122,162,255,.55);
+  box-shadow:0 0 0 3px rgba(122,162,255,.14);
 }
 
 /* Legend */
@@ -340,8 +348,8 @@ input, select, textarea{ font-size:16px; }
   align-items:center;
   gap:14px;
   font-size:12px;
-  font-weight:900;
-  margin:2px 0 10px;
+  font-weight:950;
+  margin:4px 0 12px;
   opacity:.95;
   flex-wrap:wrap;
 }
@@ -358,9 +366,9 @@ input, select, textarea{ font-size:16px; }
 .dot-both{background:#74d99b;}
 .dot-custom{background:#bb86fc;}
 
-/* Calendar border */
+/* Calendar container */
 #calendar{
-  border:3px solid rgba(255,255,255,.22);
+  border:2px solid rgba(255,255,255,.20);
   border-radius:18px;
   padding:8px;
   background:rgba(0,0,0,.10);
@@ -369,41 +377,55 @@ input, select, textarea{ font-size:16px; }
 /* FullCalendar tweaks */
 .fc{
   --fc-page-bg-color: transparent;
-  --fc-neutral-bg-color: rgba(255,255,255,0.04);
+  --fc-neutral-bg-color: rgba(255,255,255,0.035);
   --fc-border-color: rgba(255,255,255,0.12);
   --fc-today-bg-color: rgba(122,162,255,0.10);
   --fc-list-event-hover-bg-color: rgba(255,255,255,0.06);
   color:var(--text);
   font-size:12px;
 }
+
+/* Crisp toolbar */
+.fc .fc-toolbar{
+  gap:10px;
+  align-items:center;
+}
 .fc .fc-toolbar-title{
   font-size:18px;
   font-weight:950;
+  letter-spacing:.2px;
   cursor:pointer;
 }
+
+/* Buttons */
 .fc .fc-button{
   border-radius:12px;
   border:1px solid var(--border);
-  background:rgba(255,255,255,.08);
+  background:rgba(255,255,255,.06);
   color:var(--text);
+  font-weight:900;
 }
-.fc .fc-button:hover{ background:rgba(255,255,255,.14); }
+.fc .fc-button:hover{ background:rgba(255,255,255,.12); }
 .fc .fc-button-primary:not(:disabled).fc-button-active{
-  background:rgba(122,162,255,.28);
+  background:rgba(122,162,255,.22);
   border-color:rgba(122,162,255,.55);
 }
+
+/* Events */
 .fc-event{
-  border-radius:8px !important;
+  border-radius:9px !important;
   font-size:11px;
   line-height:1.15;
-  padding:1px 4px !important;
+  padding:2px 5px !important;
   margin:1px 2px !important;
-  transition:transform .15s ease, box-shadow .15s ease;
+  transition:transform .15s ease, box-shadow .15s ease, filter .15s ease;
 }
 .fc-event:hover{
   transform:scale(1.04);
-  box-shadow:0 10px 18px rgba(0,0,0,.35);
+  box-shadow:0 12px 20px rgba(0,0,0,.35);
 }
+
+/* Make grid lines a bit clearer */
 .fc .fc-scrollgrid,
 .fc .fc-scrollgrid-section > td,
 .fc .fc-scrollgrid-section > th{
@@ -429,21 +451,22 @@ input, select, textarea{ font-size:16px; }
 .panel-list{
   display:flex;
   flex-direction:column;
-  gap:8px;
+  gap:10px;
 }
 
-/* (Your JS uses "panel-card" for HTML output; keep it styled nicely) */
+/* JS outputs .panel-card */
 .panel-card{
-  padding:10px 12px;
+  padding:12px 12px;
   border:1px solid rgba(255,255,255,.14);
-  background:rgba(0,0,0,.18);
+  background:rgba(0,0,0,.16);
   border-radius:16px;
   cursor:pointer;
-  transition:transform .15s ease, background .15s ease;
+  transition:transform .15s ease, background .15s ease, border-color .15s ease;
 }
 .panel-card:hover{
   background:rgba(255,255,255,.06);
   transform:translateY(-1px);
+  border-color:rgba(255,255,255,.18);
 }
 
 .owner-pill{
@@ -456,7 +479,6 @@ input, select, textarea{ font-size:16px; }
   white-space:nowrap;
 }
 .progress-pill{
-  margin-left:auto;
   font-size:11px;
   font-weight:950;
   padding:3px 8px;
@@ -466,23 +488,25 @@ input, select, textarea{ font-size:16px; }
   white-space:nowrap;
 }
 
-/* FAB */
+/* FAB — always visible bottom-right */
 .fab{
   position:fixed;
   bottom:20px;
   right:20px;
-  width:60px;
-  height:60px;
-  border-radius:50%;
-  font-size:30px;
+  width:62px;
+  height:62px;
+  border-radius:999px;
+  font-size:32px;
   background:var(--accent);
   border:none;
   color:#fff;
   cursor:pointer;
-  box-shadow:0 20px 40px rgba(0,0,0,.5);
+  box-shadow:0 22px 44px rgba(0,0,0,.55);
+  z-index:9996; /* ensure above cards and overlays (but below modals/gate) */
   transition:transform .15s ease, filter .15s ease;
 }
-.fab:hover{ transform:scale(1.08); }
+.fab:hover{ transform:scale(1.07); }
+.fab:active{ transform:scale(1.02); filter:saturate(1.05); }
 
 /* Inputs */
 input, select, textarea{
@@ -490,14 +514,14 @@ input, select, textarea{
   padding:10px 12px;
   border-radius:14px;
   border:1px solid var(--border);
-  background:rgba(0,0,0,.25);
+  background:rgba(0,0,0,.24);
   color:var(--text);
   outline:none;
 }
 textarea{ resize:vertical; }
 input:focus, select:focus, textarea:focus{
   border-color:rgba(122,162,255,.55);
-  box-shadow:0 0 0 3px rgba(122,162,255,.18);
+  box-shadow:0 0 0 3px rgba(122,162,255,.14);
 }
 
 /* Modals */
@@ -516,10 +540,10 @@ input:focus, select:focus, textarea:focus{
   border-radius:20px;
   padding:16px;
   background:var(--card);
-  border:2px solid var(--border);
+  border:1.5px solid var(--border);
   backdrop-filter:blur(18px);
   -webkit-backdrop-filter:blur(18px);
-  box-shadow:0 30px 70px rgba(0,0,0,.5);
+  box-shadow: var(--shadow2);
 }
 .modal-header{
   display:flex;
@@ -528,15 +552,9 @@ input:focus, select:focus, textarea:focus{
   gap:10px;
   margin-bottom:12px;
 }
-.modal-title{
-  font-weight:950;
-  font-size:18px;
-}
-.modal-body{
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-}
+.modal-title{ font-weight:950; font-size:18px; }
+.modal-body{ display:flex; flex-direction:column; gap:10px; }
+
 .field span{
   display:block;
   font-size:12px;
@@ -564,25 +582,13 @@ input:focus, select:focus, textarea:focus{
 }
 .spacer{ flex:1; }
 
-@media (max-width:720px){
-  .modal-backdrop{ align-items:flex-end; padding:10px; }
-  .modal{
-    width:100%;
-    border-bottom-left-radius:0;
-    border-bottom-right-radius:0;
-    max-height:86vh;
-    overflow:auto;
-  }
-}
-
 /* Checklist */
 .checklist{
   display:flex;
   flex-direction:column;
   gap:8px;
 }
-
-/* IMPORTANT: your JS creates rows with class "checkitem" (not "check-item") */
+/* JS creates .checkitem rows */
 .checkitem{
   display:grid;
   grid-template-columns:20px 1fr 44px;
@@ -607,107 +613,47 @@ input:focus, select:focus, textarea:focus{
 .gate-card{
   width:min(520px, 100%);
   background:var(--card);
-  border:2px solid var(--border);
+  border:1.5px solid var(--border);
   border-radius:22px;
   padding:18px;
-  box-shadow:0 30px 70px rgba(0,0,0,.55);
+  box-shadow: var(--shadow2);
 }
-.gate-title{
-  font-weight:950;
-  font-size:22px;
-  margin-bottom:4px;
-}
-.gate-sub{
-  color:rgba(233,236,241,.75);
-  margin-bottom:12px;
-  font-weight:800;
-}
+.gate-title{ font-weight:950; font-size:22px; margin-bottom:4px; }
+.gate-sub{ color:rgba(233,236,241,.75); margin-bottom:12px; font-weight:900; }
 .gate-form{ display:flex; gap:10px; }
 .gate-input{ -webkit-text-security:disc; }
-.gate-note{
-  margin-top:10px;
-  font-size:11px;
-  color:rgba(233,236,241,.6);
-}
+.gate-note{ margin-top:10px; font-size:11px; color:rgba(233,236,241,.6); }
 .gate-remember{
   margin-top:10px;
   display:flex;
   gap:10px;
   align-items:center;
-  font-weight:900;
+  font-weight:950;
   color:rgba(233,236,241,.75);
 }
 .gate-remember input{ width:auto; }
 
-/* Dealer’s choice: Toast */
-.toast{
-  position:fixed;
-  left:50%;
-  transform:translateX(-50%);
-  bottom:92px;
-  max-width:min(520px, 92vw);
-  padding:10px 14px;
-  border-radius:16px;
-  border:1px solid rgba(255,255,255,.18);
-  background:rgba(0,0,0,.35);
-  backdrop-filter:blur(14px);
-  -webkit-backdrop-filter:blur(14px);
-  box-shadow:0 18px 50px rgba(0,0,0,.5);
-  font-weight:900;
-  z-index:9997;
-}
-.toast.show{ animation:toastIn .18s ease-out; }
-@keyframes toastIn{
-  from{ transform:translateX(-50%) translateY(10px); opacity:0; }
-  to{ transform:translateX(-50%) translateY(0); opacity:1; }
-}
-
-/* Dealer’s choice: Back to top */
-.to-top{
-  position:fixed;
-  right:16px;
-  bottom:92px;
-  width:46px;
-  height:46px;
-  border-radius:999px;
-  border:1px solid rgba(255,255,255,.18);
-  background:rgba(0,0,0,.25);
-  color:var(--text);
-  font-weight:950;
-  display:grid;
-  place-items:center;
-  box-shadow:0 18px 44px rgba(0,0,0,.35);
-  z-index:9997;
-}
-.to-top:hover{ background:rgba(255,255,255,.10); transform:translateY(-1px); }
-
-/* Responsive tweaks */
+/* Responsive */
 @media (max-width:720px){
-  /* keep top row tight on mobile */
-  .topbar-row{
-    align-items:center;
-  }
-
-  .brand-title{
-    font-size:19px;
-  }
-
-  /* ensure actions don't wrap too aggressively */
-  .top-actions{
-    gap:8px;
-  }
-
-  .focus-btn{
-    padding:6px 10px;
-  }
-
   .search-row{ align-items:stretch; }
-  .search{ width:100%; }
+  .search-shell{ width:100%; }
   .search-filters{ right:auto; left:0; }
   .search-filters .row{ grid-template-columns:1fr; }
+
+  .modal-backdrop{ align-items:flex-end; padding:10px; }
+  .modal{
+    width:100%;
+    border-bottom-left-radius:0;
+    border-bottom-right-radius:0;
+    max-height:86vh;
+    overflow:auto;
+  }
+
+  .top-actions{ gap:8px; }
+  .focus-btn{ padding:6px 10px; }
 }
 
-/* Optional: if focus mode is toggled, soften background slightly */
+/* Focus mode: keep things calm */
 body.focus-on{
-  filter:saturate(.92) contrast(.98);
+  filter:saturate(.95) contrast(.99);
 }
