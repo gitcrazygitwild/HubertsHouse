@@ -3,17 +3,17 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Hubert's House</title>
+  <title>Hubert’s House</title>
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css">
-  <link rel="stylesheet" href="./styles.css?v=20260227c1" />
+  <link rel="stylesheet" href="./styles.css?v=20260227_hubert_house" />
 </head>
 <body>
 
   <!-- Gate overlay -->
   <div id="gate" class="gate">
     <div class="gate-card">
-      <div class="gate-title">Hubert's House</div>
+      <div class="gate-title">Hubert’s House</div>
       <div class="gate-sub">Enter password to continue</div>
 
       <form id="gateForm" class="gate-form" autocomplete="off">
@@ -43,14 +43,31 @@
   <div id="app">
     <header class="topbar">
       <div class="brand">
-        <div class="brand-title">Hubert's House</div>
+        <div class="brand-title">Hubert’s House</div>
         <span id="status" class="pill">Sync: connecting…</span>
       </div>
+
       <div class="actions">
+        <!-- Quick month/year picker -->
+        <div class="jump">
+          <input id="jumpMonth" type="month" />
+          <button id="jumpGo" class="btn btn-ghost" type="button">Go</button>
+        </div>
+
         <button id="todayBtn" class="btn btn-ghost" type="button">Today</button>
         <button id="logoutBtn" class="btn btn-ghost" type="button">Lock</button>
       </div>
     </header>
+
+    <!-- Owner filter chips (dealer’s choice enhancement) -->
+    <div class="filters">
+      <button class="chip active" data-owner="hanry" type="button">hanry</button>
+      <button class="chip active" data-owner="karena" type="button">Karena</button>
+      <button class="chip active" data-owner="both" type="button">Both</button>
+      <button class="chip active" data-owner="custom" type="button">Other</button>
+      <button id="filtersAll" class="chip ghost" type="button">All</button>
+      <button id="filtersNone" class="chip ghost" type="button">None</button>
+    </div>
 
     <div id="calendarWrap" class="card">
       <div id="calendar"></div>
@@ -112,7 +129,6 @@
           </label>
         </div>
 
-        <!-- Custom owner name (only shown when "Other…" selected) -->
         <label id="ownerCustomWrap" class="field hidden">
           <span>Who (custom)</span>
           <input id="evtOwnerCustom" type="text" placeholder="Type a name…" />
@@ -141,6 +157,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
-  <script type="module" src="./app.js?v=20260227c1"></script>
+  <script type="module" src="./app.js?v=20260227_hubert_house"></script>
 </body>
 </html>
