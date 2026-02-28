@@ -1,4 +1,4 @@
-<!-- index.html -->
+<!-- index.html (v6) -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -8,7 +8,7 @@
 
   <!-- FullCalendar -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css">
-  <link rel="stylesheet" href="./styles.css?v=20260228_huberts_house_v5" />
+  <link rel="stylesheet" href="./styles.css?v=20260228_huberts_house_v6" />
 </head>
 <body>
 
@@ -50,14 +50,20 @@
           <span class="cat">🐱</span>
         </a>
 
-        <div>
+        <div class="brand-stack">
           <div class="brand-title">Hubert’s House</div>
           <span id="status" class="pill">Sync: connecting…</span>
         </div>
       </div>
 
       <div class="actions">
-        <!-- Search + dropdown filters -->
+        <!-- Theme centered-ish, Log out top-right -->
+        <div class="actions-top">
+          <button id="themeBtn" class="btn btn-ghost" type="button" title="Shuffle theme">🎲 Theme</button>
+          <div class="actions-spacer"></div>
+          <button id="logoutBtn" class="btn btn-ghost" type="button">Log out</button>
+        </div>
+
         <div class="searchbar">
           <div class="searchbar-top">
             <input id="searchInput" class="search" type="search" placeholder="Search events…" />
@@ -73,52 +79,49 @@
               <span>To</span>
               <input id="searchTo" class="search-date" type="date" />
             </label>
-
             <button id="clearDatesBtn" class="btn btn-ghost" type="button">Clear dates</button>
           </div>
         </div>
-
-        <!-- Log out top-right -->
-        <button id="logoutBtn" class="btn btn-ghost" type="button">Log out</button>
       </div>
     </header>
 
-    <div id="calendarWrap" class="card">
+    <div id="calendarWrap" class="card calendar-card">
       <div class="calendar-tools">
-        <!-- Today moved into calendar window -->
-        <button id="todayBtn" class="btn btn-ghost" type="button">Today</button>
+        <button id="todayBtn" class="btn btn-ghost calbtn" type="button">Today</button>
 
-        <label class="mini-label">
-          <span>Owner</span>
-          <select id="ownerFilter">
-            <option value="all" selected>All</option>
-            <option value="hanry">hanry</option>
-            <option value="karena">Karena</option>
-            <option value="both">Both</option>
-            <option value="custom">Other</option>
-          </select>
-        </label>
+        <div class="tool-group">
+          <label class="mini-label">
+            <span>Owner</span>
+            <select id="ownerFilter" class="mini-select">
+              <option value="all" selected>All</option>
+              <option value="hanry">hanry</option>
+              <option value="karena">Karena</option>
+              <option value="both">Both</option>
+              <option value="custom">Other</option>
+            </select>
+          </label>
 
-        <label class="mini-label">
-          <span>List range</span>
-          <select id="listRangeSelect">
-            <option value="7" selected>7 days</option>
-            <option value="14">14 days</option>
-            <option value="30">30 days</option>
-          </select>
-        </label>
-
-        <!-- Dealer’s choice: Theme shuffle -->
-        <button id="themeBtn" class="btn btn-ghost" type="button" title="Shuffle theme">🎲 Theme</button>
+          <label class="mini-label">
+            <span>List range</span>
+            <select id="listRangeSelect" class="mini-select">
+              <option value="7" selected>7 days</option>
+              <option value="14">14 days</option>
+              <option value="30">30 days</option>
+            </select>
+          </label>
+        </div>
       </div>
 
-      <!-- Vertical legend -->
-      <div class="legend">
-        <div class="legend-row"><span class="dot dot-hanry"></span><span class="legend-label">hanry</span></div>
-        <div class="legend-row"><span class="dot dot-karena"></span><span class="legend-label">Karena</span></div>
-        <div class="legend-row"><span class="dot dot-both"></span><span class="legend-label">Both</span></div>
-        <div class="legend-row"><span class="dot dot-custom"></span><span class="legend-label">Other</span></div>
-      </div>
+      <!-- Legend as a compact dropdown to save vertical space -->
+      <details class="legend-details">
+        <summary class="legend-summary">Legend</summary>
+        <div class="legend">
+          <div class="legend-row"><span class="dot dot-hanry"></span><span class="legend-label">hanry</span></div>
+          <div class="legend-row"><span class="dot dot-karena"></span><span class="legend-label">Karena</span></div>
+          <div class="legend-row"><span class="dot dot-both"></span><span class="legend-label">Both</span></div>
+          <div class="legend-row"><span class="dot dot-custom"></span><span class="legend-label">Other</span></div>
+        </div>
+      </details>
 
       <div id="calendar"></div>
       <div class="hint tiny muted">Tip: swipe left/right to change months. Tap the month title to jump.</div>
@@ -135,7 +138,7 @@
 
     <!-- Outstanding checklist panel -->
     <div id="outstanding" class="upcoming card">
-      <div class="panel-head">
+      <div class="panel-head panel-head-tight">
         <div class="panel-title">Checklist — outstanding</div>
         <div class="panel-sub tiny muted">Events with unchecked items</div>
       </div>
@@ -322,6 +325,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
-  <script type="module" src="./app.js?v=20260228_huberts_house_v5"></script>
+  <script type="module" src="./app.js?v=20260228_huberts_house_v6"></script>
 </body>
 </html>
