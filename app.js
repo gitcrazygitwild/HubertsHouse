@@ -973,8 +973,11 @@ function renderUpcoming() {
     const label = d.toLocaleString([], { weekday:"short", month:"short", day:"numeric", hour:"numeric", minute:"2-digit" });
 
     const row = document.createElement("div");
-    row.className = "upcoming-item";
-    row.innerHTML = `<strong>${escapeHtml(e.title || "(untitled)")}</strong><span>${escapeHtml(label)}</span>`;
+
+const ownerKey = (e.ownerKey || mapLegacyOwner(e.owner) || "both");
+row.className = `upcoming-item owner-${ownerKey}`;
+
+row.innerHTML = `<strong>${escapeHtml(e.title || "(untitled)")}</strong><span>${escapeHtml(label)}</span>`;
     upcomingList.appendChild(row);
   }
 }
