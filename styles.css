@@ -61,14 +61,19 @@ body{
   color: var(--muted);
 }
 
-/* Jump month picker */
-.jump{
-  display:flex;
-  gap:10px;
-  align-items:center;
+/* Search box */
+.search{
+  width: 210px;
+  max-width: 50vw;
 }
-.jump input[type="month"]{
-  width: 165px;
+
+/* Hide month input but keep it usable programmatically */
+.jump-hidden{
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
 }
 
 /* Buttons */
@@ -139,18 +144,14 @@ input:focus, select:focus, textarea:focus{
   font-size: 13px;
   cursor:pointer;
 }
-.chip.ghost{
-  opacity: 0.85;
-}
+.chip.ghost{ opacity: 0.85; }
 .chip.active{
   border-color: rgba(122,162,255,0.55);
   background: rgba(122,162,255,0.18);
 }
-.chip:not(.active){
-  opacity: 0.65;
-}
+.chip:not(.active){ opacity: 0.65; }
 
-/* FullCalendar smaller overall */
+/* FullCalendar */
 #calendarWrap{ padding: 10px; }
 .fc{
   --fc-page-bg-color: transparent;
@@ -161,7 +162,11 @@ input:focus, select:focus, textarea:focus{
   color: var(--text);
   font-size: 13px;
 }
-.fc .fc-toolbar-title{ font-size: 16px; font-weight: 900; }
+.fc .fc-toolbar-title{
+  font-size: 16px;
+  font-weight: 900;
+  cursor: pointer; /* tap to jump */
+}
 .fc .fc-button{
   border-radius: 12px;
   border-color: var(--border);
@@ -170,42 +175,24 @@ input:focus, select:focus, textarea:focus{
   font-size: 13px;
   padding: 6px 10px;
 }
-.fc .fc-button-primary:not(:disabled).fc-button-active{
-  border-color: rgba(122,162,255,0.55);
-  background: rgba(122,162,255,0.22);
-}
 
-/* 🔥 Smaller event text so more characters fit */
+/* EVEN SMALLER event text so more characters fit */
 .fc .fc-daygrid-event .fc-event-title,
 .fc .fc-daygrid-event .fc-event-time,
 .fc .fc-timegrid-event .fc-event-title,
 .fc .fc-timegrid-event .fc-event-time,
 .fc .fc-list-event-title {
-  font-size: 11px;
-  line-height: 1.15;
+  font-size: 10px;
+  line-height: 1.1;
 }
-.fc .fc-daygrid-event {
-  padding: 1px 2px;
-}
-.fc .fc-daygrid-dot-event .fc-event-title{
-  font-size: 11px;
+.fc .fc-daygrid-event { padding: 1px 2px; }
+.fc .fc-event-title{
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-@media (max-width: 720px){
-  #app{ margin: 10px auto; padding-bottom: 100px; }
-  .fc .fc-toolbar{
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
-  }
-  .fc .fc-toolbar-chunk{
-    display:flex;
-    justify-content:center;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-  .jump input[type="month"]{ width: 150px; }
-}
+.hint{ margin-top: 10px; }
 
 /* Floating add button */
 .fab{
@@ -250,7 +237,6 @@ input:focus, select:focus, textarea:focus{
 .gate-sub{ color: var(--muted); margin-bottom: 14px; }
 .gate-form{ display:flex; gap: 10px; }
 .gate-input{ -webkit-text-security: disc; font-size: 16px; }
-
 .gate-remember{
   display:flex;
   gap:10px;
@@ -261,7 +247,6 @@ input:focus, select:focus, textarea:focus{
   font-size: 14px;
 }
 .gate-remember input{ width:auto; }
-
 .gate-note{ margin-top: 10px; color: var(--muted); font-size: 12px; }
 
 @media (max-width: 520px){
@@ -298,38 +283,17 @@ input:focus, select:focus, textarea:focus{
 .modal-body{ display:flex; flex-direction: column; gap: 12px; }
 
 .field span{ display:block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.row{ display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 520px){ .row{ grid-template-columns: 1fr; } }
 
-.row{
-  display:grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-@media (max-width: 520px){
-  .row{ grid-template-columns: 1fr; }
-}
-
-.check{
-  display:flex;
-  align-items:center;
-  gap: 10px;
-  user-select: none;
-}
+.check{ display:flex; align-items:center; gap: 10px; user-select: none; }
 .check input{ width: auto; }
 
-.modal-actions{
-  display:flex;
-  gap: 10px;
-  align-items:center;
-  margin-top: 4px;
-}
+.modal-actions{ display:flex; gap: 10px; align-items:center; margin-top: 4px; }
 .spacer{ flex: 1; }
 
 /* Checklist */
-.checklist{
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-}
+.checklist{ display:flex; flex-direction:column; gap:10px; }
 .check-item{
   display:grid;
   grid-template-columns: 22px 1fr 42px;
@@ -345,8 +309,21 @@ input:focus, select:focus, textarea:focus{
   place-items:center;
 }
 
-/* Mobile bottom sheet */
+/* Mobile */
 @media (max-width: 720px){
+  #app{ margin: 10px auto; padding-bottom: 100px; }
+  .fc .fc-toolbar{
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .fc .fc-toolbar-chunk{
+    display:flex;
+    justify-content:center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .search{ width: 100%; max-width: 100%; }
   .modal-backdrop{ align-items: flex-end; padding: 10px; }
   .modal{
     width: 100%;
