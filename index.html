@@ -1,15 +1,16 @@
-<!-- index.html — Hubert’s House (FULL)
-     Works with the FULL app.js + FULL styles.css I sent.
-     Includes: gate (remember device), topbar with theme + logout, collapsible search date filters,
-     calendar tools row (Today / List range / Owner), compact legend aligned under header,
-     Upcoming + Outstanding panels, Event modal, Checklist-focused modal, Jump-to-month modal.
-
-     NOTE: make sure your files are named exactly:
-       - index.html
-       - styles.css
-       - app.js
-     and in GitHub Pages they live in the same folder.
+<!-- index.html — Hubert’s House (UPDATED for your latest layout requests)
+     Changes:
+     - Theme + Log out moved into the TOP ROW with the cat
+     - "Hubert’s House" nudged up; "Sync: live" moved under it (stacked)
+     - Theme button label changed to dice 🎲
+     - Removed Dinner/Groceries/Weekend quick chips
+     - Owner/All moved up to align with Today + List range on one row
+     - Adds 3 "dealers choice" UI hooks (JS optional):
+         1) Compact "Quick Add" menu button (➕) near search (id="quickAddBtn")
+         2) Ambient "sparkle" badge next to title (span id="sparkleBadge")
+         3) Mini "Focus" toggle (id="focusToggle") to hide panels (JS can implement)
 -->
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -19,8 +20,9 @@
 
   <!-- FullCalendar -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css">
-  <link rel="stylesheet" href="./styles.css?v=20260228_huberts_house_v4" />
+  <link rel="stylesheet" href="./styles.css?v=20260228_huberts_house_v5" />
 </head>
+
 <body>
 
   <!-- Gate overlay -->
@@ -57,56 +59,75 @@
 
     <!-- Top bar -->
     <header class="topbar">
+
+      <!-- LEFT: cat + stacked title/status -->
       <div class="brand">
         <a class="catlink" href="https://gitcrazygitwild.github.io/Flapurr/" target="_blank" rel="noopener">🐈‍⬛</a>
-        <div class="brand-title">Hubert’s House</div>
-        <span id="status" class="pill">Sync: connecting…</span>
+
+        <div class="brand-stack">
+          <div class="brand-title-row">
+            <div class="brand-title">Hubert’s House</div>
+            <!-- Dealers choice #1: tiny animated badge (optional JS/CSS) -->
+            <span id="sparkleBadge" class="sparkle-badge" title="You’re crushing it">✨</span>
+          </div>
+          <span id="status" class="pill">Sync: connecting…</span>
+        </div>
       </div>
 
-      <div class="actions">
-        <!-- Actions row: Theme + Logout on top-right above search -->
-        <div class="actions-top">
-          <button id="themeBtn" class="btn btn-ghost" type="button" title="Randomize theme">Theme</button>
-          <button id="logoutBtn" class="btn btn-ghost" type="button">Log out</button>
-        </div>
+      <!-- RIGHT: Theme + Log out aligned with cat row -->
+      <div class="actions actions-toprow">
+        <button id="themeBtn" class="btn btn-ghost" type="button" title="Randomize theme">🎲</button>
+        <button id="logoutBtn" class="btn btn-ghost" type="button">Log out</button>
+      </div>
+    </header>
 
-        <!-- Search row: search + date filters tucked behind a button -->
-        <div class="search-row">
-          <input id="searchInput" class="search" type="search" placeholder="Search events…" />
+    <!-- Search row -->
+    <div class="search-row-wrap">
+      <div class="search-row">
+        <input id="searchInput" class="search" type="search" placeholder="Search events…" />
 
-          <div class="search-filters-wrap">
-            <button id="searchFiltersBtn" class="btn btn-ghost search-filters-btn" type="button">
-              Dates
-            </button>
+        <!-- Dealers choice #2: quick add menu button (JS optional) -->
+        <button id="quickAddBtn" class="btn btn-ghost" type="button" title="Quick add">＋</button>
 
-            <div id="searchFilters" class="search-filters hidden">
-              <div class="row">
-                <label class="field">
-                  <span>From</span>
-                  <input id="searchFrom" class="search-date" type="date" />
-                </label>
-                <label class="field">
-                  <span>To</span>
-                  <input id="searchTo" class="search-date" type="date" />
-                </label>
-              </div>
+        <div class="search-filters-wrap">
+          <button id="searchFiltersBtn" class="btn btn-ghost search-filters-btn" type="button">Dates</button>
 
-              <div class="modal-actions" style="margin-top:10px;">
-                <div class="spacer"></div>
-                <button id="clearDatesBtn" class="btn btn-ghost" type="button">Clear</button>
-              </div>
+          <div id="searchFilters" class="search-filters hidden">
+            <div class="row">
+              <label class="field">
+                <span>From</span>
+                <input id="searchFrom" class="search-date" type="date" />
+              </label>
+              <label class="field">
+                <span>To</span>
+                <input id="searchTo" class="search-date" type="date" />
+              </label>
+            </div>
+
+            <div class="modal-actions" style="margin-top:10px;">
+              <div class="spacer"></div>
+              <button id="clearDatesBtn" class="btn btn-ghost" type="button">Clear</button>
             </div>
           </div>
         </div>
       </div>
-    </header>
+
+      <!-- Dealers choice #3: Focus toggle (JS optional; can hide panels) -->
+      <div class="focus-row">
+        <label class="check focus-toggle">
+          <input id="focusToggle" type="checkbox" />
+          <span>Focus mode</span>
+        </label>
+      </div>
+    </div>
 
     <!-- Calendar card -->
     <div id="calendarWrap" class="card">
 
-      <!-- Tools row INSIDE calendar window: Today left, List range + Owner next to it -->
+      <!-- Tools row: Today + List range + Owner all on ONE ROW -->
       <div class="calendar-tools">
         <div class="tools-left">
+
           <button id="todayBtn" class="btn btn-ghost" type="button">Today</button>
 
           <label class="mini-label">
@@ -129,17 +150,11 @@
               <option value="custom">Other</option>
             </select>
           </label>
-        </div>
 
-        <div class="tools-right">
-          <!-- Optional quick add chips (JS supports these if present) -->
-          <button class="btn btn-ghost chip" type="button" data-template="dinner">Dinner</button>
-          <button class="btn btn-ghost chip" type="button" data-template="groceries">Groceries</button>
-          <button class="btn btn-ghost chip" type="button" data-template="weekend">Weekend</button>
         </div>
       </div>
 
-      <!-- Legend compressed to align under the FullCalendar header area -->
+      <!-- Compact legend -->
       <div class="legend-inline">
         <div class="item"><span class="dot dot-hanry"></span>hanry</div>
         <div class="item"><span class="dot dot-karena"></span>Karena</div>
@@ -187,7 +202,6 @@
       </div>
 
       <form id="eventForm" class="modal-body">
-
         <label class="field">
           <span>Title</span>
           <input id="evtTitle" type="text" required placeholder="e.g., Dinner reservation" />
@@ -352,6 +366,6 @@
 
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
-  <script type="module" src="./app.js?v=20260228_huberts_house_v4"></script>
+  <script type="module" src="./app.js?v=20260228_huberts_house_v5"></script>
 </body>
 </html>
