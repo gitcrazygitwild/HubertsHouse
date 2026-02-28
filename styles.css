@@ -194,7 +194,7 @@ input:focus, select:focus, textarea:focus{
 .gate-title{ font-size: 30px; font-weight: 900; margin-bottom: 4px; }
 .gate-sub{ color: var(--muted); margin-bottom: 14px; }
 
-/* IMPORTANT: stacked on mobile so button stays visible */
+/* Stacked on mobile so button stays visible */
 .gate-form{ display:flex; gap: 10px; }
 .gate-input{ -webkit-text-security: disc; font-size: 16px; }
 
