@@ -177,18 +177,25 @@ function initCalendarUI() {
   backdrop?.addEventListener("click", (e) => { if (e.target === backdrop) closeModal(); });
 
   // FIX: all-day should NOT clear the date
-  evtAllDay?.addEventListener("change", () => {
-    const allDay = evtAllDay.checked;
+evtAllDay?.addEventListener("change", () => {
+  const allDay = evtAllDay.checked;
 
-    const prevStart = evtStart.value;
-    const prevEnd = evtEnd.value;
+  const prevStart = evtStart.value;
+  const prevEnd = evtEnd.value;
 
-    evtStart.type = allDay ? "date" : "datetime-local";
-    evtEnd.type = allDay ? "date" : "datetime-local";
+  evtStart.type = allDay ? "date" : "datetime-local";
+  evtEnd.type = allDay ? "date" : "datetime-local";
 
-    evtStart.value = convertInputValue(prevStart, allDay);
-    evtEnd.value = prevEnd ? convertInputValue(prevEnd, allDay) : "";
-  });
+  evtStart.value = convertInputValue(prevStart, allDay);
+  evtEnd.value = prevEnd ? convertInputValue(prevEnd, allDay) : "";
+});
+
+function convertInputValue(value, allDay) {
+  if (!value) return "";
+  if (allDay) return value.includes("T") ? value.split("T")[0] : value;
+  if (!value.includes("T")) return `${value}T09:00`;
+  return value;
+}
 
   eventForm?.addEventListener("submit", async (e) => {
     e.preventDefault();
