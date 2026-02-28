@@ -1,11 +1,3 @@
-<!-- index.html — Hubert’s House (v8)
-  Updates requested:
-  - Remove Focus button (and focus toggle entirely)
-  - Keep 🎲 theme button (themeBtn) — JS will implement full theme changes (fonts/colors/background/designs)
-  - Calendar not loading: this HTML keeps the required #calendar mount + all IDs expected by app.js
-    (We’ll fix the actual render issue in JS next.)
--->
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -13,9 +5,11 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Hubert’s House</title>
 
-  <!-- FullCalendar -->
+  <!-- FullCalendar (global build) -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css">
-  <link rel="stylesheet" href="./styles.css?v=20260228_huberts_house_v8" />
+
+  <!-- Your styles -->
+  <link rel="stylesheet" href="./styles.css?v=20260228_huberts_house_v9" />
 </head>
 
 <body>
@@ -55,19 +49,20 @@
     <!-- Top bar -->
     <header class="topbar">
       <div class="topbar-row">
-        <!-- LEFT: brand -->
+
+        <!-- LEFT: cat + title (force single line, never crop) -->
         <div class="brand">
           <a class="catlink" href="https://gitcrazygitwild.github.io/Flapurr/" target="_blank" rel="noopener">🐈‍⬛</a>
 
           <div class="brand-stack">
             <div class="brand-title-row">
-              <div class="brand-title">Hubert’s House</div>
-              <span id="sparkleBadge" class="sparkle-badge" title="✨">✨</span>
+              <div class="brand-title" aria-label="Hubert’s House">Hubert’s House</div>
+              <span id="sparkleBadge" class="sparkle-badge" title="Hubert approved">✨</span>
             </div>
           </div>
         </div>
 
-        <!-- RIGHT: Theme + Log out -->
+        <!-- RIGHT: theme + logout -->
         <div class="top-actions">
           <button id="themeBtn" class="btn btn-ghost" type="button" title="Change theme">🎲</button>
           <button id="logoutBtn" class="btn btn-ghost" type="button">Log out</button>
@@ -75,7 +70,7 @@
       </div>
     </header>
 
-    <!-- Search row -->
+    <!-- Search row (clean) -->
     <div class="search-row-wrap">
       <div class="search-row">
         <div class="search-shell">
@@ -83,14 +78,14 @@
           <button id="searchClearBtn" class="search-clear hidden" type="button" aria-label="Clear search">✕</button>
         </div>
 
-        <!-- Search options only relevant while searching -->
+        <!-- Shows only once search is active (JS controls) -->
         <div class="search-filters-wrap">
-          <button id="searchFiltersBtn" class="btn btn-ghost search-filters-btn hidden" type="button" aria-haspopup="dialog">
-            Options
+          <button id="searchFiltersBtn" class="btn btn-ghost search-filters-btn hidden" type="button">
+            Dates
           </button>
 
-          <div id="searchFilters" class="search-filters hidden" role="dialog" aria-label="Search options">
-            <div class="search-filters-title">Search options</div>
+          <div id="searchFilters" class="search-filters hidden">
+            <div class="search-filters-title">Narrow by date</div>
 
             <div class="row">
               <label class="field">
@@ -104,7 +99,7 @@
             </div>
 
             <div class="modal-actions" style="margin-top:10px;">
-              <button id="clearDatesBtn" class="btn btn-ghost" type="button">Clear dates</button>
+              <button id="clearDatesBtn" class="btn btn-ghost" type="button">Clear</button>
               <div class="spacer"></div>
               <button id="closeSearchFiltersBtn" class="btn btn-primary" type="button">Done</button>
             </div>
@@ -112,11 +107,15 @@
         </div>
       </div>
 
-      <div id="searchHint" class="tiny muted hidden">Tip: type to search; optionally narrow by date range.</div>
+      <div id="searchHint" class="tiny muted hidden" style="margin-top:6px;">
+        Tip: type to search; optionally narrow by date range.
+      </div>
     </div>
 
     <!-- Calendar card -->
     <div id="calendarWrap" class="card">
+
+      <!-- Tools row -->
       <div class="calendar-tools">
         <div class="tools-left">
           <button id="todayBtn" class="btn btn-ghost" type="button">Today</button>
@@ -144,17 +143,20 @@
         </div>
       </div>
 
-      <div class="legend-inline">
+      <!-- Compact legend -->
+      <div class="legend-inline" aria-label="Legend">
         <div class="item"><span class="dot dot-hanry"></span>hanry</div>
         <div class="item"><span class="dot dot-karena"></span>Karena</div>
         <div class="item"><span class="dot dot-both"></span>Both</div>
         <div class="item"><span class="dot dot-custom"></span>Other</div>
       </div>
 
-      <!-- FullCalendar mounts here -->
+      <!-- FullCalendar mount -->
       <div id="calendar"></div>
 
-      <div class="hint tiny muted">Tip: swipe left/right to change months. Tap the month title to jump.</div>
+      <div class="hint tiny muted">
+        Tip: swipe left/right to change months. Tap the month title to jump.
+      </div>
     </div>
 
     <!-- Panels -->
@@ -180,7 +182,7 @@
       <div id="outstandingList" class="panel-list tiny muted">Loading…</div>
     </div>
 
-    <!-- Floating add (FAB) -->
+    <!-- Floating add -->
     <button id="fab" class="fab" type="button" aria-label="Add event">＋</button>
   </div>
 
@@ -355,8 +357,10 @@
     </div>
   </div>
 
-  <!-- Scripts -->
+  <!-- FullCalendar JS must load BEFORE app.js -->
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
-  <script type="module" src="./app.js?v=20260228_huberts_house_v8"></script>
+
+  <!-- Your app (module) -->
+  <script type="module" src="./app.js?v=20260228_huberts_house_v9"></script>
 </body>
 </html>
