@@ -1,10 +1,12 @@
-<!-- index.html — Hubert’s House (UPDATED layout v6)
-  Updates in this version:
-  - Sync pill moved into the title row, aligned with ✨
-  - Top row is now a single flex row: cat/title/sync on left, Focus + 🎲 + Log out on right
-  - Focus mode is now a compact top-row control (keeps id="focusToggle" for your existing JS)
-  - Removed the old Focus row under “Dates” (to avoid duplicate ids)
-  - Dealers choice (visual hook): added a lightweight “sheen” layer you can style in CSS later
+<!-- index.html — Hubert’s House (v7)
+  Requested updates:
+  - FAB (+) stays fixed bottom-right (already fixed-position; kept + ensured z-index)
+  - Removed Sync pill entirely
+  - Dice ONLY changes theme (JS will be updated later; HTML keeps themeBtn)
+  - Removed redundant + near search (quickAddBtn removed)
+  - Date range UI is now a CLEAN "Search options" popover that only appears while searching
+    (HTML supports this; JS will control show/hide based on search text)
+  - Overall crisper: tightened header, simplified rows, cleaner controls
 -->
 
 <!doctype html>
@@ -16,7 +18,7 @@
 
   <!-- FullCalendar -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css">
-  <link rel="stylesheet" href="./styles.css?v=20260228_huberts_house_v6" />
+  <link rel="stylesheet" href="./styles.css?v=20260228_huberts_house_v7" />
 </head>
 
 <body>
@@ -52,38 +54,33 @@
   </div>
 
   <div id="app">
-    <!-- Dealers choice hook: a subtle decorative layer (style in CSS later) -->
-    <div class="sheen" aria-hidden="true"></div>
 
     <!-- Top bar -->
     <header class="topbar">
       <div class="topbar-row">
-        <!-- LEFT: cat + title row (title + ✨ + Sync inline) -->
+        <!-- LEFT: brand -->
         <div class="brand">
           <a class="catlink" href="https://gitcrazygitwild.github.io/Flapurr/" target="_blank" rel="noopener">🐈‍⬛</a>
 
           <div class="brand-stack">
             <div class="brand-title-row">
               <div class="brand-title">Hubert’s House</div>
-
-              <!-- tiny badge -->
               <span id="sparkleBadge" class="sparkle-badge" title="You’re crushing it">✨</span>
-
-              <!-- Sync pill moved INLINE with ✨ -->
-              <span id="status" class="pill">Sync: connecting…</span>
             </div>
           </div>
         </div>
 
-        <!-- RIGHT: Focus + Theme + Log out on the same top row -->
+        <!-- RIGHT: Focus + Theme + Log out -->
         <div class="top-actions">
-          <!-- Focus mode: compact top-row control (keeps id="focusToggle" for your JS) -->
+          <!-- Focus mode (compact) -->
           <label class="btn btn-ghost focus-btn" for="focusToggle" title="Toggle focus mode">
             <input id="focusToggle" type="checkbox" style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;" />
             Focus
           </label>
 
+          <!-- Theme dice (JS will only randomize theme) -->
           <button id="themeBtn" class="btn btn-ghost" type="button" title="Randomize theme">🎲</button>
+
           <button id="logoutBtn" class="btn btn-ghost" type="button">Log out</button>
         </div>
       </div>
@@ -92,15 +89,21 @@
     <!-- Search row -->
     <div class="search-row-wrap">
       <div class="search-row">
-        <input id="searchInput" class="search" type="search" placeholder="Search events…" />
+        <div class="search-shell">
+          <input id="searchInput" class="search" type="search" placeholder="Search events…" />
+          <!-- Small clear button (CSS/JS later; harmless if unused) -->
+          <button id="searchClearBtn" class="search-clear hidden" type="button" aria-label="Clear search">✕</button>
+        </div>
 
-        <!-- Quick add -->
-        <button id="quickAddBtn" class="btn btn-ghost" type="button" title="Quick add">＋</button>
-
+        <!-- Clean search options: only relevant when searching -->
         <div class="search-filters-wrap">
-          <button id="searchFiltersBtn" class="btn btn-ghost search-filters-btn" type="button">Dates</button>
+          <button id="searchFiltersBtn" class="btn btn-ghost search-filters-btn hidden" type="button" aria-haspopup="dialog">
+            Options
+          </button>
 
-          <div id="searchFilters" class="search-filters hidden">
+          <div id="searchFilters" class="search-filters hidden" role="dialog" aria-label="Search options">
+            <div class="search-filters-title">Search options</div>
+
             <div class="row">
               <label class="field">
                 <span>From</span>
@@ -113,19 +116,20 @@
             </div>
 
             <div class="modal-actions" style="margin-top:10px;">
+              <button id="clearDatesBtn" class="btn btn-ghost" type="button">Clear dates</button>
               <div class="spacer"></div>
-              <button id="clearDatesBtn" class="btn btn-ghost" type="button">Clear</button>
+              <button id="closeSearchFiltersBtn" class="btn btn-primary" type="button">Done</button>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- NOTE: old focus-row removed (Focus now lives in top row) -->
+      <!-- Hint (optional) -->
+      <div id="searchHint" class="tiny muted hidden">Tip: type to search; optionally narrow by date range.</div>
     </div>
 
     <!-- Calendar card -->
     <div id="calendarWrap" class="card">
-      <!-- Tools row -->
       <div class="calendar-tools">
         <div class="tools-left">
           <button id="todayBtn" class="btn btn-ghost" type="button">Today</button>
@@ -153,7 +157,6 @@
         </div>
       </div>
 
-      <!-- Legend -->
       <div class="legend-inline">
         <div class="item"><span class="dot dot-hanry"></span>hanry</div>
         <div class="item"><span class="dot dot-karena"></span>Karena</div>
@@ -188,7 +191,7 @@
       <div id="outstandingList" class="panel-list tiny muted">Loading…</div>
     </div>
 
-    <!-- Floating add -->
+    <!-- Floating add (FAB) -->
     <button id="fab" class="fab" type="button" aria-label="Add event">＋</button>
   </div>
 
@@ -365,6 +368,6 @@
 
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
-  <script type="module" src="./app.js?v=20260228_huberts_house_v6"></script>
+  <script type="module" src="./app.js?v=20260228_huberts_house_v7"></script>
 </body>
 </html>
