@@ -16,6 +16,29 @@ body{
   color: var(--text);
 }
 
+.hidden{ display:none; }
+
+.modal-backdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  display:flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  z-index: 9998;
+}
+@media (max-width: 720px){
+  .modal-backdrop{ align-items: flex-end; padding: 10px; }
+  .modal{
+    width: 100%;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    max-height: 85vh;
+    overflow: auto;
+  }
+}
+
 #app{
   max-width: 1100px;
   margin: 18px auto;
