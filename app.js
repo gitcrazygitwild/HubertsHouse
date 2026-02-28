@@ -1,9 +1,7 @@
 // app.js
 // Hubert’s House — Firebase shared calendar
-// Features: gate (remember device, case-insensitive password), mobile modal event editor,
-// owners (hanry/Karena/Both/Other), checklist presets + progress, recurrence, swipe nav,
-// tap month title to jump (jump modal w/ year dropdown), owner dropdown filter,
-// search (auto list view, 5-year list duration, optional date-range filter), upcoming panel.
+// Updates in v4: one List tab (range-based), list range selector, search dropdown filters,
+// “Log out” label, POP legend + hover, keep search dates hidden by default.
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
 import {
@@ -77,14 +75,14 @@ const todayBtn = document.getElementById("todayBtn");
 const statusEl = document.getElementById("status");
 
 const ownerFilter = document.getElementById("ownerFilter");
-
-const searchFiltersBtn = document.getElementById("searchFiltersBtn");
-const searchFilters = document.getElementById("searchFilters");
-const clearDatesBtn = document.getElementById("clearDatesBtn");
+const listRangeSelect = document.getElementById("listRangeSelect");
 
 const searchInput = document.getElementById("searchInput");
 const searchFrom = document.getElementById("searchFrom");
 const searchTo = document.getElementById("searchTo");
+const searchFiltersBtn = document.getElementById("searchFiltersBtn");
+const searchFilters = document.getElementById("searchFilters");
+const clearDatesBtn = document.getElementById("clearDatesBtn");
 
 // Upcoming panel
 const upcomingList = document.getElementById("upcomingList");
@@ -160,6 +158,8 @@ let currentChecklist = []; // [{text,done}]
 
 // Filters/search state
 let ownerFilterValue = "all";
+let listRangeDays = 7;
+
 let searchQuery = "";
 let searchFromValue = "";
 let searchToValue = "";
@@ -202,15 +202,17 @@ function initCalendarUI() {
 
   calendar = new FullCalendar.Calendar(calendarEl, {
     initialView: "dayGridMonth",
-initialDate: new Date(),
+    initialDate: new Date(),
+
     headerToolbar: {
       left: "prev,next",
       center: "title",
-      right: "dayGridMonth,timeGridWeek,timeGridDay,listWeek,listYear"
+      right: "dayGridMonth,timeGridWeek,timeGridDay,listRange"
     },
+
     views: {
-      // Search mode uses listYear; make it feel “all time-ish”
-      listYear: { duration: { years: 5 } }
+      listRange: { type: "list", duration: { days: listRangeDays }, buttonText: "List" },
+      listAll:   { type: "list", duration: { years: 5 } } // internal for search
     },
 
     selectable: true,
@@ -267,35 +269,55 @@ initialDate: new Date(),
   });
 
   calendar.render();
+
+  // Ensure we don't start in list view because iOS autofilled search inputs
   resetSearchUIOnLoad();
-calendar.changeView("dayGridMonth");
-calendar.today();
+  calendar.changeView("dayGridMonth");
+  calendar.today();
 
-  function resetSearchUIOnLoad() {
-  // Clear any autofilled values so we don't enter search mode on load
-  if (searchInput) searchInput.value = "";
-  if (searchFrom) searchFrom.value = "";
-  if (searchTo) searchTo.value = "";
-
-  searchQuery = "";
-  searchFromValue = "";
-  searchToValue = "";
-
-  preSearchView = null;
-  preSearchDate = null;
-}
   bindMonthTitleClick();
   attachSwipeNavigation(wrap);
 
   todayBtn?.addEventListener("click", () => calendar.today());
 
-  // Owner filter dropdown
+  // Owner filter
   ownerFilter?.addEventListener("change", () => {
     ownerFilterValue = ownerFilter.value || "all";
     rebuildCalendarEvents();
   });
 
-  // Search behavior: auto list view + optional date range
+  // List range
+  listRangeSelect?.addEventListener("change", () => {
+    listRangeDays = Number(listRangeSelect.value || "7") || 7;
+
+    calendar.setOption("views", {
+      ...calendar.getOption("views"),
+      listRange: { type: "list", duration: { days: listRangeDays }, buttonText: "List" },
+      listAll: { type: "list", duration: { years: 5 } }
+    });
+
+    if (calendar.view.type === "listRange") {
+      const anchor = calendar.getDate();
+      calendar.changeView("listRange", anchor);
+    }
+  });
+
+  // Search dropdown UI
+  searchFiltersBtn?.addEventListener("click", () => {
+    searchFilters?.classList.toggle("hidden");
+  });
+
+  clearDatesBtn?.addEventListener("click", () => {
+    if (searchFrom) searchFrom.value = "";
+    if (searchTo) searchTo.value = "";
+    searchFromValue = "";
+    searchToValue = "";
+    updateFiltersBtnState();
+    enterSearchModeIfNeeded();
+    rebuildCalendarEvents();
+  });
+
+  // Search behavior
   searchInput?.addEventListener("input", () => {
     searchQuery = (searchInput.value || "").trim().toLowerCase();
     enterSearchModeIfNeeded();
@@ -303,15 +325,17 @@ calendar.today();
   });
   searchFrom?.addEventListener("change", () => {
     searchFromValue = (searchFrom.value || "").trim();
+    searchFilters?.classList.remove("hidden");
+    updateFiltersBtnState();
     enterSearchModeIfNeeded();
     rebuildCalendarEvents();
-    searchFilters?.classList.remove("hidden");
   });
   searchTo?.addEventListener("change", () => {
     searchToValue = (searchTo.value || "").trim();
+    searchFilters?.classList.remove("hidden");
+    updateFiltersBtnState();
     enterSearchModeIfNeeded();
     rebuildCalendarEvents();
-    searchFilters?.classList.remove("hidden");
   });
 
   // FAB create
@@ -332,19 +356,6 @@ calendar.today();
       recurrence: { freq: "none", until: null }
     });
   });
-  
-  searchFiltersBtn?.addEventListener("click", () => {
-  searchFilters?.classList.toggle("hidden");
-});
-
-clearDatesBtn?.addEventListener("click", () => {
-  if (searchFrom) searchFrom.value = "";
-  if (searchTo) searchTo.value = "";
-  searchFromValue = "";
-  searchToValue = "";
-  enterSearchModeIfNeeded();
-  rebuildCalendarEvents();
-});
 
   // Modal close handlers
   modalClose?.addEventListener("click", closeModal);
@@ -421,6 +432,25 @@ clearDatesBtn?.addEventListener("click", () => {
   });
 }
 
+function resetSearchUIOnLoad() {
+  if (searchInput) searchInput.value = "";
+  if (searchFrom) searchFrom.value = "";
+  if (searchTo) searchTo.value = "";
+  searchQuery = "";
+  searchFromValue = "";
+  searchToValue = "";
+  preSearchView = null;
+  preSearchDate = null;
+  updateFiltersBtnState();
+}
+
+function updateFiltersBtnState() {
+  const active = !!(searchFromValue || searchToValue);
+  if (!searchFiltersBtn) return;
+  searchFiltersBtn.classList.toggle("is-active", active);
+}
+
+// ---------- Search mode (one List tab) ----------
 function enterSearchModeIfNeeded() {
   if (!calendar) return;
   const hasText = !!searchQuery;
@@ -431,7 +461,8 @@ function enterSearchModeIfNeeded() {
       preSearchView = calendar.view.type;
       preSearchDate = calendar.getDate();
     }
-    calendar.changeView("listYear");
+    if (hasText && !hasRange) calendar.changeView("listAll");
+    else calendar.changeView("listRange");
   } else {
     if (preSearchView) {
       calendar.changeView(preSearchView);
@@ -446,15 +477,11 @@ function enterSearchModeIfNeeded() {
 function bindMonthTitleClick() {
   const titleEl = document.querySelector(".fc .fc-toolbar-title");
   if (!titleEl) return;
-
-  // avoid duplicates
   if (titleEl.dataset.boundJump === "1") return;
-  titleEl.dataset.boundJump = "1";
 
+  titleEl.dataset.boundJump = "1";
   titleEl.style.cursor = "pointer";
   titleEl.title = "Tap to jump to a month";
-
-  // pointerup is more reliable on iOS than click
   titleEl.addEventListener("pointerup", (e) => {
     e.preventDefault();
     openJumpModal();
@@ -498,9 +525,7 @@ function attachSwipeNavigation(targetEl) {
   const MAX_Y = 80;
 
   targetEl.addEventListener("touchstart", (e) => {
-    // IMPORTANT: do not treat toolbar taps as swipes
     if (e.target && e.target.closest && e.target.closest(".fc-toolbar")) return;
-
     if (!e.touches || e.touches.length !== 1) return;
     tracking = true;
     locked = false;
@@ -512,10 +537,7 @@ function attachSwipeNavigation(targetEl) {
     if (!tracking || !e.touches || e.touches.length !== 1) return;
     const dx = e.touches[0].clientX - sx;
     const dy = e.touches[0].clientY - sy;
-
-    if (!locked && Math.abs(dx) > MIN_LOCK && Math.abs(dy) < MAX_Y) {
-      locked = true;
-    }
+    if (!locked && Math.abs(dx) > MIN_LOCK && Math.abs(dy) < MAX_Y) locked = true;
     if (locked) e.preventDefault();
   }, { passive: false });
 
@@ -595,25 +617,20 @@ function openModal(payload) {
   evtStart.value = toInputValue(payload.start, evtAllDay.checked);
   evtEnd.value = payload.end ? toInputValue(payload.end, evtAllDay.checked) : "";
 
-  // Owner
   evtOwner.value = payload.ownerKey || "both";
   const isCustom = evtOwner.value === "custom";
   ownerCustomWrap?.classList.toggle("hidden", !isCustom);
   if (evtOwnerCustom) evtOwnerCustom.value = isCustom ? (payload.ownerLabel || "") : "";
 
-  // Type
   evtType.value = payload.type || "general";
 
-  // Repeat
   const rec = normalizeRecurrence(payload.recurrence);
   evtRepeat.value = rec.freq || "none";
   repeatUntilWrap?.classList.toggle("hidden", evtRepeat.value === "none");
   evtRepeatUntil.value = rec.until ? rec.until : "";
 
-  // Notes
   evtNotes.value = payload.notes || "";
 
-  // Checklist
   currentChecklist = Array.isArray(payload.checklist) ? payload.checklist : [];
   if (!isEdit && currentChecklist.length === 0 && evtType.value !== "general") {
     setChecklistPreset(evtType.value);
@@ -729,7 +746,6 @@ function expandRecurringEvent(base, rangeStart, rangeEnd) {
   const out = [];
   let cur = new Date(baseStart);
 
-  // advance until rangeStart
   let guard = 0;
   while (cur < rangeStart && guard < 5000) {
     cur = addInterval(cur, rec.freq);
@@ -737,7 +753,6 @@ function expandRecurringEvent(base, rangeStart, rangeEnd) {
     if (untilDate && cur > untilDate) return out;
   }
 
-  // generate in range
   guard = 0;
   while (cur < rangeEnd && guard < 5000) {
     if (!untilDate || cur <= untilDate) {
