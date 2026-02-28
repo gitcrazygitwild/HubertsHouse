@@ -32,6 +32,11 @@ body{
   padding: 0 12px 110px;
 }
 
+.btn-icon-sm.is-active{
+  border-color: rgba(122,162,255,0.7);
+  background: rgba(122,162,255,0.18);
+}
+
 .card{
   background: rgba(15,24,51,0.92);
   border: 1px solid var(--border);
