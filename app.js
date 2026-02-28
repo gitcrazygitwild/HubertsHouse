@@ -1,9 +1,23 @@
-// app.js — Hubert’s House (v6 FULL)
-// Firebase sync + password gate + theme dice + search/list-range + owner filter
-// Upcoming + Outstanding checklist panels + checklist-focused modal
-// Month title tap = jump-to-month + swipe left/right to change months
+// app.js — Hubert’s House (v6) — PART 1/2
+// Firebase sync + password gate + theme dice (now also cycles calendar view) + search/list-range + owner filter
+// Upcoming + Outstanding panels + checklist modal + jump-to-month + swipe nav
 //
 // NOTE: Gate is client-side only (not real security).
+
+// ---------- Firebase (CDN imports ONLY) ----------
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  doc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+  query,
+  orderBy,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
 
 // ---------- Gate ----------
 const PASSWORD = "Mack"; // not real security
@@ -59,12 +73,11 @@ else gate?.classList.remove("hidden");
 
 // ---------- Topbar / controls ----------
 const statusEl = document.getElementById("status");
-
 const logoutBtn = document.getElementById("logoutBtn");
 const todayBtn = document.getElementById("todayBtn");
 const themeBtn = document.getElementById("themeBtn");
-const focusBtn = document.getElementById("focusBtn");
 
+// Search + filters
 const searchInput = document.getElementById("searchInput");
 const searchFiltersBtn = document.getElementById("searchFiltersBtn");
 const searchFilters = document.getElementById("searchFilters");
@@ -72,126 +85,15 @@ const searchFrom = document.getElementById("searchFrom");
 const searchTo = document.getElementById("searchTo");
 const clearDatesBtn = document.getElementById("clearDatesBtn");
 
+// Tools
 const listRangeSelect = document.getElementById("listRangeSelect");
 const ownerFilter = document.getElementById("ownerFilter");
 
+// Top-row focus toggle (moved to top row in HTML; id stays the same)
+const focusToggle = document.getElementById("focusToggle");
+
+// Quick add
 const quickAddBtn = document.getElementById("quickAddBtn");
-
-logoutBtn?.addEventListener("click", lock);
-todayBtn?.addEventListener("click", () => calendar?.today());
-
-searchFiltersBtn?.addEventListener("click", () => {
-  searchFilters?.classList.toggle("hidden");
-  searchFiltersBtn?.classList.toggle("is-active", !searchFilters?.classList.contains("hidden"));
-});
-
-document.addEventListener("click", (e) => {
-  // click-outside closes search filters
-  if (!searchFilters || searchFilters.classList.contains("hidden")) return;
-  const wrap = searchFilters.closest(".search-filters-wrap");
-  if (wrap && !wrap.contains(e.target)) {
-    searchFilters.classList.add("hidden");
-    searchFiltersBtn?.classList.remove("is-active");
-  }
-});
-
-clearDatesBtn?.addEventListener("click", () => {
-  if (searchFrom) searchFrom.value = "";
-  if (searchTo) searchTo.value = "";
-  applySearchAndFilters();
-});
-
-// Focus mode: top-row button toggles panel visibility
-function setFocusMode(on) {
-  document.body.classList.toggle("focus-on", on);
-  focusBtn?.setAttribute("aria-pressed", on ? "true" : "false");
-
-  const upcoming = document.getElementById("upcoming");
-  const outstanding = document.getElementById("outstanding");
-  if (upcoming) upcoming.style.display = on ? "none" : "";
-  if (outstanding) outstanding.style.display = on ? "none" : "";
-}
-
-focusBtn?.addEventListener("click", () => {
-  const on = document.body.classList.contains("focus-on");
-  setFocusMode(!on);
-});
-
-// ---------- Theme (🎲) ----------
-const LS_THEME = "huberts_house_theme_v1";
-const LS_DENSITY = "huberts_house_density_v1";
-
-const THEMES = ["aurora", "sunset", "mint", "grape", "mono"];
-const DENSITIES = ["compact", "cozy"];
-
-function applyTheme(theme) {
-  document.documentElement.dataset.theme = theme;
-  localStorage.setItem(LS_THEME, theme);
-}
-function applyDensity(d) {
-  document.documentElement.dataset.density = d;
-  localStorage.setItem(LS_DENSITY, d);
-}
-function cycleThemeAndDensity() {
-  const curTheme = document.documentElement.dataset.theme || "aurora";
-  const curDensity = document.documentElement.dataset.density || "cozy";
-  const nextTheme = THEMES[(THEMES.indexOf(curTheme) + 1) % THEMES.length];
-  const nextDensity = DENSITIES[(DENSITIES.indexOf(curDensity) + 1) % DENSITIES.length];
-  applyTheme(nextTheme);
-  applyDensity(nextDensity);
-}
-themeBtn?.addEventListener("click", cycleThemeAndDensity);
-
-// initial load (persisted)
-applyTheme(localStorage.getItem(LS_THEME) || "aurora");
-applyDensity(localStorage.getItem(LS_DENSITY) || "cozy");
-
-// ---------- Modal: event editor ----------
-const backdrop = document.getElementById("modalBackdrop");
-const modalClose = document.getElementById("modalClose");
-const eventForm = document.getElementById("eventForm");
-const modalTitle = document.getElementById("modalTitle");
-
-const evtTitle = document.getElementById("evtTitle");
-const evtStart = document.getElementById("evtStart");
-const evtEnd = document.getElementById("evtEnd");
-const evtAllDay = document.getElementById("evtAllDay");
-
-const evtOwner = document.getElementById("evtOwner");
-const ownerCustomWrap = document.getElementById("ownerCustomWrap");
-const evtOwnerCustom = document.getElementById("evtOwnerCustom");
-
-const evtType = document.getElementById("evtType");
-
-const evtRepeat = document.getElementById("evtRepeat");
-const repeatUntilWrap = document.getElementById("repeatUntilWrap");
-const evtRepeatUntil = document.getElementById("evtRepeatUntil");
-
-const checklistEl = document.getElementById("checklist");
-const addCheckItemBtn = document.getElementById("addCheckItem");
-
-const evtNotes = document.getElementById("evtNotes");
-
-const deleteBtn = document.getElementById("deleteBtn");
-const cancelBtn = document.getElementById("cancelBtn");
-
-const fab = document.getElementById("fab");
-
-// ---------- Checklist-focused modal ----------
-const taskBackdrop = document.getElementById("taskBackdrop");
-const taskClose = document.getElementById("taskClose");
-const taskDone = document.getElementById("taskDone");
-const taskMeta = document.getElementById("taskMeta");
-const taskChecklist = document.getElementById("taskChecklist");
-const taskAddItem = document.getElementById("taskAddItem");
-
-// ---------- Jump-to-month modal ----------
-const jumpBackdrop = document.getElementById("jumpBackdrop");
-const jumpClose = document.getElementById("jumpClose");
-const jumpCancel = document.getElementById("jumpCancel");
-const jumpGoBtn = document.getElementById("jumpGoBtn");
-const jumpMonthSelect = document.getElementById("jumpMonthSelect");
-const jumpYearSelect = document.getElementById("jumpYearSelect");
 
 // Panels
 const upcomingListEl = document.getElementById("upcomingList");
@@ -199,6 +101,44 @@ const outstandingListEl = document.getElementById("outstandingList");
 const outPrev = document.getElementById("outPrev");
 const outNext = document.getElementById("outNext");
 const outPage = document.getElementById("outPage");
+
+// Floating add
+const fab = document.getElementById("fab");
+
+// Wire basic clicks
+logoutBtn?.addEventListener("click", lock);
+todayBtn?.addEventListener("click", () => calendar?.today());
+
+searchFiltersBtn?.addEventListener("click", () => {
+  searchFilters?.classList.toggle("hidden");
+});
+
+document.addEventListener("click", (e) => {
+  // click-outside closes search filters
+  if (!searchFilters || searchFilters.classList.contains("hidden")) return;
+  const wrap = searchFilters.closest(".search-filters-wrap");
+  if (wrap && !wrap.contains(e.target)) searchFilters.classList.add("hidden");
+});
+
+clearDatesBtn?.addEventListener("click", () => {
+  if (searchFrom) searchFrom.value = "";
+  if (searchTo) searchTo.value = "";
+  applySearchAndFilters(true);
+});
+
+// Focus mode behavior (panels hidden; calendar expands)
+focusToggle?.addEventListener("change", () => {
+  const on = !!focusToggle.checked;
+  document.body.classList.toggle("focus-on", on);
+
+  const upcoming = document.getElementById("upcoming");
+  const outstanding = document.getElementById("outstanding");
+  if (upcoming) upcoming.style.display = on ? "none" : "";
+  if (outstanding) outstanding.style.display = on ? "none" : "";
+
+  // Nudge FullCalendar to recompute height after layout changes
+  setTimeout(() => calendar?.updateSize?.(), 60);
+});
 
 // ---------- Colors / owners ----------
 const OWNER_STYLE = {
@@ -225,22 +165,7 @@ const CHECKLIST_PRESETS = {
   party: ["Invite list", "Food/drinks", "Music", "Supplies", "Cleanup plan"]
 };
 
-// ---------- Firebase (CDN imports ONLY) ----------
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
-import {
-  getFirestore,
-  collection,
-  addDoc,
-  doc,
-  updateDoc,
-  deleteDoc,
-  onSnapshot,
-  query,
-  orderBy,
-  serverTimestamp
-} from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
-
-// Your Firebase config
+// ---------- Your Firebase config ----------
 const firebaseConfig = {
   apiKey: "AIzaSyBEXNyX6vIbHwGCpI3fpVUb5llubOjt9qQ",
   authDomain: "huberts-house.firebaseapp.com",
@@ -258,10 +183,6 @@ let calendar;
 let rawDocs = [];         // [{id,...data}]
 let expandedEvents = [];  // normalized + expanded repeats (each has sourceId)
 
-let editingDocId = null; // Firestore doc id
-let editingSourceId = null; // for repeat occurrence click (maps to doc id)
-let editingOccurrenceStart = null;
-
 // Outstanding pagination
 let outstandingPage = 1;
 const OUT_PAGE_SIZE = 10;
@@ -272,9 +193,41 @@ let searchText = "";
 // Filter state
 let ownerFilterValue = "all";
 
+// ---------- Theme + Dice behavior (FIXED + upgraded) ----------
+// Dice now does:
+// 1) randomize theme (same as before)
+// 2) cycle calendar view: Month → Week → Day → List → Month ...
+const THEMES = ["aurora", "sunset", "mint", "grape", "mono"];
+function pickTheme() {
+  const t = THEMES[Math.floor(Math.random() * THEMES.length)];
+  document.documentElement.dataset.theme = t;
+  // turn on/off designs sometimes
+  document.documentElement.classList.toggle("designs-on", Math.random() < 0.75);
+}
+
+const VIEW_CYCLE = ["dayGridMonth", "timeGridWeek", "timeGridDay", "listCustom"];
+function cycleCalendarView() {
+  if (!calendar) return;
+  const cur = calendar.view?.type || "dayGridMonth";
+  const idx = Math.max(0, VIEW_CYCLE.indexOf(cur));
+  const next = VIEW_CYCLE[(idx + 1) % VIEW_CYCLE.length];
+
+  if (next === "listCustom") openListView();
+  else calendar.changeView(next);
+}
+
+themeBtn?.addEventListener("click", () => {
+  pickTheme();
+  // “format/setting” improvement: also cycle the calendar view
+  cycleCalendarView();
+});
+
+// initial theme
+pickTheme();
+
 // ---------- Init ----------
 async function initApp() {
-  setStatus("connecting", "Sync: connecting…");
+  statusEl && (statusEl.textContent = "Sync: connecting…");
 
   const app = initializeApp(firebaseConfig);
   db = getFirestore(app);
@@ -293,17 +246,11 @@ async function initApp() {
     renderCalendarFromCache();
     renderPanels();
 
-    setStatus("live", "Sync: live");
+    statusEl && (statusEl.textContent = "Sync: live");
   }, (err) => {
     console.error(err);
-    setStatus("error", "Sync: error (check rules)");
+    statusEl && (statusEl.textContent = "Sync: error (check rules)");
   });
-}
-
-function setStatus(kind, text) {
-  if (!statusEl) return;
-  statusEl.textContent = text;
-  statusEl.dataset.status = kind;
 }
 
 // ---------- UI hooks ----------
@@ -350,11 +297,31 @@ function initUIHooks() {
       checklist: []
     });
   });
+
+  fab?.addEventListener("click", () => {
+    const start = roundToNextHour(new Date());
+    const end = new Date(start.getTime() + 60 * 60 * 1000);
+    openEventModal({
+      mode: "create",
+      title: "",
+      start,
+      end,
+      allDay: false,
+      owner: "both",
+      ownerCustom: "",
+      type: "general",
+      repeat: "none",
+      repeatUntil: "",
+      notes: "",
+      checklist: []
+    });
+  });
 }
 
 // ---------- Calendar ----------
 function initCalendarUI() {
   const calendarEl = document.getElementById("calendar");
+  if (!calendarEl) return;
 
   calendar = new FullCalendar.Calendar(calendarEl, {
     initialView: "dayGridMonth",
@@ -453,6 +420,9 @@ function initCalendarUI() {
         arg.event.setProp("durationEditable", false);
         arg.event.setProp("startEditable", false);
       }
+
+      // allow CSS to control default event font size
+      arg.el.style.fontSize = "var(--event-font)";
     },
 
     eventDrop: async (info) => {
@@ -479,91 +449,130 @@ function initCalendarUI() {
   calendar.render();
   hookMonthTitleClick();
   attachSwipe(calendarEl);
-
-  fab?.addEventListener("click", () => {
-    const start = roundToNextHour(new Date());
-    const end = new Date(start.getTime() + 60 * 60 * 1000);
-    openEventModal({
-      mode: "create",
-      title: "",
-      start,
-      end,
-      allDay: false,
-      owner: "both",
-      ownerCustom: "",
-      type: "general",
-      repeat: "none",
-      repeatUntil: "",
-      notes: "",
-      checklist: []
-    });
-  });
-
-  modalClose?.addEventListener("click", closeModal);
-  cancelBtn?.addEventListener("click", closeModal);
-  backdrop?.addEventListener("click", (e) => {
-    if (e.target === backdrop) closeModal();
-  });
-
-  evtAllDay?.addEventListener("change", () => {
-    preserveDatesOnAllDayToggle(!!evtAllDay.checked);
-  });
-
-  evtOwner?.addEventListener("change", () => {
-    const v = evtOwner.value;
-    ownerCustomWrap?.classList.toggle("hidden", v !== "custom");
-    if (v !== "custom" && evtOwnerCustom) evtOwnerCustom.value = "";
-  });
-
-  evtRepeat?.addEventListener("change", () => {
-    const v = evtRepeat.value;
-    repeatUntilWrap?.classList.toggle("hidden", v === "none");
-  });
-
-  evtType?.addEventListener("change", () => {
-    maybeAutofillChecklist(evtType.value);
-  });
-
-  addCheckItemBtn?.addEventListener("click", () => {
-    addChecklistItemUI(checklistEl, { text: "", done: false }, true);
-  });
-
-  eventForm?.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    await handleSave();
-  });
-
-  deleteBtn?.addEventListener("click", async () => {
-    if (!editingDocId) return;
-    if (!confirm("Delete this event?")) return;
-    await deleteDoc(doc(db, "events", editingDocId));
-    closeModal();
-  });
-
-  taskClose?.addEventListener("click", closeTaskModal);
-  taskDone?.addEventListener("click", closeTaskModal);
-  taskBackdrop?.addEventListener("click", (e) => {
-    if (e.target === taskBackdrop) closeTaskModal();
-  });
-  taskAddItem?.addEventListener("click", () => {
-    addChecklistItemUI(taskChecklist, { text: "", done: false }, true);
-  });
-
-  jumpClose?.addEventListener("click", closeJumpModal);
-  jumpCancel?.addEventListener("click", closeJumpModal);
-  jumpBackdrop?.addEventListener("click", (e) => {
-    if (e.target === jumpBackdrop) closeJumpModal();
-  });
-  jumpGoBtn?.addEventListener("click", () => {
-    const month = Number(jumpMonthSelect?.value ?? 0);
-    const year = Number(jumpYearSelect?.value ?? new Date().getFullYear());
-    calendar?.gotoDate(new Date(year, month, 1));
-    closeJumpModal();
-  });
-
-  populateYearSelect();
 }
 
+// --- PART 2 continues with: modals (event/task/jump), rendering/panels,
+// filters/search/list view, repeat expansion, helpers, and initApp() start. ---
+
+// app.js — Hubert’s House (v6) — PART 2/2
+// (Continues from Part 1)
+
+// ---------- Modal: event editor ----------
+const backdrop = document.getElementById("modalBackdrop");
+const modalClose = document.getElementById("modalClose");
+const eventForm = document.getElementById("eventForm");
+const modalTitle = document.getElementById("modalTitle");
+
+const evtTitle = document.getElementById("evtTitle");
+const evtStart = document.getElementById("evtStart");
+const evtEnd = document.getElementById("evtEnd");
+const evtAllDay = document.getElementById("evtAllDay");
+
+const evtOwner = document.getElementById("evtOwner");
+const ownerCustomWrap = document.getElementById("ownerCustomWrap");
+const evtOwnerCustom = document.getElementById("evtOwnerCustom");
+
+const evtType = document.getElementById("evtType");
+
+const evtRepeat = document.getElementById("evtRepeat");
+const repeatUntilWrap = document.getElementById("repeatUntilWrap");
+const evtRepeatUntil = document.getElementById("evtRepeatUntil");
+
+const checklistEl = document.getElementById("checklist");
+const addCheckItemBtn = document.getElementById("addCheckItem");
+
+const evtNotes = document.getElementById("evtNotes");
+
+const deleteBtn = document.getElementById("deleteBtn");
+const cancelBtn = document.getElementById("cancelBtn");
+
+// Editing state
+let editingDocId = null; // Firestore doc id
+let editingSourceId = null; // series id
+let editingOccurrenceStart = null;
+
+// ---------- Checklist-focused modal ----------
+const taskBackdrop = document.getElementById("taskBackdrop");
+const taskClose = document.getElementById("taskClose");
+const taskDone = document.getElementById("taskDone");
+const taskMeta = document.getElementById("taskMeta");
+const taskChecklist = document.getElementById("taskChecklist");
+const taskAddItem = document.getElementById("taskAddItem");
+
+// ---------- Jump-to-month modal ----------
+const jumpBackdrop = document.getElementById("jumpBackdrop");
+const jumpClose = document.getElementById("jumpClose");
+const jumpCancel = document.getElementById("jumpCancel");
+const jumpGoBtn = document.getElementById("jumpGoBtn");
+const jumpMonthSelect = document.getElementById("jumpMonthSelect");
+const jumpYearSelect = document.getElementById("jumpYearSelect");
+
+// ---------- Modal wiring ----------
+modalClose?.addEventListener("click", closeModal);
+cancelBtn?.addEventListener("click", closeModal);
+backdrop?.addEventListener("click", (e) => {
+  if (e.target === backdrop) closeModal();
+});
+
+evtAllDay?.addEventListener("change", () => {
+  preserveDatesOnAllDayToggle(!!evtAllDay.checked);
+});
+
+evtOwner?.addEventListener("change", () => {
+  const v = evtOwner.value;
+  ownerCustomWrap?.classList.toggle("hidden", v !== "custom");
+  if (v !== "custom" && evtOwnerCustom) evtOwnerCustom.value = "";
+});
+
+evtRepeat?.addEventListener("change", () => {
+  const v = evtRepeat.value;
+  repeatUntilWrap?.classList.toggle("hidden", v === "none");
+});
+
+evtType?.addEventListener("change", () => {
+  maybeAutofillChecklist(evtType.value);
+});
+
+addCheckItemBtn?.addEventListener("click", () => {
+  addChecklistItemUI(checklistEl, { text: "", done: false }, true);
+});
+
+eventForm?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  await handleSave();
+});
+
+deleteBtn?.addEventListener("click", async () => {
+  if (!editingDocId) return;
+  if (!confirm("Delete this event?")) return;
+  await deleteDoc(doc(db, "events", editingDocId));
+  closeModal();
+});
+
+// Task modal wiring
+taskClose?.addEventListener("click", closeTaskModal);
+taskDone?.addEventListener("click", closeTaskModal);
+taskBackdrop?.addEventListener("click", (e) => {
+  if (e.target === taskBackdrop) closeTaskModal();
+});
+taskAddItem?.addEventListener("click", () => {
+  addChecklistItemUI(taskChecklist, { text: "", done: false }, true);
+});
+
+// Jump modal wiring
+jumpClose?.addEventListener("click", closeJumpModal);
+jumpCancel?.addEventListener("click", closeJumpModal);
+jumpBackdrop?.addEventListener("click", (e) => {
+  if (e.target === jumpBackdrop) closeJumpModal();
+});
+jumpGoBtn?.addEventListener("click", () => {
+  const month = Number(jumpMonthSelect?.value ?? 0);
+  const year = Number(jumpYearSelect?.value ?? new Date().getFullYear());
+  calendar?.gotoDate(new Date(year, month, 1));
+  closeJumpModal();
+});
+
+// ---------- Month title click → jump modal ----------
 function hookMonthTitleClick() {
   const title = document.querySelector(".fc-toolbar-title");
   if (!title) return;
@@ -592,9 +601,12 @@ function populateYearSelect() {
   jumpYearSelect.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join("");
   jumpYearSelect.value = String(now);
 }
+populateYearSelect();
 
+// ---------- Swipe month navigation ----------
 function attachSwipe(el) {
   let sx = 0, sy = 0, st = 0;
+
   el.addEventListener("touchstart", (e) => {
     if (!e.touches || e.touches.length !== 1) return;
     sx = e.touches[0].clientX;
@@ -618,16 +630,6 @@ function attachSwipe(el) {
     else calendar?.prev();
   }, { passive: true });
 }
-
-// =====================
-// PART 2 STARTS BELOW
-// - Rendering (calendar + panels)
-// - Search/filter helpers
-// - Upcoming + Outstanding panels
-// - Modals + checklist autosave
-// - Repeat expansion engine
-// - Utilities (date helpers, escapeHtml, etc.)
-// =====================
 
 // ---------- Rendering ----------
 function renderCalendarFromCache() {
@@ -742,7 +744,7 @@ function openListView() {
   else calendar.gotoDate(new Date());
 }
 
-// ---------- Upcoming ----------
+// ---------- Upcoming panel ----------
 function renderUpcoming() {
   if (!upcomingListEl) return;
 
@@ -780,7 +782,7 @@ function renderUpcoming() {
     return;
   }
 
-  upcomingListEl.innerHTML = top.map(renderPanelItemHTML).join("");
+  upcomingListEl.innerHTML = top.map(renderPanelCardHTML).join("");
   upcomingListEl.querySelectorAll("[data-open-id]").forEach((el) => {
     el.addEventListener("click", () => {
       const id = el.getAttribute("data-open-id");
@@ -790,7 +792,7 @@ function renderUpcoming() {
   });
 }
 
-// ---------- Outstanding ----------
+// ---------- Outstanding panel ----------
 outPrev?.addEventListener("click", () => {
   outstandingPage = Math.max(1, outstandingPage - 1);
   renderOutstanding();
@@ -827,7 +829,7 @@ function renderOutstanding() {
     return;
   }
 
-  outstandingListEl.innerHTML = pageItems.map(renderPanelItemHTMLWithProgress).join("");
+  outstandingListEl.innerHTML = pageItems.map(renderPanelCardHTMLWithProgress).join("");
   outstandingListEl.querySelectorAll("[data-open-id]").forEach((el) => {
     el.addEventListener("click", () => {
       const id = el.getAttribute("data-open-id");
@@ -837,7 +839,6 @@ function renderOutstanding() {
   });
 }
 
-// ---------- Panel open helper ----------
 function openFromPanel(sourceId, occurrenceStartISO, checklistView) {
   const docData = rawDocs.find(d => d.id === sourceId);
   if (!docData) return;
@@ -866,7 +867,229 @@ function openFromPanel(sourceId, occurrenceStartISO, checklistView) {
   }
 }
 
-// ---------- Repeat expansion ----------
+// ---------- Event modal ----------
+function openEventModal(payload) {
+  const isEdit = payload.mode === "edit";
+
+  editingDocId = isEdit ? payload.id : null;
+  editingSourceId = isEdit ? payload.id : null;
+  editingOccurrenceStart = payload.occurrenceStart || null;
+
+  if (modalTitle) modalTitle.textContent = isEdit ? "Edit event" : "New event";
+  deleteBtn?.classList.toggle("hidden", !isEdit);
+
+  if (evtTitle) evtTitle.value = payload.title ?? "";
+  if (evtAllDay) evtAllDay.checked = !!payload.allDay;
+
+  const owner = normalizeOwner(payload.owner);
+  if (evtOwner) evtOwner.value = owner;
+  ownerCustomWrap?.classList.toggle("hidden", owner !== "custom");
+  if (evtOwnerCustom) evtOwnerCustom.value = payload.ownerCustom || "";
+
+  if (evtType) evtType.value = payload.type || "general";
+
+  if (evtRepeat) evtRepeat.value = payload.repeat || "none";
+  repeatUntilWrap?.classList.toggle("hidden", (payload.repeat || "none") === "none");
+  if (evtRepeatUntil) evtRepeatUntil.value = payload.repeatUntil || "";
+
+  setDateTimeInputs(!!payload.allDay, payload.start, payload.end);
+
+  renderChecklistUI(checklistEl, payload.checklist || []);
+  if (evtNotes) evtNotes.value = payload.notes || "";
+
+  backdrop?.classList.remove("hidden");
+  evtTitle?.focus();
+}
+
+function closeModal() {
+  editingDocId = null;
+  editingSourceId = null;
+  editingOccurrenceStart = null;
+  backdrop?.classList.add("hidden");
+}
+
+function setDateTimeInputs(isAllDay, startDate, endDate) {
+  if (!evtStart || !evtEnd) return;
+
+  evtStart.type = isAllDay ? "date" : "datetime-local";
+  evtEnd.type = isAllDay ? "date" : "datetime-local";
+
+  evtStart.value = toInputValue(startDate, isAllDay);
+  evtEnd.value = endDate ? toInputValue(endDate, isAllDay) : "";
+}
+
+function preserveDatesOnAllDayToggle(isAllDayNow) {
+  if (!evtStart || !evtEnd) return;
+
+  const prevStartVal = evtStart.value;
+  const prevEndVal = evtEnd.value;
+
+  const wasAllDay = evtStart.type === "date";
+  const startDate = prevStartVal ? fromInputValue(prevStartVal, wasAllDay) : new Date();
+  const endDate = prevEndVal ? fromInputValue(prevEndVal, wasAllDay) : null;
+
+  setDateTimeInputs(isAllDayNow, startDate, endDate);
+}
+
+async function handleSave() {
+  const title = (evtTitle?.value || "").trim();
+  if (!title) return;
+
+  const allDay = !!evtAllDay?.checked;
+
+  const owner = normalizeOwner(evtOwner?.value || "both");
+  const ownerCustom = owner === "custom" ? (evtOwnerCustom?.value || "").trim() : "";
+
+  const type = evtType?.value || "general";
+  const notes = (evtNotes?.value || "").trim();
+
+  const repeat = evtRepeat?.value || "none";
+  const repeatUntil = repeat !== "none" ? (evtRepeatUntil?.value || "") : "";
+
+  const start = fromInputValue(evtStart?.value, allDay);
+  const end = evtEnd?.value ? fromInputValue(evtEnd.value, allDay) : null;
+
+  if (end && end.getTime() < start.getTime()) {
+    alert("End must be after start.");
+    return;
+  }
+
+  const checklist = readChecklistUI(checklistEl);
+
+  const payload = {
+    title,
+    allDay,
+    owner,
+    ownerCustom,
+    type,
+    notes,
+    checklist,
+    repeat,
+    repeatUntil,
+    start: start.toISOString(),
+    end: end ? end.toISOString() : null,
+    updatedAt: serverTimestamp()
+  };
+
+  if (editingDocId) {
+    await updateDoc(doc(db, "events", editingDocId), payload);
+  } else {
+    await addDoc(eventsCol, { ...payload, createdAt: serverTimestamp() });
+  }
+
+  closeModal();
+}
+
+async function persistMovedEvent(fcEvent) {
+  const patch = {
+    start: fcEvent.start ? fcEvent.start.toISOString() : null,
+    end: fcEvent.end ? fcEvent.end.toISOString() : null,
+    allDay: fcEvent.allDay,
+    updatedAt: serverTimestamp()
+  };
+  // NOTE: only non-repeat events are draggable; their FC id is the doc id
+  await updateDoc(doc(db, "events", fcEvent.id), patch);
+}
+
+// ---------- Task modal ----------
+let taskDocId = null;
+
+function openTaskModal(docData, occurrenceStart) {
+  taskDocId = docData.id;
+
+  const when = formatWhenForPanel({
+    start: occurrenceStart || (docData.start ? new Date(docData.start) : null),
+    end: docData.end ? new Date(docData.end) : null,
+    allDay: !!docData.allDay
+  });
+
+  const owner = normalizeOwner(docData.owner);
+  const ownerLabel = owner === "custom" ? (docData.ownerCustom || "Other") : owner;
+
+  if (taskMeta) taskMeta.textContent = `${docData.title || ""} — ${when} — ${ownerLabel}`;
+
+  renderChecklistUI(taskChecklist, Array.isArray(docData.checklist) ? docData.checklist : []);
+  taskBackdrop?.classList.remove("hidden");
+
+  // Auto-save checklist changes
+  taskChecklist?.addEventListener("change", taskAutoSaveHandler, { once: true });
+  taskChecklist?.addEventListener("blur", taskAutoSaveHandler, { once: true, capture: true });
+}
+
+async function taskAutoSaveHandler() {
+  if (!taskDocId) return;
+  const checklist = readChecklistUI(taskChecklist);
+  await updateDoc(doc(db, "events", taskDocId), { checklist, updatedAt: serverTimestamp() });
+
+  // Re-arm (simple)
+  taskChecklist?.addEventListener("change", taskAutoSaveHandler, { once: true });
+  taskChecklist?.addEventListener("blur", taskAutoSaveHandler, { once: true, capture: true });
+}
+
+function closeTaskModal() {
+  taskDocId = null;
+  taskBackdrop?.classList.add("hidden");
+}
+
+// ---------- Checklist UI helpers ----------
+function renderChecklistUI(container, items) {
+  if (!container) return;
+  const safe = Array.isArray(items) ? items : [];
+  container.innerHTML = "";
+  for (const it of safe) addChecklistItemUI(container, it, false);
+}
+
+function addChecklistItemUI(container, item, focus) {
+  if (!container) return;
+  const wrap = document.createElement("div");
+  wrap.className = "checkitem";
+
+  const cb = document.createElement("input");
+  cb.type = "checkbox";
+  cb.checked = !!item.done;
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = item.text || "";
+  input.placeholder = "Checklist item…";
+
+  const del = document.createElement("button");
+  del.type = "button";
+  del.className = "btn btn-ghost";
+  del.textContent = "✕";
+  del.style.width = "44px";
+  del.style.padding = "10px 0";
+
+  del.addEventListener("click", () => wrap.remove());
+
+  wrap.appendChild(cb);
+  wrap.appendChild(input);
+  wrap.appendChild(del);
+
+  container.appendChild(wrap);
+  if (focus) input.focus();
+}
+
+function readChecklistUI(container) {
+  if (!container) return [];
+  const rows = Array.from(container.querySelectorAll(".checkitem"));
+  return rows.map((row) => {
+    const cb = row.querySelector('input[type="checkbox"]');
+    const input = row.querySelector('input[type="text"]');
+    return { text: (input?.value || "").trim(), done: !!cb?.checked };
+  }).filter(it => it.text.length > 0);
+}
+
+function maybeAutofillChecklist(type) {
+  if (!checklistEl) return;
+  const current = readChecklistUI(checklistEl);
+  if (current.length > 0) return;
+  const preset = CHECKLIST_PRESETS[type] || [];
+  if (preset.length === 0) return;
+  renderChecklistUI(checklistEl, preset.map(t => ({ text: t, done: false })));
+}
+
+// ---------- Normalize docs + expand repeats ----------
 function normalizeDocs(docs) {
   return docs.map((d) => {
     const owner = normalizeOwner(d.owner);
@@ -977,7 +1200,93 @@ function makeFcEvent({ id, title, start, end, allDay, style, extra }) {
   };
 }
 
-// ---------- Utilities ----------
+// ---------- Panel card rendering ----------
+function renderPanelCardHTML(e) {
+  const p = e.extendedProps || {};
+  const owner = normalizeOwner(p.owner);
+  const ownerLabel = owner === "custom" ? (p.ownerCustom || "Other") : owner;
+
+  const when = formatWhenForPanel({
+    start: new Date(e.start),
+    end: e.end ? new Date(e.end) : null,
+    allDay: !!e.allDay
+  });
+
+  const style = OWNER_STYLE[owner] || OWNER_STYLE.custom;
+  const pillColor = style.border;
+
+  return `
+    <div class="panel-card" data-open-id="${p.sourceId || e.id}" data-occ="${String(e.start)}" style="border-left: 5px solid ${pillColor}; cursor: pointer;">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
+        <span class="owner-pill">${escapeHtml(ownerLabel)}</span>
+        <strong style="font-size: 16px;">${escapeHtml(e.title || "")}</strong>
+      </div>
+      <div class="tiny muted">${escapeHtml(when)}</div>
+    </div>
+  `;
+}
+
+function renderPanelCardHTMLWithProgress(e) {
+  const p = e.extendedProps || {};
+  const items = Array.isArray(p.checklist) ? p.checklist : [];
+  const done = items.filter(i => i.done).length;
+  const total = items.length;
+  const pct = total ? Math.round((done / total) * 100) : 0;
+
+  // Insert a progress pill after the title block
+  return `
+    <div class="panel-card" data-open-id="${p.sourceId || e.id}" data-occ="${String(e.start)}" style="border-left: 5px solid ${(OWNER_STYLE[normalizeOwner(p.owner)]||OWNER_STYLE.custom).border}; cursor: pointer;">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
+        <span class="owner-pill">${escapeHtml(normalizeOwner(p.owner) === "custom" ? (p.ownerCustom || "Other") : normalizeOwner(p.owner))}</span>
+        <strong style="font-size: 16px; margin-right:auto;">${escapeHtml(e.title || "")}</strong>
+        <span class="progress-pill">${done}/${total} (${pct}%)</span>
+      </div>
+      <div class="tiny muted">${escapeHtml(formatWhenForPanel({ start:new Date(e.start), end:e.end?new Date(e.end):null, allDay:!!e.allDay }))}</div>
+    </div>
+  `;
+}
+
+function formatWhenForPanel({ start, end, allDay }) {
+  if (!start) return "";
+  const optsDate = { weekday: "short", month: "short", day: "numeric" };
+  const optsTime = { hour: "numeric", minute: "2-digit" };
+
+  if (allDay) return `${start.toLocaleDateString(undefined, optsDate)} (all day)`;
+
+  const d = start.toLocaleDateString(undefined, optsDate);
+  const t1 = start.toLocaleTimeString(undefined, optsTime);
+  if (!end) return `${d} • ${t1}`;
+  const t2 = end.toLocaleTimeString(undefined, optsTime);
+  return `${d} • ${t1}–${t2}`;
+}
+
+// ---------- Date helpers ----------
+function toInputValue(dateObj, allDay) {
+  let d = dateObj;
+  if (!(d instanceof Date)) d = new Date(d);
+  if (isNaN(d)) d = new Date();
+
+  const pad = (n) => String(n).padStart(2, "0");
+  const y = d.getFullYear();
+  const m = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+
+  if (allDay) return `${y}-${m}-${day}`;
+
+  const hh = pad(d.getHours());
+  const mm = pad(d.getMinutes());
+  return `${y}-${m}-${day}T${hh}:${mm}`;
+}
+
+function fromInputValue(value, allDay) {
+  if (!value) return new Date();
+  if (allDay) {
+    const [y, m, d] = value.split("-").map(Number);
+    return new Date(y, m - 1, d, 0, 0, 0, 0);
+  }
+  return new Date(value);
+}
+
 function roundToNextHour(d) {
   const x = new Date(d);
   x.setMinutes(0, 0, 0);
@@ -985,6 +1294,7 @@ function roundToNextHour(d) {
   return x;
 }
 
+// ---------- Escape ----------
 function escapeHtml(s) {
   return String(s)
     .replaceAll("&", "&amp;")
@@ -997,7 +1307,6 @@ function escapeHtml(s) {
 // ---------- Start ----------
 initApp().catch((err) => {
   console.error(err);
-  setStatus("error", "Sync: error");
+  if (statusEl) statusEl.textContent = "Sync: error";
   alert("Firebase failed to initialize. Check firebaseConfig + Firestore rules.");
 });
-
