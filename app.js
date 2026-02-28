@@ -629,3 +629,375 @@ function attachSwipe(el) {
 // - Utilities (date helpers, escapeHtml, etc.)
 // =====================
 
+// ---------- Rendering ----------
+function renderCalendarFromCache() {
+  if (!calendar) return;
+
+  calendar.removeAllEvents();
+  for (const e of getVisibleEvents()) calendar.addEvent(e);
+
+  const searchActive = isSearchActive();
+  if (!searchActive && calendar.view?.type === "listCustom") {
+    calendar.changeView("dayGridMonth");
+  }
+}
+
+function renderPanels() {
+  renderUpcoming();
+  renderOutstanding();
+}
+
+function getVisibleEvents() {
+  let list = expandedEvents.slice();
+  list = list.filter((e) => matchOwnerFilter(e));
+  list = list.filter((e) => matchSearch(e));
+
+  const bounds = getSearchBounds();
+  if (bounds) {
+    const { from, to } = bounds;
+    list = list.filter((e) => {
+      const s = new Date(e.start).getTime();
+      if (from && s < from.getTime()) return false;
+      if (to && s > to.getTime()) return false;
+      return true;
+    });
+  }
+
+  return list;
+}
+
+function shouldShowEvent(fcEvent) {
+  const p = fcEvent.extendedProps || {};
+  const owner = normalizeOwner(p.owner);
+
+  if (ownerFilterValue && ownerFilterValue !== "all") {
+    if (ownerFilterValue !== owner) return false;
+  }
+
+  if (searchText) {
+    const hay = `${fcEvent.title} ${p.notes || ""} ${p.type || ""} ${p.ownerCustom || ""}`.toLowerCase();
+    if (!hay.includes(searchText.toLowerCase())) return false;
+  }
+
+  const bounds = getSearchBounds();
+  if (bounds) {
+    const s = fcEvent.start ? fcEvent.start.getTime() : 0;
+    if (bounds.from && s < bounds.from.getTime()) return false;
+    if (bounds.to && s > bounds.to.getTime()) return false;
+  }
+
+  return true;
+}
+
+function matchOwnerFilter(e) {
+  if (!ownerFilterValue || ownerFilterValue === "all") return true;
+  return normalizeOwner(e.extendedProps?.owner) === ownerFilterValue;
+}
+
+function matchSearch(e) {
+  if (!searchText) return true;
+  const p = e.extendedProps || {};
+  const hay = `${e.title} ${p.notes || ""} ${p.type || ""} ${p.ownerCustom || ""}`.toLowerCase();
+  return hay.includes(searchText.toLowerCase());
+}
+
+function getSearchBounds() {
+  const fromVal = searchFrom?.value || "";
+  const toVal = searchTo?.value || "";
+  if (!fromVal && !toVal) return null;
+
+  const from = fromVal ? new Date(fromVal + "T00:00:00") : null;
+  const to = toVal ? new Date(toVal + "T23:59:59") : null;
+  return { from, to };
+}
+
+function isSearchActive() {
+  const b = getSearchBounds();
+  return !!(searchText || b);
+}
+
+function applySearchAndFilters(switchToListIfSearching) {
+  searchText = (searchInput?.value || "").trim();
+
+  renderCalendarFromCache();
+  renderPanels();
+
+  if (switchToListIfSearching && isSearchActive()) {
+    openListView();
+  }
+}
+
+function openListView() {
+  if (!calendar) return;
+
+  const days = Number(listRangeSelect?.value || 7);
+  calendar.setOption("views", {
+    listCustom: { type: "list", duration: { days }, buttonText: "List" }
+  });
+
+  calendar.changeView("listCustom");
+
+  const bounds = getSearchBounds();
+  if (bounds?.from) calendar.gotoDate(bounds.from);
+  else calendar.gotoDate(new Date());
+}
+
+// ---------- Upcoming ----------
+function renderUpcoming() {
+  if (!upcomingListEl) return;
+
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+
+  let list = expandedEvents.slice();
+  list = list.filter(matchOwnerFilter);
+  list = list.filter(matchSearch);
+
+  const upcoming = [];
+  for (const e of list) {
+    const start = new Date(e.start);
+    const end = e.end ? new Date(e.end) : null;
+    const isAllDay = !!e.allDay;
+
+    if (isAllDay) {
+      if (start.getTime() >= todayStart.getTime()) upcoming.push(e);
+      continue;
+    }
+
+    if (start.toDateString() === now.toDateString()) {
+      const endTime = end ? end.getTime() : start.getTime();
+      if (endTime >= now.getTime()) upcoming.push(e);
+    } else if (start.getTime() > now.getTime()) {
+      upcoming.push(e);
+    }
+  }
+
+  upcoming.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+
+  const top = upcoming.slice(0, 5);
+  if (top.length === 0) {
+    upcomingListEl.textContent = "No upcoming events.";
+    return;
+  }
+
+  upcomingListEl.innerHTML = top.map(renderPanelItemHTML).join("");
+  upcomingListEl.querySelectorAll("[data-open-id]").forEach((el) => {
+    el.addEventListener("click", () => {
+      const id = el.getAttribute("data-open-id");
+      const occ = el.getAttribute("data-occ");
+      openFromPanel(id, occ, false);
+    });
+  });
+}
+
+// ---------- Outstanding ----------
+outPrev?.addEventListener("click", () => {
+  outstandingPage = Math.max(1, outstandingPage - 1);
+  renderOutstanding();
+});
+outNext?.addEventListener("click", () => {
+  outstandingPage += 1;
+  renderOutstanding();
+});
+
+function renderOutstanding() {
+  if (!outstandingListEl || !outPage) return;
+
+  let list = expandedEvents.slice();
+  list = list.filter(matchOwnerFilter);
+  list = list.filter(matchSearch);
+
+  const withUnchecked = list.filter((e) => {
+    const items = e.extendedProps?.checklist || [];
+    return Array.isArray(items) && items.some(it => !it.done);
+  });
+
+  withUnchecked.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+
+  const totalPages = Math.max(1, Math.ceil(withUnchecked.length / OUT_PAGE_SIZE));
+  outstandingPage = Math.min(outstandingPage, totalPages);
+
+  const startIdx = (outstandingPage - 1) * OUT_PAGE_SIZE;
+  const pageItems = withUnchecked.slice(startIdx, startIdx + OUT_PAGE_SIZE);
+
+  outPage.textContent = `Page ${outstandingPage} / ${totalPages}`;
+
+  if (pageItems.length === 0) {
+    outstandingListEl.textContent = "No outstanding checklist items 🎉";
+    return;
+  }
+
+  outstandingListEl.innerHTML = pageItems.map(renderPanelItemHTMLWithProgress).join("");
+  outstandingListEl.querySelectorAll("[data-open-id]").forEach((el) => {
+    el.addEventListener("click", () => {
+      const id = el.getAttribute("data-open-id");
+      const occ = el.getAttribute("data-occ");
+      openFromPanel(id, occ, true);
+    });
+  });
+}
+
+// ---------- Panel open helper ----------
+function openFromPanel(sourceId, occurrenceStartISO, checklistView) {
+  const docData = rawDocs.find(d => d.id === sourceId);
+  if (!docData) return;
+
+  const occStart = occurrenceStartISO ? new Date(occurrenceStartISO) : (docData.start ? new Date(docData.start) : null);
+
+  if (checklistView) {
+    openTaskModal(docData, occStart);
+  } else {
+    openEventModal({
+      mode: "edit",
+      id: sourceId,
+      occurrenceStart: occStart,
+      title: docData.title || "",
+      start: docData.start ? new Date(docData.start) : occStart,
+      end: docData.end ? new Date(docData.end) : null,
+      allDay: !!docData.allDay,
+      owner: normalizeOwner(docData.owner),
+      ownerCustom: docData.ownerCustom || "",
+      type: docData.type || "general",
+      repeat: docData.repeat || "none",
+      repeatUntil: docData.repeatUntil || "",
+      notes: docData.notes || "",
+      checklist: Array.isArray(docData.checklist) ? docData.checklist : []
+    });
+  }
+}
+
+// ---------- Repeat expansion ----------
+function normalizeDocs(docs) {
+  return docs.map((d) => {
+    const owner = normalizeOwner(d.owner);
+    const start = d.start ? new Date(d.start) : null;
+    const end = d.end ? new Date(d.end) : null;
+
+    return {
+      id: d.id,
+      title: d.title || "",
+      start,
+      end,
+      allDay: !!d.allDay,
+      owner,
+      ownerCustom: d.ownerCustom || "",
+      type: d.type || "general",
+      notes: d.notes || "",
+      checklist: Array.isArray(d.checklist) ? d.checklist : [],
+      repeat: d.repeat || "none",
+      repeatUntil: d.repeatUntil || ""
+    };
+  }).filter(d => d.start instanceof Date && !isNaN(d.start));
+}
+
+function expandRepeats(norm) {
+  const horizonDays = 240;
+  const now = new Date();
+  const horizon = new Date(now.getTime() + horizonDays * 24 * 60 * 60 * 1000);
+
+  const out = [];
+  for (const d of norm) {
+    const style = OWNER_STYLE[d.owner] || OWNER_STYLE.custom;
+
+    const base = {
+      sourceId: d.id,
+      owner: d.owner,
+      ownerCustom: d.ownerCustom,
+      type: d.type,
+      notes: d.notes,
+      checklist: d.checklist
+    };
+
+    const repeat = d.repeat || "none";
+    if (repeat === "none") {
+      out.push(makeFcEvent({
+        id: d.id,
+        title: d.title,
+        start: d.start,
+        end: d.end,
+        allDay: d.allDay,
+        style,
+        extra: { ...base, isRepeatOccurrence: false }
+      }));
+      continue;
+    }
+
+    const until = d.repeatUntil ? new Date(d.repeatUntil + "T23:59:59") : horizon;
+    const stop = until.getTime() < horizon.getTime() ? until : horizon;
+
+    let cur = new Date(d.start);
+    let count = 0;
+
+    while (cur.getTime() <= stop.getTime() && count < 400) {
+      const occStart = new Date(cur);
+      const durMs = d.end ? (new Date(d.end).getTime() - new Date(d.start).getTime()) : 0;
+      const occEndAdj = d.end ? new Date(occStart.getTime() + durMs) : null;
+
+      const occId = `${d.id}__${occStart.toISOString().slice(0,10)}`;
+
+      out.push(makeFcEvent({
+        id: occId,
+        title: d.title,
+        start: occStart,
+        end: occEndAdj,
+        allDay: d.allDay,
+        style,
+        extra: { ...base, isRepeatOccurrence: true }
+      }));
+
+      cur = advanceRepeat(cur, repeat);
+      count++;
+    }
+  }
+
+  return out;
+}
+
+function advanceRepeat(date, repeat) {
+  const d = new Date(date);
+  if (repeat === "daily") d.setDate(d.getDate() + 1);
+  else if (repeat === "weekly") d.setDate(d.getDate() + 7);
+  else if (repeat === "monthly") d.setMonth(d.getMonth() + 1);
+  else if (repeat === "yearly") d.setFullYear(d.getFullYear() + 1);
+  else d.setDate(d.getDate() + 1);
+  return d;
+}
+
+function makeFcEvent({ id, title, start, end, allDay, style, extra }) {
+  return {
+    id,
+    title,
+    start: start.toISOString(),
+    end: end ? end.toISOString() : undefined,
+    allDay: !!allDay,
+    backgroundColor: style.bg,
+    borderColor: style.border,
+    textColor: "#e9ecf1",
+    extendedProps: extra
+  };
+}
+
+// ---------- Utilities ----------
+function roundToNextHour(d) {
+  const x = new Date(d);
+  x.setMinutes(0, 0, 0);
+  x.setHours(x.getHours() + 1);
+  return x;
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+// ---------- Start ----------
+initApp().catch((err) => {
+  console.error(err);
+  setStatus("error", "Sync: error");
+  alert("Firebase failed to initialize. Check firebaseConfig + Firestore rules.");
+});
+
