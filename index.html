@@ -8,7 +8,7 @@
 
   <!-- FullCalendar -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css">
-  <link rel="stylesheet" href="./styles.css?v=20260228_huberts_house_v3" />
+  <link rel="stylesheet" href="./styles.css?v=20260228_huberts_house_v4" />
 </head>
 <body>
 
@@ -50,29 +50,28 @@
       </div>
 
       <div class="actions">
-<div class="searchbar">
-  <div class="searchbar-top">
-    <input id="searchInput" class="search" type="search" placeholder="Search events…" />
-    <button id="searchFiltersBtn" class="btn btn-ghost btn-icon-sm" type="button" aria-label="Search filters">
-      ☰
-    </button>
-  </div>
+        <div class="searchbar">
+          <div class="searchbar-top">
+            <input id="searchInput" class="search" type="search" placeholder="Search events…" />
+            <button id="searchFiltersBtn" class="btn btn-ghost btn-icon-sm" type="button" aria-label="Search filters">☰</button>
+          </div>
 
-  <div id="searchFilters" class="search-filters hidden">
-    <label class="search-field">
-      <span>From</span>
-      <input id="searchFrom" class="search-date" type="date" />
-    </label>
-    <label class="search-field">
-      <span>To</span>
-      <input id="searchTo" class="search-date" type="date" />
-    </label>
+          <div id="searchFilters" class="search-filters hidden">
+            <label class="search-field">
+              <span>From</span>
+              <input id="searchFrom" class="search-date" type="date" />
+            </label>
+            <label class="search-field">
+              <span>To</span>
+              <input id="searchTo" class="search-date" type="date" />
+            </label>
 
-    <button id="clearDatesBtn" class="btn btn-ghost" type="button">Clear dates</button>
-  </div>
-</div>
+            <button id="clearDatesBtn" class="btn btn-ghost" type="button">Clear dates</button>
+          </div>
+        </div>
+
         <button id="todayBtn" class="btn btn-ghost" type="button">Today</button>
-        <button id="logoutBtn" class="btn btn-ghost" type="button">Lock</button>
+        <button id="logoutBtn" class="btn btn-ghost" type="button">Log out</button>
       </div>
     </header>
 
@@ -88,13 +87,30 @@
             <option value="custom">Other</option>
           </select>
         </label>
+
+        <label class="mini-label">
+          <span>List range</span>
+          <select id="listRangeSelect">
+            <option value="7" selected>7 days</option>
+            <option value="14">14 days</option>
+            <option value="30">30 days</option>
+          </select>
+        </label>
+      </div>
+
+      <!-- Dealer’s choice POP: tiny legend -->
+      <div class="legend">
+        <span class="dot dot-hanry"></span><span class="legend-label">hanry</span>
+        <span class="dot dot-karena"></span><span class="legend-label">Karena</span>
+        <span class="dot dot-both"></span><span class="legend-label">Both</span>
+        <span class="dot dot-custom"></span><span class="legend-label">Other</span>
       </div>
 
       <div id="calendar"></div>
       <div class="hint tiny muted">Tip: swipe left/right to change months. Tap the month title to jump.</div>
     </div>
 
-    <!-- Dealer’s choice enhancement: Upcoming panel -->
+    <!-- Upcoming panel -->
     <div id="upcoming" class="upcoming card">
       <div class="upcoming-title">Upcoming</div>
       <div id="upcomingList" class="upcoming-list tiny muted">Loading…</div>
@@ -249,6 +265,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
-  <script type="module" src="./app.js?v=20260228_huberts_house_v3"></script>
+  <script type="module" src="./app.js?v=20260228_huberts_house_v4"></script>
 </body>
 </html>
