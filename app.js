@@ -239,6 +239,7 @@ function initCalendarUI() {
       if (jumpMonth) jumpMonth.value = `${y}-${m}`;
       rebuildCalendarEvents();
       attachTitleClickForJump(); // title element re-renders; reattach
+      bindMonthTitleClick();
     },
 
     dateClick: (info) => {
@@ -282,6 +283,7 @@ function initCalendarUI() {
   });
 
   calendar.render();
+  bindMonthTitleClick();
 
   todayBtn?.addEventListener("click", () => calendar.today());
 
