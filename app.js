@@ -35,8 +35,11 @@ gateForm.addEventListener("submit", (e) => {
 });
 
 // Show/hide gate immediately
-if (isUnlocked()) gate.classList.add("hidden");
-else gate.classList.remove("hidden");
+if (isUnlocked()) {
+  gate.classList.add("hidden");
+} else {
+  gate.classList.remove("hidden");
+}
 
 // ---------- Topbar buttons ----------
 const logoutBtn = document.getElementById("logoutBtn");
