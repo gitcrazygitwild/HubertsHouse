@@ -6,7 +6,7 @@
   <title>Hubert’s House</title>
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css">
-  <link rel="stylesheet" href="./styles.css?v=20260227_hubert_house" />
+  <link rel="stylesheet" href="./styles.css?v=20260227_huberts_house_v2" />
 </head>
 <body>
 
@@ -48,18 +48,17 @@
       </div>
 
       <div class="actions">
-        <!-- Quick month/year picker -->
-        <div class="jump">
-          <input id="jumpMonth" type="month" />
-          <button id="jumpGo" class="btn btn-ghost" type="button">Go</button>
-        </div>
+        <!-- Dealer’s choice: Search -->
+        <input id="searchInput" class="search" type="search" placeholder="Search events…" />
 
         <button id="todayBtn" class="btn btn-ghost" type="button">Today</button>
         <button id="logoutBtn" class="btn btn-ghost" type="button">Lock</button>
+
+        <!-- Hidden month picker used when user taps the month title -->
+        <input id="jumpMonth" class="jump-hidden" type="month" />
       </div>
     </header>
 
-    <!-- Owner filter chips (dealer’s choice enhancement) -->
     <div class="filters">
       <button class="chip active" data-owner="hanry" type="button">hanry</button>
       <button class="chip active" data-owner="karena" type="button">Karena</button>
@@ -71,6 +70,7 @@
 
     <div id="calendarWrap" class="card">
       <div id="calendar"></div>
+      <div class="hint tiny muted">Tip: swipe left/right to change months. Tap the month title to jump.</div>
     </div>
 
     <button id="fab" class="fab" type="button" aria-label="Add event">＋</button>
@@ -87,7 +87,7 @@
       <form id="eventForm" class="modal-body">
         <label class="field">
           <span>Title</span>
-          <input id="evtTitle" type="text" required placeholder="e.g., OB appointment" />
+          <input id="evtTitle" type="text" required placeholder="e.g., Dinner reservation" />
         </label>
 
         <div class="row">
@@ -134,6 +134,25 @@
           <input id="evtOwnerCustom" type="text" placeholder="Type a name…" />
         </label>
 
+        <!-- Recurrence -->
+        <div class="row">
+          <label class="field">
+            <span>Repeat</span>
+            <select id="evtRepeat">
+              <option value="none">Does not repeat</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
+            </select>
+          </label>
+
+          <label id="repeatUntilWrap" class="field hidden">
+            <span>Repeat until</span>
+            <input id="evtRepeatUntil" type="date" />
+          </label>
+        </div>
+
         <div class="field">
           <span>Checklist</span>
           <div id="checklist" class="checklist"></div>
@@ -152,11 +171,15 @@
           <button id="cancelBtn" type="button" class="btn btn-ghost">Cancel</button>
           <button id="saveBtn" type="submit" class="btn btn-primary">Save</button>
         </div>
+
+        <div class="tiny muted" style="margin-top:8px;">
+          Note: repeating events update the whole series (no single-instance edits yet).
+        </div>
       </form>
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
-  <script type="module" src="./app.js?v=20260227_hubert_house"></script>
+  <script type="module" src="./app.js?v=20260227_huberts_house_v2"></script>
 </body>
 </html>
