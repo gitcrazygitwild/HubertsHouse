@@ -78,6 +78,10 @@ const statusEl = document.getElementById("status");
 
 const ownerFilter = document.getElementById("ownerFilter");
 
+const searchFiltersBtn = document.getElementById("searchFiltersBtn");
+const searchFilters = document.getElementById("searchFilters");
+const clearDatesBtn = document.getElementById("clearDatesBtn");
+
 const searchInput = document.getElementById("searchInput");
 const searchFrom = document.getElementById("searchFrom");
 const searchTo = document.getElementById("searchTo");
@@ -301,11 +305,13 @@ calendar.today();
     searchFromValue = (searchFrom.value || "").trim();
     enterSearchModeIfNeeded();
     rebuildCalendarEvents();
+    searchFilters?.classList.remove("hidden");
   });
   searchTo?.addEventListener("change", () => {
     searchToValue = (searchTo.value || "").trim();
     enterSearchModeIfNeeded();
     rebuildCalendarEvents();
+    searchFilters?.classList.remove("hidden");
   });
 
   // FAB create
@@ -326,6 +332,19 @@ calendar.today();
       recurrence: { freq: "none", until: null }
     });
   });
+  
+  searchFiltersBtn?.addEventListener("click", () => {
+  searchFilters?.classList.toggle("hidden");
+});
+
+clearDatesBtn?.addEventListener("click", () => {
+  if (searchFrom) searchFrom.value = "";
+  if (searchTo) searchTo.value = "";
+  searchFromValue = "";
+  searchToValue = "";
+  enterSearchModeIfNeeded();
+  rebuildCalendarEvents();
+});
 
   // Modal close handlers
   modalClose?.addEventListener("click", closeModal);
