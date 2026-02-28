@@ -855,6 +855,43 @@ function toInputValue(dateObj, allDay) {
   return `${y}-${m}-${d}T${hh}:${mm}`;
 }
 
+// --- Jump-to-month modal ---
+const jumpBackdrop = document.getElementById("jumpBackdrop");
+const jumpClose = document.getElementById("jumpClose");
+const jumpCancel = document.getElementById("jumpCancel");
+const jumpGoBtn = document.getElementById("jumpGoBtn");
+const jumpMonthSelect = document.getElementById("jumpMonthSelect");
+const jumpYearInput = document.getElementById("jumpYearInput");
+
+function openJumpModal() {
+  if (!calendar) return;
+
+  const d = calendar.getDate(); // current date in view
+  if (jumpMonthSelect) jumpMonthSelect.value = String(d.getMonth());
+  if (jumpYearInput) jumpYearInput.value = String(d.getFullYear());
+
+  jumpBackdrop?.classList.remove("hidden");
+  setTimeout(() => jumpYearInput?.focus?.(), 50);
+}
+
+function closeJumpModal() {
+  jumpBackdrop?.classList.add("hidden");
+}
+
+jumpClose?.addEventListener("click", closeJumpModal);
+jumpCancel?.addEventListener("click", closeJumpModal);
+jumpBackdrop?.addEventListener("click", (e) => {
+  if (e.target === jumpBackdrop) closeJumpModal();
+});
+
+jumpGoBtn?.addEventListener("click", () => {
+  const m = Number(jumpMonthSelect?.value ?? 0);
+  const y = Number(jumpYearInput?.value ?? new Date().getFullYear());
+  if (!Number.isFinite(m) || !Number.isFinite(y)) return;
+  calendar.gotoDate(new Date(y, m, 1));
+  closeJumpModal();
+});
+
 function bindMonthTitleClick() {
   const titleEl = document.querySelector(".fc .fc-toolbar-title");
   if (!titleEl) return;
