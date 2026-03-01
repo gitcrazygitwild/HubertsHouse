@@ -1,12 +1,10 @@
-/* styles.css — Hubert’s House (v12.1)
-   Changes for your latest requests:
-   - Paw button pops more + brighter paw prints; paw turns GREEN when cat mode on (html.cat-mode)
-   - Mode light (between 🐾 and ✨): off by default; ORANGE in cat mode; BLUE in focus mode
-   - ✨ is now a real button (focus) with active styling when focus is on (html.focus-on)
-   - “Hubert’s House” title always fully shows by stacking + centering the two lines
-   - Search Dates popover anchored under the Dates button; never forces horizontal scroll on iPhone
-   - Focus mode helps focus: dims background blobs + hides side panels + increases calendar contrast
-   - Calendar header stays fully inside calendar window, centered + tidy on mobile
+/* styles.css — Hubert’s House (v10)
+   Adds:
+   - iOS modal scroll fix (.modal-scroll + safe-area padding + overscroll)
+   - New Details modal styling (clean read-only view)
+   - Cat Mode hooks (paw button, purr dot, ambient cat layer)
+   - Keeps FullCalendar header fully inside calendar window
+   - Title clamp so “Hubert’s House” always fits
 */
 
 :root{
@@ -41,11 +39,6 @@
   /* iOS safe areas */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bot: env(safe-area-inset-bottom, 0px);
-
-  /* Focus + Cat palette helpers */
-  --focus-blue: rgba(122,162,255,.95);
-  --cat-orange: rgba(255,170,64,.95);
-  --cat-green: rgba(116,217,155,.95);
 }
 
 *{ box-sizing:border-box; }
@@ -88,7 +81,7 @@ input, select, textarea{ font-size:16px; }
   cursor:pointer;
   font-weight:850;
   letter-spacing:.2px;
-  transition: transform .12s ease, background .12s ease, box-shadow .12s ease, filter .12s ease;
+  transition: transform .12s ease, background .12s ease, box-shadow .12s ease;
 }
 .btn:hover{
   background: rgba(255,255,255,.14);
@@ -111,6 +104,11 @@ input, select, textarea{ font-size:16px; }
   border-radius:16px;
   display:grid;
   place-items:center;
+}
+
+.btn-danger{
+  border-color: rgba(255,107,107,.50);
+  background: rgba(255,107,107,.14);
 }
 
 /* ---------- Cards ---------- */
@@ -164,35 +162,48 @@ input, select, textarea{ font-size:16px; }
   gap:6px;
   min-width:0;
 }
-
-/* Title stacked + centered against itself */
-.brand-title--stacked{
+.brand-title-row{
   display:flex;
-  flex-direction:column;
-  align-items:flex-start;
-  gap:0px;
+  align-items:center;
+  gap:8px;
   min-width:0;
 }
-.brand-title-line{
+.brand-title{
   font-family: var(--font-display);
-  font-weight: 980;
+  font-weight: 950;
   letter-spacing: .2px;
   line-height: 1.05;
   white-space: nowrap;
-  /* keeps it from ballooning and breaking the layout */
-  font-size: clamp(16px, 3.8vw, 20px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(62vw, 520px);
+  font-size: clamp(16px, 3.2vw, 20px);
 }
-.brand-title-line:first-child{ margin-bottom:-1px; }
 
-/* Small chip under title */
-.subrow{ display:flex; gap:8px; align-items:center; }
-.pill{
-  font-size:12px;
-  padding:4px 10px;
+.sparkle-badge{
+  font-size: 16px;
+  opacity: .95;
+  filter: drop-shadow(0 10px 18px rgba(0,0,0,.30));
+}
+
+/* Enhancement: purr dot */
+.purr-dot{
+  width:10px;
+  height:10px;
   border-radius:999px;
-  border:1px solid var(--border);
-  background:rgba(255,255,255,.07);
-  width:fit-content;
+  background: rgba(255,255,255,.22);
+  border:1px solid rgba(255,255,255,.26);
+  box-shadow: 0 0 0 3px rgba(255,255,255,.05);
+}
+html.purr-on .purr-dot{
+  background: rgba(116,217,155,.85);
+  border-color: rgba(116,217,155,.65);
+  box-shadow: 0 0 0 3px rgba(116,217,155,.18), 0 10px 18px rgba(0,0,0,.25);
+  animation: purrPulse 1.2s ease-in-out infinite;
+}
+@keyframes purrPulse{
+  0%,100%{ transform:scale(1); opacity:.95; }
+  50%{ transform:scale(1.12); opacity:1; }
 }
 
 .top-actions{
@@ -202,60 +213,9 @@ input, select, textarea{ font-size:16px; }
   flex-shrink:0;
 }
 
-/* Paw button: POP more */
-#catModeBtn{
-  position:relative;
-  border-color: rgba(255,255,255,.20);
-  background: rgba(255,255,255,.10);
-  box-shadow:
-    0 10px 22px rgba(0,0,0,.22),
-    inset 0 -1px 0 rgba(255,255,255,.08);
-}
-#catModeBtn:hover{ filter: brightness(1.08); }
-html.cat-mode #catModeBtn{
-  background: rgba(116,217,155,.18);
-  border-color: rgba(116,217,155,.45);
-  box-shadow:
-    0 0 0 4px rgba(116,217,155,.14),
-    0 14px 30px rgba(0,0,0,.28);
-}
-
-/* Focus button: highlight when on */
-html.focus-on #focusBtn{
-  background: rgba(122,162,255,.18);
-  border-color: rgba(122,162,255,.55);
-  box-shadow:
-    0 0 0 4px rgba(122,162,255,.14),
-    0 14px 30px rgba(0,0,0,.28);
-}
-
-/* Theme dice compact */
-#themeBtn{ width:40px; }
-
-/* Mode light indicator */
-.mode-light{
-  width:10px;
-  height:10px;
-  border-radius:999px;
-  background: rgba(255,255,255,.12); /* off */
-  border: 1px solid rgba(255,255,255,.18);
-  box-shadow: 0 0 0 3px rgba(255,255,255,.05);
-}
-html.cat-mode .mode-light{
-  background: rgba(255,170,64,.90);   /* orange in cat mode */
-  border-color: rgba(255,170,64,.60);
-  box-shadow: 0 0 0 3px rgba(255,170,64,.18), 0 10px 18px rgba(0,0,0,.25);
-}
-html.focus-on .mode-light{
-  background: rgba(122,162,255,.92);  /* blue in focus mode */
-  border-color: rgba(122,162,255,.60);
-  box-shadow: 0 0 0 3px rgba(122,162,255,.18), 0 10px 18px rgba(0,0,0,.25);
-}
-/* If both on, focus wins visually */
-html.cat-mode.focus-on .mode-light{
-  background: rgba(122,162,255,.92);
-  border-color: rgba(122,162,255,.60);
-  box-shadow: 0 0 0 3px rgba(122,162,255,.18), 0 10px 18px rgba(0,0,0,.25);
+#themeBtn{
+  width:46px;
+  padding:8px 0;
 }
 
 /* ---------- Search ---------- */
@@ -305,11 +265,11 @@ html.cat-mode.focus-on .mode-light{
 }
 .search-clear:hover{ background: rgba(255,255,255,.12); }
 
-/* Dates popover anchor */
-.search-wrap{
+.search-filters-wrap{
   position:relative;
   display:flex;
   align-items:center;
+  gap:10px;
 }
 .search-filters-btn.is-active{
   box-shadow:0 0 0 3px rgba(122,162,255,.18);
@@ -317,9 +277,9 @@ html.cat-mode.focus-on .mode-light{
 }
 .search-filters{
   position:absolute;
-  left:0;                /* anchor under button, not off-screen */
-  top: calc(100% + 10px);
-  width: min(420px, 92vw);
+  right:0;
+  top:44px;
+  width:min(420px, 92vw);
   padding:12px;
   border-radius:18px;
   background: rgba(0,0,0,.34);
@@ -362,13 +322,8 @@ html.cat-mode.focus-on .mode-light{
 .tools-left{
   width:100%;
   display:grid;
-  grid-template-columns:auto auto 1fr;
+  grid-template-columns:auto 1fr 1fr;
   gap:10px;
-  align-items:center;
-}
-.nav-arrows{
-  display:flex;
-  gap:8px;
   align-items:center;
 }
 .mini-label{
@@ -423,7 +378,7 @@ html.cat-mode.focus-on .mode-light{
   border-radius: 18px;
   padding: 10px;
   background: rgba(0,0,0,.10);
-  overflow: hidden; /* keep toolbar buttons inside */
+  overflow: hidden; /* key: keep toolbar buttons inside */
 }
 
 /* ---------- FullCalendar tweaks ---------- */
@@ -450,7 +405,7 @@ html.cat-mode.focus-on .mode-light{
   min-width: 0;
 }
 
-/* Center title chunk and keep it “against itself” */
+/* Center title chunk */
 .fc .fc-toolbar-chunk:nth-child(2){
   flex: 1 1 100%;
   justify-content: center;
@@ -458,7 +413,7 @@ html.cat-mode.focus-on .mode-light{
 .fc .fc-toolbar-title{
   font-family: var(--font-display);
   font-size: 18px;
-  font-weight: 980;
+  font-weight: 950;
   letter-spacing: .2px;
   text-align:center;
   line-height: 1.05;
@@ -512,24 +467,6 @@ html.cat-mode.focus-on .mode-light{
   box-shadow: 0 12px 22px rgba(0,0,0,.34);
 }
 
-/* Focus mode: help user focus by reducing visual noise + emphasizing calendar */
-html.focus-on body{
-  background:
-    radial-gradient(circle at 20% 20%, rgba(122,162,255,.16), transparent 52%),
-    radial-gradient(circle at 75% 55%, rgba(255,107,107,.08), transparent 56%),
-    radial-gradient(circle at 40% 85%, rgba(116,217,155,.08), transparent 60%),
-    linear-gradient(180deg, var(--bg), var(--bg2));
-}
-html.focus-on #calendar{
-  background: rgba(0,0,0,.18);
-  border-color: rgba(122,162,255,.35);
-  box-shadow: inset 0 0 0 1px rgba(122,162,255,.12);
-}
-html.focus-on #upcoming,
-html.focus-on #outstanding{
-  display:none !important;
-}
-
 /* ---------- Panels ---------- */
 .panel{ margin-top:12px; }
 .panel-header{
@@ -574,6 +511,13 @@ html.focus-on #outstanding{
   border: 1px solid rgba(255,255,255,.16);
   background: rgba(255,255,255,.06);
   white-space: nowrap;
+}
+
+.details-title{
+  font-family: var(--font-display);
+  font-weight: 950;
+  font-size: 18px;
+  letter-spacing: .2px;
 }
 
 /* ---------- FAB ---------- */
@@ -643,6 +587,8 @@ input:focus, select:focus, textarea:focus{
   padding-top: calc(14px + var(--safe-top));
   padding-bottom: calc(14px + var(--safe-bot));
   z-index:9998;
+
+  /* prevent body behind from scrolling weirdly */
   overscroll-behavior: contain;
 }
 
@@ -674,6 +620,7 @@ input:focus, select:focus, textarea:focus{
 }
 
 .modal-scroll{
+  /* Key: scrolling happens inside here */
   overflow:auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
@@ -705,10 +652,6 @@ input:focus, select:focus, textarea:focus{
   border-radius: 18px;
 }
 .details-title{
-  font-family: var(--font-display);
-  font-weight: 980;
-  font-size: 18px;
-  letter-spacing: .2px;
   margin-top: 8px;
   margin-bottom: 4px;
 }
@@ -804,25 +747,38 @@ input:focus, select:focus, textarea:focus{
 }
 .gate-remember input{ width:auto; }
 
-/* ---------- Cat mode ambient layer + brighter paws ---------- */
+/* ---------- Cat mode ambient layer ---------- */
+./* ---------- Cat mode ambient layer ---------- */
 .cat-layer{
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 2;
-  opacity: .70;
-  mix-blend-mode: screen;
-}
-html.cat-mode .cat-layer{ display:block !important; }
-html.cat-mode .cat-layer .paw{
-  opacity: .80; /* brighter */
-  filter: drop-shadow(0 10px 18px rgba(0,0,0,.25)) brightness(1.45);
+  overflow: hidden;        /* important */
+  display: none;           /* important */
+  z-index: 5;              /* above background + cards */
+  opacity: 1;              /* let each paw control its own opacity */
+  /* mix-blend-mode: screen;  <-- remove for now (can re-add later) */
 }
 
-/* Optional: subtle overall “cat mode” glow */
-html.cat-mode #calendar{
-  border-color: rgba(116,217,155,.30);
-  box-shadow: inset 0 0 0 1px rgba(116,217,155,.10);
+html.cat-mode .cat-layer{
+  display: block !important;
+}
+}
+html.cat-mode .cat-layer{ display:block !important; }
+html.cat-mode body{ }
+html.cat-mode .sparkle-badge{ animation: sparkleWiggle 1.8s ease-in-out infinite; }
+@keyframes sparkleWiggle{
+  0%,100%{ transform: rotate(0deg); }
+  50%{ transform: rotate(10deg); }
+}
+
+/* Optional: subtle pawprint background via CSS (JS can also inject floating paws) */
+html.cat-mode body{
+  background:
+    radial-gradient(circle at 20% 20%, var(--blob1), transparent 48%),
+    radial-gradient(circle at 75% 55%, var(--blob2), transparent 52%),
+    radial-gradient(circle at 40% 85%, var(--blob3), transparent 55%),
+    linear-gradient(180deg, var(--bg), var(--bg2));
 }
 
 /* ---------- Theme variants (dice sets data-theme) ---------- */
@@ -861,19 +817,12 @@ html.cat-mode #calendar{
 /* ---------- Mobile tweaks ---------- */
 @media (max-width:720px){
   .search-row{ align-items:stretch; }
+  .search-filters{ right:auto; left:0; }
   .search-filters .row{ grid-template-columns: 1fr; }
-
-  /* keep popover within viewport */
-  .search-filters{
-    width: min(420px, 92vw);
-    left: 0;
-    right: auto;
-  }
-
   .fc .fc-button{ padding: 7px 9px; border-radius: 13px; }
   .fc .fc-toolbar-title{ font-size: 17px; }
 
-  /* bottom sheet modals on iOS */
+  /* iOS: anchor modal to bottom sheet style for comfort */
   .modal-backdrop{ align-items:flex-end; }
   .modal{
     width:100%;
