@@ -15,6 +15,10 @@
 // 6) Mode light: orange in cat mode, blue in focus mode, off otherwise (and focus wins if both)
 // 7) Dealer’s choice: "Purr" micro-confirmation toast on save + subtle now chip time update
 
+window.addEventListener("error", function (e) {
+  alert("JS Error: " + e.message);
+});
+
 // ---------- Gate ----------
 const PASSWORD = "Mack"; // not real security
 const LS_UNLOCK = "huberts_house_unlocked_v1";
