@@ -1,23 +1,3 @@
-<!-- index.html — Hubert’s House (v10)
-  Updates for your notes:
-  1) iPhone modal “can’t scroll to top” fix:
-     - Ensures modals have their own scroll container
-     - Adds safe-area padding + iOS momentum scrolling
-     - JS will also scroll modal to top on open
-  2) List range affects List tab:
-     - (JS will wire listRangeSelect to listCustom duration)
-  3) Clicking a day in month view opens DAY view for that date (instead of new event):
-     - (JS will change dateClick behavior)
-  4) Clicking an event opens a CLEAN “Details” window, with Edit button to open editor:
-     - Adds a new Details modal: #detailsBackdrop
-  5) New enhancement: “Cat Mode” ambient cats + header purr indicator hook
-     - Adds a small Cat Mode toggle (top row) + floating pawprint accent
-  6) More cat theme:
-     - Cat Mode toggle + pawprint + “purr” status dot (pure UI hooks; CSS/JS implement)
-
-  NOTE: You asked for HTML only. CSS/JS will follow.
--->
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -27,12 +7,12 @@
 
   <!-- FullCalendar -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css">
-  <link rel="stylesheet" href="./styles.css?v=20260228_huberts_house_v10" />
+  <link rel="stylesheet" href="./styles.css?v=20260301_v12" />
 </head>
 
 <body>
 
-  <!-- Gate overlay -->
+  <!-- Gate overlay (restored) -->
   <div id="gate" class="gate">
     <div class="gate-card">
       <div class="gate-title">Hubert’s House</div>
@@ -62,101 +42,98 @@
     </div>
   </div>
 
+  <!-- Ambient cat layer (pawprints float here; pointer-events none) -->
+  <div id="catLayer" class="cat-layer hidden" aria-hidden="true"></div>
+
   <div id="app">
 
-    <!-- Top bar -->
+    <!-- =========================
+         TOP BAR
+    ========================== -->
     <header class="topbar">
       <div class="topbar-row">
 
-        <!-- LEFT: cat + title -->
         <div class="brand">
-          <a class="catlink" href="https://gitcrazygitwild.github.io/Flapurr/" target="_blank" rel="noopener" aria-label="Open Flapurr">🐈‍⬛</a>
+          <!-- Cat link stays a link; JS will swap emoji + “coat-*” classes for color/stripe vibe -->
+          <a class="catlink coat-1" href="https://gitcrazygitwild.github.io/Flapurr/" target="_blank" rel="noopener">🐈‍⬛</a>
 
-          <div class="brand-stack">
-            <div class="brand-title-row">
-              <div class="brand-title" aria-label="Hubert’s House">Hubert’s House</div>
-
-              <!-- sparkles -->
-              <span id="sparkleBadge" class="sparkle-badge" title="✨">✨</span>
-
-              <!-- enhancement hook: purr indicator dot -->
-              <span id="purrDot" class="purr-dot" title="purr"></span>
-            </div>
-
-            <!-- (Removed Sync: live pill per your prior request) -->
+          <!-- Title always fully visible (stacked) -->
+          <div class="brand-title-stack" aria-label="Hubert’s House">
+            <div class="brand-title">Hubert’s</div>
+            <div class="brand-title">House</div>
           </div>
+
+          <!-- Optional tiny sparkle badge -->
+          <span id="sparkleBadge" class="sparkle-badge" title="meow">✨</span>
         </div>
 
-        <!-- RIGHT: Cat mode + Theme + Log out -->
         <div class="top-actions">
-          <!-- Enhancement: Cat mode toggle (JS/CSS will implement) -->
-          <button id="catModeBtn" class="btn btn-ghost" type="button" title="Toggle Cat Mode">🐾</button>
-
+          <button id="catModeBtn" class="btn btn-ghost" type="button" title="Cat mode">🐾</button>
           <button id="themeBtn" class="btn btn-ghost" type="button" title="Randomize theme">🎲</button>
-          <button id="logoutBtn" class="btn btn-ghost" type="button">Log out</button>
+          <button id="logoutBtn" class="btn btn-ghost" type="button" title="Lock / reset">Log out</button>
         </div>
 
       </div>
     </header>
 
-    <!-- Search row -->
-    <div class="search-row-wrap">
+    <!-- =========================
+         SEARCH + DATE FILTER (centered popover)
+    ========================== -->
+    <div class="search-wrap">
+
       <div class="search-row">
         <div class="search-shell">
-          <input id="searchInput" class="search" type="search" placeholder="Search events…" />
-          <button id="searchClearBtn" class="search-clear hidden" type="button" aria-label="Clear search">×</button>
+          <input id="searchInput" class="search" type="search" placeholder="Search events…" autocomplete="off" />
+          <button id="searchClearBtn" class="search-clear" type="button" aria-label="Clear search">×</button>
         </div>
 
-        <!-- Dates: only shown when search is active (JS toggles) -->
-        <div class="search-filters-wrap">
-          <button id="searchFiltersBtn" class="btn btn-ghost search-filters-btn hidden" type="button">Dates</button>
-
-          <div id="searchFilters" class="search-filters hidden">
-            <div class="search-filters-title">Narrow search by date</div>
-
-            <div class="row">
-              <label class="field">
-                <span>From</span>
-                <input id="searchFrom" class="search-date" type="date" />
-              </label>
-              <label class="field">
-                <span>To</span>
-                <input id="searchTo" class="search-date" type="date" />
-              </label>
-            </div>
-
-            <div class="modal-actions" style="margin-top:10px;">
-              <button id="clearDatesBtn" class="btn btn-ghost" type="button">Clear</button>
-              <div class="spacer"></div>
-              <button id="closeSearchFiltersBtn" class="btn btn-primary" type="button">Done</button>
-            </div>
-          </div>
-        </div>
+        <button id="searchFiltersBtn" class="btn btn-ghost search-filters-btn" type="button" title="Filter by dates">Dates</button>
       </div>
 
-      <div id="searchHint" class="tiny muted hidden" style="margin-top:6px;">
-        Tip: type to search; optionally narrow by date range.
+      <!-- Date filter popover (NOT off to the right; CSS centers it under search row) -->
+      <div id="searchFilters" class="search-filters hidden" role="dialog" aria-label="Date filter">
+        <div class="search-filters-title">Search date range</div>
+
+        <div class="row">
+          <label class="field">
+            <span>From</span>
+            <input id="searchFrom" class="search-date" type="date" />
+          </label>
+          <label class="field">
+            <span>To</span>
+            <input id="searchTo" class="search-date" type="date" />
+          </label>
+        </div>
+
+        <div class="modal-actions" style="margin-top:10px;">
+          <button id="clearDatesBtn" class="btn btn-ghost" type="button">Clear</button>
+          <div class="spacer"></div>
+          <button id="closeSearchFiltersBtn" class="btn btn-primary" type="button">Done</button>
+        </div>
+
+        <div class="tiny muted" style="margin-top:8px;">
+          Tip: Search + Dates work together. Leave dates blank to search all.
+        </div>
       </div>
     </div>
 
-    <!-- Calendar card -->
+    <!-- =========================
+         CALENDAR CARD
+    ========================== -->
     <div id="calendarWrap" class="card">
 
-      <!-- Tools row -->
+      <!-- Tools row: arrows moved where list range used to be -->
       <div class="calendar-tools">
         <div class="tools-left">
-          <button id="todayBtn" class="btn btn-ghost" type="button">Today</button>
 
-          <label class="mini-label">
-            <span>List range</span>
-            <select id="listRangeSelect" class="mini-select">
-              <option value="7" selected>7 days</option>
-              <option value="14">14 days</option>
-              <option value="30">30 days</option>
-              <option value="60">60 days</option>
-            </select>
-          </label>
+          <!-- Arrows + Today -->
+          <div class="nav-arrows">
+            <button id="prevBtn" class="btn btn-ghost" type="button" aria-label="Previous month">‹</button>
+            <button id="todayBtn" class="btn btn-ghost" type="button">Today</button>
+            <button id="nextBtn" class="btn btn-ghost" type="button" aria-label="Next month">›</button>
+          </div>
 
+          <!-- Owner filter -->
           <label class="mini-label">
             <span>Owner</span>
             <select id="ownerFilter" class="mini-select">
@@ -167,10 +144,11 @@
               <option value="custom">Other</option>
             </select>
           </label>
+
         </div>
       </div>
 
-      <!-- Compact legend -->
+      <!-- Legend -->
       <div class="legend-inline">
         <div class="item"><span class="dot dot-hanry"></span>hanry</div>
         <div class="item"><span class="dot dot-karena"></span>Karena</div>
@@ -179,10 +157,15 @@
       </div>
 
       <div id="calendar"></div>
-      <div class="hint tiny muted">Tip: swipe left/right to change months. Tap the month title to jump.</div>
+
+      <div class="hint tiny muted">
+        Tip: swipe left/right to change months. Tap the month title to jump.
+      </div>
     </div>
 
-    <!-- Panels -->
+    <!-- =========================
+         PANELS
+    ========================== -->
     <div id="upcoming" class="panel card">
       <div class="panel-header">
         <span>Upcoming</span>
@@ -205,11 +188,13 @@
       <div id="outstandingList" class="panel-list tiny muted">Loading…</div>
     </div>
 
-    <!-- Floating add -->
+    <!-- Floating Add -->
     <button id="fab" class="fab" type="button" aria-label="Add event">＋</button>
   </div>
 
-  <!-- DETAILS modal (NEW): clean read-only view + Edit button -->
+  <!-- =========================
+       DETAILS MODAL (read-only)
+  ========================== -->
   <div id="detailsBackdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true">
     <div class="modal modal--details">
       <div class="modal-header">
@@ -217,41 +202,47 @@
         <button id="detailsClose" class="btn btn-icon" type="button" aria-label="Close">✕</button>
       </div>
 
-      <!-- iOS-friendly scroll container -->
       <div id="detailsScroll" class="modal-scroll">
         <div class="details-hero">
-          <div id="detailsOwnerPill" class="owner-pill">both</div>
-          <div id="detailsTitle" class="details-title">Title</div>
-          <div id="detailsWhen" class="tiny muted">When</div>
+          <div id="detailsTitle" class="details-title">—</div>
+          <div id="detailsWhen" class="tiny muted">—</div>
         </div>
 
         <div class="details-grid">
           <div class="details-row">
+            <div class="details-label">Owner</div>
+            <div id="detailsOwnerPill" class="details-value">—</div>
+          </div>
+
+          <div class="details-row">
             <div class="details-label">Type</div>
-            <div id="detailsType" class="details-value">General</div>
+            <div id="detailsType" class="details-value">—</div>
           </div>
 
           <div class="details-row">
             <div class="details-label">Notes</div>
-            <div id="detailsNotes" class="details-value muted">—</div>
+            <div id="detailsNotes" class="details-value">—</div>
           </div>
 
           <div class="details-row">
             <div class="details-label">Checklist</div>
-            <div id="detailsChecklist" class="details-value muted">—</div>
+            <div id="detailsChecklist" class="details-value">—</div>
           </div>
         </div>
       </div>
 
       <div class="modal-actions">
-        <button id="detailsEditBtn" class="btn btn-primary" type="button">Edit</button>
         <div class="spacer"></div>
+        <button id="detailsChecklistBtn" class="btn btn-ghost" type="button">Checklist</button>
+        <button id="detailsEditBtn" class="btn btn-primary" type="button">Edit</button>
         <button id="detailsDeleteBtn" class="btn btn-danger" type="button">Delete</button>
       </div>
     </div>
   </div>
 
-  <!-- EDIT modal (existing): full editor -->
+  <!-- =========================
+       EDIT MODAL (full editor)
+  ========================== -->
   <div id="modalBackdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true">
     <div class="modal">
       <div class="modal-header">
@@ -259,9 +250,10 @@
         <button id="modalClose" class="btn btn-icon" type="button" aria-label="Close">✕</button>
       </div>
 
-      <!-- iOS-friendly scroll container -->
-      <div class="modal-scroll" id="editScroll">
+      <!-- iOS scroll fix: scroll container -->
+      <div id="editScroll" class="modal-scroll">
         <form id="eventForm" class="modal-body">
+
           <label class="field">
             <span>Title</span>
             <input id="evtTitle" type="text" required placeholder="e.g., Dinner reservation" />
@@ -352,12 +344,15 @@
           <div class="tiny muted" style="margin-top:8px;">
             Note: repeating events update the whole series (no single-instance edits yet).
           </div>
+
         </form>
       </div>
     </div>
   </div>
 
-  <!-- Checklist-focused modal -->
+  <!-- =========================
+       CHECKLIST-ONLY MODAL (restored)
+  ========================== -->
   <div id="taskBackdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true">
     <div class="modal">
       <div class="modal-header">
@@ -384,7 +379,9 @@
     </div>
   </div>
 
-  <!-- Jump-to-month modal -->
+  <!-- =========================
+       JUMP-TO-MONTH MODAL (restored)
+  ========================== -->
   <div id="jumpBackdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true">
     <div class="modal">
       <div class="modal-header">
@@ -394,6 +391,7 @@
 
       <div class="modal-scroll">
         <div class="modal-body">
+
           <div class="row">
             <label class="field">
               <span>Month</span>
@@ -424,16 +422,14 @@
             <button id="jumpCancel" class="btn btn-ghost" type="button">Cancel</button>
             <button id="jumpGoBtn" class="btn btn-primary" type="button">Go</button>
           </div>
+
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Cat mode ambient layer (enhancement hook) -->
-  <div id="catLayer" class="cat-layer hidden" aria-hidden="true"></div>
-
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
-  <script type="module" src="./app.js?v=20260228_huberts_house_v10"></script>
+  <script type="module" src="./app.js?v=20260301_v12"></script>
 </body>
 </html>
