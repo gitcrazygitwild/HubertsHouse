@@ -29,6 +29,8 @@ const gateInput = document.getElementById("gateInput");
 const rememberDevice = document.getElementById("rememberDevice");
 
 let sessionUnlocked = false;
+if (pawsTimer) clearInterval(pawsTimer);
+pawsTimer = null;
 
 function isUnlocked() {
   if (sessionUnlocked) return true;
@@ -1440,7 +1442,9 @@ function escapeHtml(s) {
 }
 
 // ---------- Cat paws (floating) ----------
+// --- Cat mode timers (declare early so we can clear safely) ---
 let pawsTimer = null;
+let pawsCleanupTimer = null; // if you have a second timer
 
 function startPaws() {
   if (!catLayer) return;
