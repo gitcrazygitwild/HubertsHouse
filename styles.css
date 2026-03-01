@@ -1,18 +1,23 @@
-/* styles.css — Hubert’s House (v10)
-   Adds:
-   - iOS modal scroll fix (.modal-scroll + safe-area padding + overscroll)
-   - New Details modal styling (clean read-only view)
-   - Cat Mode hooks (paw button, purr dot, ambient cat layer)
-   - Keeps FullCalendar header fully inside calendar window
-   - Title clamp so “Hubert’s House” always fits
+/* styles.css — Hubert’s House (v12)
+   Restores:
+   - Gate overlay
+   - Details modal + Edit modal + Checklist-only modal + Jump-to-month modal
+   Fixes / upgrades:
+   - Dates popover centered under search (no sideways scroll on iPhone)
+   - Title always fully visible by stacking (Hubert’s / House)
+   - Calendar header/buttons always inside calendar card
+   - iOS modal scroll reliability (.modal-scroll + safe-area padding)
+   - Brighter pawprints + clearer paw button
+   - Cat “coat” classes for linked cat emoji (visual vibe without breaking link)
+   - Crisp UI / better spacing / subtle depth
 */
 
 :root{
   --bg:#070b17;
   --bg2:#0b1020;
 
-  --card: rgba(18, 26, 52, .72);
-  --card2: rgba(10, 14, 28, .55);
+  --card: rgba(18, 26, 52, .74);
+  --card2: rgba(10, 14, 28, .56);
 
   --text:#eef1f7;
   --muted:#a7b2cf;
@@ -61,6 +66,8 @@ body{
 .muted{ color:var(--muted); }
 .tiny{ font-size:11px; color:var(--muted); }
 
+a{ color:inherit; }
+
 /* Prevent iOS zoom on inputs (>=16px) */
 input, select, textarea{ font-size:16px; }
 
@@ -81,13 +88,14 @@ input, select, textarea{ font-size:16px; }
   cursor:pointer;
   font-weight:850;
   letter-spacing:.2px;
-  transition: transform .12s ease, background .12s ease, box-shadow .12s ease;
+  transition: transform .12s ease, background .12s ease, box-shadow .12s ease, filter .12s ease;
 }
 .btn:hover{
   background: rgba(255,255,255,.14);
   transform: translateY(-1px);
   box-shadow: 0 10px 18px rgba(0,0,0,.22);
 }
+.btn:active{ transform: translateY(0px); }
 .btn:disabled{ opacity:.45; cursor:default; transform:none; box-shadow:none; }
 
 .btn-primary{
@@ -149,61 +157,56 @@ input, select, textarea{ font-size:16px; }
   gap:12px;
   min-width:0;
 }
+
 .catlink{
-  font-size:28px;
+  font-size:30px;
   text-decoration:none;
   display:inline-block;
   transform: translateY(1px);
-  filter: drop-shadow(0 8px 18px rgba(0,0,0,.25));
+  filter: drop-shadow(0 10px 18px rgba(0,0,0,.24));
+  transition: transform .15s ease, filter .15s ease;
+  line-height:1;
 }
-.brand-stack{
+.catlink:hover{ transform: translateY(-1px) rotate(-2deg); filter: drop-shadow(0 14px 24px rgba(0,0,0,.28)); }
+
+/* “coats” = subtle colored glow/stripe vibe around the emoji */
+.catlink.coat-1{ text-shadow: 0 0 0 rgba(0,0,0,0), 0 0 14px rgba(122,162,255,.55); }
+.catlink.coat-2{ text-shadow: 0 0 0 rgba(0,0,0,0), 0 0 14px rgba(255,107,107,.50); }
+.catlink.coat-3{ text-shadow: 0 0 0 rgba(0,0,0,0), 0 0 14px rgba(116,217,155,.55); }
+.catlink.coat-4{ text-shadow: 0 0 0 rgba(0,0,0,0), 0 0 14px rgba(187,134,252,.55); }
+
+/* optional wiggle class (JS adds briefly) */
+.catlink.cat-wiggle{ animation: catWiggle .45s ease-in-out; }
+@keyframes catWiggle{
+  0%{ transform: translateY(1px) rotate(0deg) scale(1); }
+  40%{ transform: translateY(-2px) rotate(-10deg) scale(1.03); }
+  70%{ transform: translateY(0px) rotate(6deg) scale(1.01); }
+  100%{ transform: translateY(1px) rotate(0deg) scale(1); }
+}
+
+/* Stacked title always visible */
+.brand-title-stack{
   display:flex;
   flex-direction:column;
-  gap:6px;
-  min-width:0;
-}
-.brand-title-row{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  min-width:0;
+  gap:2px;
+  line-height:1.02;
 }
 .brand-title{
   font-family: var(--font-display);
   font-weight: 950;
   letter-spacing: .2px;
-  line-height: 1.05;
   white-space: nowrap;
-  overflow: hidden;
+  font-size: clamp(15px, 3.2vw, 20px);
+  max-width: min(56vw, 520px);
+  overflow:hidden;
   text-overflow: ellipsis;
-  max-width: min(62vw, 520px);
-  font-size: clamp(16px, 3.2vw, 20px);
 }
 
+/* Sparkle */
 .sparkle-badge{
   font-size: 16px;
   opacity: .95;
   filter: drop-shadow(0 10px 18px rgba(0,0,0,.30));
-}
-
-/* Enhancement: purr dot */
-.purr-dot{
-  width:10px;
-  height:10px;
-  border-radius:999px;
-  background: rgba(255,255,255,.22);
-  border:1px solid rgba(255,255,255,.26);
-  box-shadow: 0 0 0 3px rgba(255,255,255,.05);
-}
-html.purr-on .purr-dot{
-  background: rgba(116,217,155,.85);
-  border-color: rgba(116,217,155,.65);
-  box-shadow: 0 0 0 3px rgba(116,217,155,.18), 0 10px 18px rgba(0,0,0,.25);
-  animation: purrPulse 1.2s ease-in-out infinite;
-}
-@keyframes purrPulse{
-  0%,100%{ transform:scale(1); opacity:.95; }
-  50%{ transform:scale(1.12); opacity:1; }
 }
 
 .top-actions{
@@ -213,27 +216,31 @@ html.purr-on .purr-dot{
   flex-shrink:0;
 }
 
-#themeBtn{
-  width:46px;
-  padding:8px 0;
+/* Make paw button clearer (brighter) */
+#catModeBtn{
+  filter: brightness(1.12);
 }
 
 /* ---------- Search ---------- */
-.search-row-wrap{
+.search-wrap{
   margin-top:8px;
   margin-bottom:10px;
+  position:relative;
 }
+
 .search-row{
   display:flex;
   gap:10px;
   align-items:center;
   flex-wrap:wrap;
 }
+
 .search-shell{
   position:relative;
   flex: 1 1 260px;
   min-width: 220px;
 }
+
 .search{
   width:100%;
   padding:12px 40px 12px 14px;
@@ -249,6 +256,7 @@ html.purr-on .purr-dot{
   border-color: rgba(122,162,255,.60);
   box-shadow: 0 0 0 3px rgba(122,162,255,.18), inset 0 -1px 0 rgba(255,255,255,.06);
 }
+
 .search-clear{
   position:absolute;
   right:10px;
@@ -258,49 +266,50 @@ html.purr-on .purr-dot{
   height:30px;
   border-radius:12px;
   border:1px solid var(--border2);
-  background: rgba(255,255,255,.07);
+  background: rgba(255,255,255,.10);
   color: var(--text);
-  font-weight: 900;
+  font-weight: 950;
   cursor:pointer;
 }
-.search-clear:hover{ background: rgba(255,255,255,.12); }
+.search-clear:hover{ background: rgba(255,255,255,.16); }
 
-.search-filters-wrap{
-  position:relative;
-  display:flex;
-  align-items:center;
-  gap:10px;
-}
+/* Dates button highlight */
 .search-filters-btn.is-active{
   box-shadow:0 0 0 3px rgba(122,162,255,.18);
   border-color: rgba(122,162,255,.55);
 }
+
+/* IMPORTANT: popover centered under search row */
 .search-filters{
   position:absolute;
-  right:0;
-  top:44px;
-  width:min(420px, 92vw);
+  left:50%;
+  transform: translateX(-50%);
+  top: calc(100% + 10px);
+  width: min(520px, 92vw);
   padding:12px;
   border-radius:18px;
-  background: rgba(0,0,0,.34);
+  background: rgba(0,0,0,.36);
   border:1px solid var(--border);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   box-shadow: var(--shadow2);
   z-index:60;
 }
+
 .search-filters-title{
   font-weight: 950;
   font-size: 12px;
-  color: rgba(238,241,247,.78);
+  color: rgba(238,241,247,.80);
   margin-bottom: 10px;
   letter-spacing: .2px;
 }
+
 .search-filters .row{
   display:grid;
   grid-template-columns:1fr 1fr;
   gap:10px;
 }
+
 .search-date{
   width:100%;
   padding:10px 12px;
@@ -312,6 +321,7 @@ html.purr-on .purr-dot{
 
 /* ---------- Calendar tools ---------- */
 #calendarWrap{ margin-top:10px; }
+
 .calendar-tools{
   display:flex;
   justify-content:space-between;
@@ -319,13 +329,24 @@ html.purr-on .purr-dot{
   gap:10px;
   margin-bottom:10px;
 }
+
+/* Tools-left: nav arrows + owner select in one row */
 .tools-left{
   width:100%;
   display:grid;
-  grid-template-columns:auto 1fr 1fr;
+  grid-template-columns: auto 1fr;
   gap:10px;
   align-items:center;
 }
+
+.nav-arrows{
+  display:flex;
+  gap:10px;
+  align-items:center;
+}
+#prevBtn, #nextBtn{ width:46px; padding:8px 0; font-size:18px; }
+#todayBtn{ white-space:nowrap; }
+
 .mini-label{
   display:flex;
   align-items:center;
@@ -392,6 +413,7 @@ html.purr-on .purr-dot{
   font-size: 12px;
 }
 
+/* Toolbar spacing */
 .fc .fc-header-toolbar{
   margin: 6px 2px 10px;
   gap: 8px;
@@ -405,11 +427,14 @@ html.purr-on .purr-dot{
   min-width: 0;
 }
 
-/* Center title chunk */
-.fc .fc-toolbar-chunk:nth-child(2){
+/* Center title chunk & keep month+year centered */
+.fc .fc-toolbar-chunk:nth-child(2),
+.fc .fc-toolbar-chunk:first-child{
   flex: 1 1 100%;
   justify-content: center;
 }
+
+/* Title */
 .fc .fc-toolbar-title{
   font-family: var(--font-display);
   font-size: 18px;
@@ -420,9 +445,10 @@ html.purr-on .purr-dot{
   margin: 0;
   padding: 2px 6px;
   width: 100%;
+  cursor: pointer;
 }
 
-/* Keep right buttons inside and centered */
+/* Right buttons: keep fully inside + centered */
 .fc .fc-toolbar-chunk:last-child{
   flex: 1 1 100%;
   justify-content: center;
@@ -450,6 +476,7 @@ html.purr-on .purr-dot{
   text-decoration:none;
   font-weight: 900;
 }
+
 .fc .fc-daygrid-day-number{
   padding: 6px 8px;
 }
@@ -513,20 +540,13 @@ html.purr-on .purr-dot{
   white-space: nowrap;
 }
 
-.details-title{
-  font-family: var(--font-display);
-  font-weight: 950;
-  font-size: 18px;
-  letter-spacing: .2px;
-}
-
 /* ---------- FAB ---------- */
 .fab{
   position: fixed;
   right: 18px;
   bottom: calc(18px + var(--safe-bot));
-  width: 64px;
-  height: 64px;
+  width: 66px;
+  height: 66px;
   border-radius: 999px;
   font-size: 32px;
   background: var(--accent);
@@ -537,7 +557,7 @@ html.purr-on .purr-dot{
   z-index: 9996;
   transition: transform .12s ease, filter .12s ease;
 }
-.fab:hover{ transform: scale(1.08); filter: brightness(1.05); }
+.fab:hover{ transform: scale(1.08); filter: brightness(1.06); }
 
 /* ---------- Inputs ---------- */
 input, select, textarea{
@@ -587,8 +607,6 @@ input:focus, select:focus, textarea:focus{
   padding-top: calc(14px + var(--safe-top));
   padding-bottom: calc(14px + var(--safe-bot));
   z-index:9998;
-
-  /* prevent body behind from scrolling weirdly */
   overscroll-behavior: contain;
 }
 
@@ -620,7 +638,6 @@ input:focus, select:focus, textarea:focus{
 }
 
 .modal-scroll{
-  /* Key: scrolling happens inside here */
   overflow:auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
@@ -652,6 +669,10 @@ input:focus, select:focus, textarea:focus{
   border-radius: 18px;
 }
 .details-title{
+  font-family: var(--font-display);
+  font-weight: 950;
+  font-size: 18px;
+  letter-spacing: .2px;
   margin-top: 8px;
   margin-bottom: 4px;
 }
@@ -698,7 +719,7 @@ input:focus, select:focus, textarea:focus{
 /* ---------- Hint ---------- */
 .hint{ margin-top:10px; opacity:.92; }
 
-/* ---------- Gate ---------- */
+/* ---------- Gate (restored) ---------- */
 .gate{
   position:fixed;
   inset:0;
@@ -706,7 +727,7 @@ input:focus, select:focus, textarea:focus{
   align-items:center;
   justify-content:center;
   padding:16px;
-  background: rgba(0,0,0,.55);
+  background: rgba(0,0,0,.60);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   z-index:9999;
@@ -748,37 +769,25 @@ input:focus, select:focus, textarea:focus{
 .gate-remember input{ width:auto; }
 
 /* ---------- Cat mode ambient layer ---------- */
-./* ---------- Cat mode ambient layer ---------- */
 .cat-layer{
   position: fixed;
   inset: 0;
   pointer-events: none;
-  overflow: hidden;        /* important */
-  display: none;           /* important */
-  z-index: 5;              /* above background + cards */
-  opacity: 1;              /* let each paw control its own opacity */
-  /* mix-blend-mode: screen;  <-- remove for now (can re-add later) */
+  z-index: 2;
+  opacity: .78; /* brighter overall */
+  mix-blend-mode: screen;
 }
 
-html.cat-mode .cat-layer{
-  display: block !important;
+/* brighter pawprints created by JS (.paw elements) */
+.cat-layer .paw{
+  opacity: 0.55; /* extra nudge, JS also sets */
 }
-}
-html.cat-mode .cat-layer{ display:block !important; }
-html.cat-mode body{ }
+
+/* Optional cat mode styling */
 html.cat-mode .sparkle-badge{ animation: sparkleWiggle 1.8s ease-in-out infinite; }
 @keyframes sparkleWiggle{
   0%,100%{ transform: rotate(0deg); }
   50%{ transform: rotate(10deg); }
-}
-
-/* Optional: subtle pawprint background via CSS (JS can also inject floating paws) */
-html.cat-mode body{
-  background:
-    radial-gradient(circle at 20% 20%, var(--blob1), transparent 48%),
-    radial-gradient(circle at 75% 55%, var(--blob2), transparent 52%),
-    radial-gradient(circle at 40% 85%, var(--blob3), transparent 55%),
-    linear-gradient(180deg, var(--bg), var(--bg2));
 }
 
 /* ---------- Theme variants (dice sets data-theme) ---------- */
@@ -816,13 +825,19 @@ html.cat-mode body{
 
 /* ---------- Mobile tweaks ---------- */
 @media (max-width:720px){
-  .search-row{ align-items:stretch; }
-  .search-filters{ right:auto; left:0; }
+  /* keep date popover anchored and centered */
+  .search-filters{
+    width: min(520px, 94vw);
+    left: 50%;
+    transform: translateX(-50%);
+  }
   .search-filters .row{ grid-template-columns: 1fr; }
+
+  /* reduce FC button size slightly */
   .fc .fc-button{ padding: 7px 9px; border-radius: 13px; }
   .fc .fc-toolbar-title{ font-size: 17px; }
 
-  /* iOS: anchor modal to bottom sheet style for comfort */
+  /* bottom sheet style */
   .modal-backdrop{ align-items:flex-end; }
   .modal{
     width:100%;
@@ -830,5 +845,6 @@ html.cat-mode body{
     border-bottom-right-radius:0;
     max-height: 86vh;
   }
+
   .row{ grid-template-columns:1fr; }
 }
