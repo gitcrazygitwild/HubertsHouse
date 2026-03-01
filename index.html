@@ -76,8 +76,10 @@
 
             <!-- Tiny helper chip (dealer’s choice hook; JS can fill with “Today • 2:13pm” etc.) -->
             <div class="subrow">
-              <span id="nowChip" class="pill tiny" title="A tiny status chip">Ready</span>
-            </div>
+  <span id="nowChip" class="pill tiny" title="A tiny status chip">Ready</span>
+  <!-- TEMP compat shim so app.js doesn't crash if it still expects #status -->
+  <span id="status" class="hidden" aria-hidden="true"></span>
+</div>
           </div>
         </div>
 
