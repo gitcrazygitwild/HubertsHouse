@@ -28,10 +28,6 @@ const gateForm = document.getElementById("gateForm");
 const gateInput = document.getElementById("gateInput");
 const rememberDevice = document.getElementById("rememberDevice");
 
-let sessionUnlocked = false;
-if (pawsTimer) clearInterval(pawsTimer);
-pawsTimer = null;
-
 function isUnlocked() {
   if (sessionUnlocked) return true;
   return localStorage.getItem(LS_UNLOCK) === "1";
