@@ -505,8 +505,6 @@ async function initApp() {
   db = getFirestore(app);
   eventsCol = collection(db, "events");
 
-await backfillCreatedAtFromStartOnce();
-
   initCalendarUI();
   initUIHooks();
 
