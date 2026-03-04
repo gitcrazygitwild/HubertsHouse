@@ -1,18 +1,17 @@
-// app.js — Hubert’s House (v10)
-// Firebase sync + password gate + theme dice + search/list-range + owner filter
+// app.js — Hubert’s House (v12.2)
+// Firebase sync + password gate + theme dice + search (with date bounds) + owner filter
 // Upcoming + Outstanding checklist panels + checklist-focused modal
 // Month title tap = jump-to-month + swipe left/right to change months
 //
-// v10 changes:
-// - Month day tap opens Day view (instead of creating event)
-// - Event tap opens Details modal; Details -> Edit opens Edit modal
-// - List range affects List view duration (listCustom)
-// - Search + Owner filter reliably filter calendar + panels
-// - iOS modal scroll "stuck mid" fix (scroll-to-top on open)
-// - Theme dice ONLY changes theme (colors/fonts/designs) + persists
-// - Cat mode toggle hooks
-//
-// NOTE: Gate is client-side only (not real security).
+// FIXES / FEATURES ADDED:
+// ✅ Calendar shows all-day events ON the “end date” (inclusive end for display)
+// ✅ Removed list range (no more listRangeSelect); List view duration now derives from Dates popover
+// ✅ Search + Dates are always the source of truth (search no longer “limited” by list view range)
+// ✅ Dates popover outside-click closing works with new HTML structure
+// ✅ Owner filter: selecting hanry/Karena includes "both" events too
+// ✅ Theme→coat stripes handled by CSS vars; JS injects structured cat link for tail + blink
+// ✅ Subtle tail wiggle (CSS) + occasional blink in cat mode (JS toggles .blink)
+// ✅ Fixes common errors: sessionUnlocked exists before use; pawsTimer declared before used
 
 // ---------- Gate ----------
 const PASSWORD = "Mack"; // not real security
@@ -68,13 +67,16 @@ else gate?.classList.remove("hidden");
 
 // ---------- Topbar / controls ----------
 const logoutBtn = document.getElementById("logoutBtn");
-const todayBtn = document.getElementById("todayBtn");
 const themeBtn = document.getElementById("themeBtn");
 const catModeBtn = document.getElementById("catModeBtn");
 
+// Calendar nav buttons in the card row
+const prevBtn = document.getElementById("prevBtn");
+const nextBtn = document.getElementById("nextBtn");
+const todayBtn = document.getElementById("todayBtn");
+
 const searchInput = document.getElementById("searchInput");
 const searchClearBtn = document.getElementById("searchClearBtn");
-const searchHint = document.getElementById("searchHint");
 
 const searchFiltersBtn = document.getElementById("searchFiltersBtn");
 const closeSearchFiltersBtn = document.getElementById("closeSearchFiltersBtn");
@@ -83,17 +85,10 @@ const searchFrom = document.getElementById("searchFrom");
 const searchTo = document.getElementById("searchTo");
 const clearDatesBtn = document.getElementById("clearDatesBtn");
 
-const listRangeSelect = document.getElementById("listRangeSelect");
 const ownerFilter = document.getElementById("ownerFilter");
-
 const fab = document.getElementById("fab");
 
-// Cat ambient layer (optional)
-const catLayer = document.getElementById("catLayer");
-const purrDot = document.getElementById("purrDot");
-
 logoutBtn?.addEventListener("click", lock);
-todayBtn?.addEventListener("click", () => calendar?.today());
 
 // ---------- iOS modal scroll fix ----------
 function scrollToTopSafely(el) {
@@ -103,20 +98,15 @@ function scrollToTopSafely(el) {
   });
 }
 
-// ---------- Search UI state (cleaner) ----------
+// ---------- Search UI state ----------
 function setSearchUIState() {
   const hasText = !!(searchInput?.value || "").trim();
   const hasDates = !!(searchFrom?.value || searchTo?.value);
-  const active = hasText || hasDates;
 
-  // Clear button
   searchClearBtn?.classList.toggle("hidden", !hasText);
 
-  // Dates button only when searching (or already set)
+  // Dates button visible when searching OR dates already set
   searchFiltersBtn?.classList.toggle("hidden", !(hasText || hasDates));
-
-  // Optional hint line if you have one
-  searchHint?.classList.toggle("hidden", !active);
 }
 
 searchClearBtn?.addEventListener("click", () => {
@@ -128,7 +118,10 @@ searchClearBtn?.addEventListener("click", () => {
 
 searchFiltersBtn?.addEventListener("click", () => {
   searchFilters?.classList.toggle("hidden");
-  searchFiltersBtn?.classList.toggle("is-active", !searchFilters?.classList.contains("hidden"));
+  searchFiltersBtn?.classList.toggle(
+    "is-active",
+    !searchFilters?.classList.contains("hidden")
+  );
 });
 
 closeSearchFiltersBtn?.addEventListener("click", () => {
@@ -136,9 +129,12 @@ closeSearchFiltersBtn?.addEventListener("click", () => {
   searchFiltersBtn?.classList.remove("is-active");
 });
 
+// Click outside popover closes it (works with your new HTML)
 document.addEventListener("click", (e) => {
   if (!searchFilters || searchFilters.classList.contains("hidden")) return;
-  const wrap = searchFilters.closest(".search-filters-wrap");
+
+  // Use the whole search-wrap as the containment region
+  const wrap = document.querySelector(".search-wrap");
   if (wrap && !wrap.contains(e.target)) {
     searchFilters.classList.add("hidden");
     searchFiltersBtn?.classList.remove("is-active");
@@ -152,7 +148,7 @@ clearDatesBtn?.addEventListener("click", () => {
   applySearchAndFilters(true);
 });
 
-// ---------- Details Modal (clean read-only) ----------
+// ---------- Details Modal ----------
 const detailsBackdrop = document.getElementById("detailsBackdrop");
 const detailsClose = document.getElementById("detailsClose");
 const detailsEditBtn = document.getElementById("detailsEditBtn");
@@ -210,44 +206,11 @@ detailsBackdrop?.addEventListener("click", (e) => {
   if (e.target === detailsBackdrop) closeDetailsModal();
 });
 
-detailsEditBtn?.addEventListener("click", () => {
-  if (!detailsDocId) return;
-  const docData = rawDocs.find(d => d.id === detailsDocId);
-  if (!docData) return;
-
-  closeDetailsModal();
-  openEventModal({
-    mode: "edit",
-    id: detailsDocId,
-    occurrenceStart: detailsOccurrenceStart,
-    title: docData.title || "",
-    start: docData.start ? new Date(docData.start) : detailsOccurrenceStart,
-    end: docData.end ? new Date(docData.end) : null,
-    allDay: !!docData.allDay,
-    owner: normalizeOwner(docData.owner),
-    ownerCustom: docData.ownerCustom || "",
-    type: docData.type || "general",
-    repeat: docData.repeat || "none",
-    repeatUntil: docData.repeatUntil || "",
-    notes: docData.notes || "",
-    checklist: Array.isArray(docData.checklist) ? docData.checklist : []
-  });
-});
-
-detailsDeleteBtn?.addEventListener("click", async () => {
-  if (!detailsDocId) return;
-  if (!confirm("Delete this event?")) return;
-  await deleteDoc(doc(db, "events", detailsDocId));
-  closeDetailsModal();
-});
-
 // ---------- Modal: event editor ----------
 const backdrop = document.getElementById("modalBackdrop");
 const modalClose = document.getElementById("modalClose");
 const eventForm = document.getElementById("eventForm");
 const modalTitle = document.getElementById("modalTitle");
-
-// v10 expects a scroll wrapper inside the edit modal
 const editScroll = document.getElementById("editScroll");
 
 const evtTitle = document.getElementById("evtTitle");
@@ -260,14 +223,12 @@ const ownerCustomWrap = document.getElementById("ownerCustomWrap");
 const evtOwnerCustom = document.getElementById("evtOwnerCustom");
 
 const evtType = document.getElementById("evtType");
-
 const evtRepeat = document.getElementById("evtRepeat");
 const repeatUntilWrap = document.getElementById("repeatUntilWrap");
 const evtRepeatUntil = document.getElementById("evtRepeatUntil");
 
 const checklistEl = document.getElementById("checklist");
 const addCheckItemBtn = document.getElementById("addCheckItem");
-
 const evtNotes = document.getElementById("evtNotes");
 
 const deleteBtn = document.getElementById("deleteBtn");
@@ -336,7 +297,6 @@ import {
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
 
-// Your Firebase config
 const firebaseConfig = {
   apiKey: "AIzaSyBEXNyX6vIbHwGCpI3fpVUb5llubOjt9qQ",
   authDomain: "huberts-house.firebaseapp.com",
@@ -354,7 +314,7 @@ let calendar;
 let rawDocs = [];         // [{id,...data}]
 let expandedEvents = [];  // normalized + expanded repeats (each has sourceId)
 
-let editingDocId = null;          // Firestore doc id
+let editingDocId = null;
 let editingOccurrenceStart = null;
 
 // Outstanding pagination
@@ -407,18 +367,49 @@ function pickTheme() {
 
 themeBtn?.addEventListener("click", () => pickTheme());
 
+// ---------- Cat link: inject structured markup for tail + blink ----------
+function ensureCatLinkMarkup() {
+  const a = document.querySelector(".catlink");
+  if (!a) return;
+  if (!a.id) a.id = "catLink";
+
+  // If it already has the inner structure, leave it
+  if (a.querySelector(".catlink-inner")) return;
+
+  a.innerHTML = `
+    <span class="catlink-inner" aria-hidden="true">
+      <span class="cat-face">🐈‍⬛</span>
+      <span class="cat-tail">〰️</span>
+    </span>
+  `;
+}
+
+function setCatFaceEmoji(emoji) {
+  const face = document.querySelector("#catLink .cat-face");
+  if (face) face.textContent = emoji;
+}
+
 // ---------- Cat mode ----------
 const LS_CATMODE = "huberts_house_catmode_v1";
-let catInterval = null;
+let pawsTimer = null;   // declare BEFORE use (prevents “before initialization”)
+let blinkTimer = null;
+
+const catLayer = document.getElementById("catLayer");
 
 function setCatMode(on) {
   document.documentElement.classList.toggle("cat-mode", !!on);
-  document.documentElement.classList.toggle("purr-on", !!on);
   localStorage.setItem(LS_CATMODE, on ? "1" : "0");
   if (catLayer) catLayer.classList.toggle("hidden", !on);
 
-  if (on) startCatAmbient();
-  else stopCatAmbient();
+  if (on) {
+    startCatAmbient();
+    startBlinking();
+    setCatFaceEmoji("😼");
+  } else {
+    stopCatAmbient();
+    stopBlinking();
+    setCatFaceEmoji("🐈‍⬛");
+  }
 }
 
 catModeBtn?.addEventListener("click", () => {
@@ -451,21 +442,47 @@ function startCatAmbient() {
     setTimeout(() => paw.remove(), 7000);
   };
 
-  if (catInterval) clearInterval(catInterval);
-  catInterval = setInterval(() => {
+  if (pawsTimer) clearInterval(pawsTimer);
+  pawsTimer = setInterval(() => {
     if (!document.documentElement.classList.contains("cat-mode")) return;
     makePaw();
   }, 900);
 }
 
 function stopCatAmbient() {
-  if (catInterval) clearInterval(catInterval);
-  catInterval = null;
+  if (pawsTimer) clearInterval(pawsTimer);
+  pawsTimer = null;
   if (catLayer) catLayer.innerHTML = "";
+}
+
+// Occasional blink: toggle #catLink.blink for ~120ms
+function startBlinking() {
+  stopBlinking();
+  const schedule = () => {
+    const delay = 4500 + Math.random() * 6500; // 4.5–11s
+    blinkTimer = setTimeout(() => {
+      if (!document.documentElement.classList.contains("cat-mode")) return schedule();
+      const el = document.getElementById("catLink");
+      if (el) {
+        el.classList.add("blink");
+        setTimeout(() => el.classList.remove("blink"), 120);
+      }
+      schedule();
+    }, delay);
+  };
+  schedule();
+}
+
+function stopBlinking() {
+  if (blinkTimer) clearTimeout(blinkTimer);
+  blinkTimer = null;
+  const el = document.getElementById("catLink");
+  el?.classList.remove("blink");
 }
 
 // ---------- Init ----------
 restoreTheme();
+ensureCatLinkMarkup();
 setCatMode((localStorage.getItem(LS_CATMODE) || "0") === "1");
 setSearchUIState();
 
@@ -494,6 +511,11 @@ async function initApp() {
 
 // ---------- UI hooks ----------
 function initUIHooks() {
+  // Calendar card nav buttons
+  prevBtn?.addEventListener("click", () => calendar?.prev());
+  nextBtn?.addEventListener("click", () => calendar?.next());
+  todayBtn?.addEventListener("click", () => calendar?.today());
+
   // Search debounce
   let t = null;
   searchInput?.addEventListener("input", () => {
@@ -517,21 +539,6 @@ function initUIHooks() {
   ownerFilter?.addEventListener("change", () => {
     ownerFilterValue = ownerFilter.value || "all";
     applySearchAndFilters(false);
-  });
-
-  // List range affects List tab duration
-  listRangeSelect?.addEventListener("change", () => {
-    if (!calendar) return;
-
-    const days = Number(listRangeSelect.value || 7);
-
-    calendar.setOption("views", {
-      listCustom: { type: "list", duration: { days }, buttonText: "List" }
-    });
-
-    if (calendar.view?.type === "listCustom") {
-      calendar.changeView("listCustom");
-    }
   });
 
   fab?.addEventListener("click", () => {
@@ -625,8 +632,6 @@ function initCalendarUI() {
   const calendarEl = document.getElementById("calendar");
   if (!calendarEl) return;
 
-  const days = Number(listRangeSelect?.value || 7);
-
   calendar = new FullCalendar.Calendar(calendarEl, {
     initialView: "dayGridMonth",
     headerToolbar: {
@@ -634,9 +639,12 @@ function initCalendarUI() {
       center: "title",
       right: "dayGridMonth,timeGridWeek,timeGridDay,listCustom"
     },
+
+    // List duration is dynamic; we override before switching to listCustom
     views: {
-      listCustom: { type: "list", duration: { days }, buttonText: "List" }
+      listCustom: { type: "list", duration: { days: 14 }, buttonText: "List" }
     },
+
     selectable: true,
     editable: true,
     nowIndicator: true,
@@ -646,12 +654,11 @@ function initCalendarUI() {
 
     datesSet: () => hookMonthTitleClick(),
 
-    // v10: date tap in month view opens Day view instead of creating event
+    // Month day tap opens Day view; other views create an event
     dateClick: (info) => {
       if (calendar?.view?.type === "dayGridMonth") {
         calendar.changeView("timeGridDay", info.date);
       } else {
-        // In other views, create a new event on tap
         const start = new Date(info.date);
         const end = new Date(start.getTime() + 60 * 60 * 1000);
         openEventModal({
@@ -691,7 +698,7 @@ function initCalendarUI() {
       });
     },
 
-    // v10: event tap opens Details modal
+    // event tap opens Details modal
     eventClick: (info) => {
       const ev = info.event;
       const p = ev.extendedProps || {};
@@ -819,7 +826,6 @@ function attachSwipe(el) {
 // ---------- Rendering ----------
 function renderCalendarFromCache() {
   if (!calendar) return;
-
   calendar.removeAllEvents();
   for (const e of getVisibleEvents()) calendar.addEvent(e);
 }
@@ -829,6 +835,8 @@ function renderPanels() {
   renderOutstanding();
 }
 
+// NOTE: We filter by *event start* for search bounds.
+// The big “search doesn’t work outside list range” issue is solved by setting listCustom duration from bounds.
 function getVisibleEvents() {
   let list = expandedEvents.slice();
   list = list.filter(matchOwnerFilter);
@@ -853,7 +861,14 @@ function shouldShowEvent(fcEvent) {
   const owner = normalizeOwner(p.owner);
 
   if (ownerFilterValue && ownerFilterValue !== "all") {
-    if (ownerFilterValue !== owner) return false;
+    // hanry/Karena should also show "both"
+    if (ownerFilterValue === "hanry") {
+      if (!(owner === "hanry" || owner === "both")) return false;
+    } else if (ownerFilterValue === "karena") {
+      if (!(owner === "karena" || owner === "both")) return false;
+    } else {
+      if (ownerFilterValue !== owner) return false;
+    }
   }
 
   if (searchText) {
@@ -873,7 +888,11 @@ function shouldShowEvent(fcEvent) {
 
 function matchOwnerFilter(e) {
   if (!ownerFilterValue || ownerFilterValue === "all") return true;
-  return normalizeOwner(e.extendedProps?.owner) === ownerFilterValue;
+  const o = normalizeOwner(e.extendedProps?.owner);
+
+  if (ownerFilterValue === "hanry") return (o === "hanry" || o === "both");
+  if (ownerFilterValue === "karena") return (o === "karena" || o === "both");
+  return o === ownerFilterValue;
 }
 
 function matchSearch(e) {
@@ -889,7 +908,7 @@ function getSearchBounds() {
   if (!fromVal && !toVal) return null;
 
   const from = fromVal ? new Date(fromVal + "T00:00:00") : null;
-  const to = toVal ? new Date(toVal + "T23:59:59") : null;
+  const to = toVal ? new Date(toVal + "T23:59:59") : null; // inclusive end day
   return { from, to };
 }
 
@@ -905,23 +924,41 @@ function applySearchAndFilters(switchToListIfSearching) {
   renderPanels();
 
   if (switchToListIfSearching && isSearchActive()) {
-    openListView();
+    openListViewForSearch();
   }
 }
 
-function openListView() {
+// List view now derives from search bounds; if no bounds, it expands wide enough to find stuff.
+function openListViewForSearch() {
   if (!calendar) return;
 
-  const days = Number(listRangeSelect?.value || 7);
+  const bounds = getSearchBounds();
+  let days = 14;
+  let anchorDate = new Date();
+
+  if (bounds?.from && bounds?.to) {
+    const ms = bounds.to.getTime() - bounds.from.getTime();
+    days = Math.max(1, Math.ceil(ms / (24 * 60 * 60 * 1000)) + 1);
+    anchorDate = bounds.from;
+  } else if (bounds?.from && !bounds?.to) {
+    days = 60;
+    anchorDate = bounds.from;
+  } else if (!bounds?.from && bounds?.to) {
+    days = 60;
+    anchorDate = new Date(bounds.to.getFullYear(), bounds.to.getMonth(), bounds.to.getDate());
+    anchorDate.setDate(anchorDate.getDate() - 30);
+  } else {
+    // text-only search: show a generous window
+    days = 365;
+    anchorDate = new Date();
+  }
+
   calendar.setOption("views", {
     listCustom: { type: "list", duration: { days }, buttonText: "List" }
   });
 
   calendar.changeView("listCustom");
-
-  const bounds = getSearchBounds();
-  if (bounds?.from) calendar.gotoDate(bounds.from);
-  else calendar.gotoDate(new Date());
+  calendar.gotoDate(anchorDate);
 }
 
 // ---------- Upcoming ----------
@@ -1023,7 +1060,9 @@ function openFromPanel(sourceId, occurrenceStartISO, checklistView) {
   const docData = rawDocs.find(d => d.id === sourceId);
   if (!docData) return;
 
-  const occStart = occurrenceStartISO ? new Date(occurrenceStartISO) : (docData.start ? new Date(docData.start) : null);
+  const occStart = occurrenceStartISO
+    ? new Date(occurrenceStartISO)
+    : (docData.start ? new Date(docData.start) : null);
 
   if (checklistView) {
     openTaskModal(docData, occStart);
@@ -1075,7 +1114,6 @@ function openEventModal(payload) {
 
   backdrop?.classList.remove("hidden");
 
-  // iOS fix: force top
   scrollToTopSafely(editScroll);
   setTimeout(() => evtTitle?.focus(), 0);
 }
@@ -1109,6 +1147,37 @@ function preserveDatesOnAllDayToggle(isAllDayNow) {
   setDateTimeInputs(isAllDayNow, startDate, endDate);
 }
 
+detailsEditBtn?.addEventListener("click", () => {
+  if (!detailsDocId) return;
+  const docData = rawDocs.find(d => d.id === detailsDocId);
+  if (!docData) return;
+
+  closeDetailsModal();
+  openEventModal({
+    mode: "edit",
+    id: detailsDocId,
+    occurrenceStart: detailsOccurrenceStart,
+    title: docData.title || "",
+    start: docData.start ? new Date(docData.start) : detailsOccurrenceStart,
+    end: docData.end ? new Date(docData.end) : null,
+    allDay: !!docData.allDay,
+    owner: normalizeOwner(docData.owner),
+    ownerCustom: docData.ownerCustom || "",
+    type: docData.type || "general",
+    repeat: docData.repeat || "none",
+    repeatUntil: docData.repeatUntil || "",
+    notes: docData.notes || "",
+    checklist: Array.isArray(docData.checklist) ? docData.checklist : []
+  });
+});
+
+detailsDeleteBtn?.addEventListener("click", async () => {
+  if (!detailsDocId) return;
+  if (!confirm("Delete this event?")) return;
+  await deleteDoc(doc(db, "events", detailsDocId));
+  closeDetailsModal();
+});
+
 async function handleSave() {
   const title = (evtTitle?.value || "").trim();
   if (!title) return;
@@ -1125,7 +1194,10 @@ async function handleSave() {
   const repeatUntil = repeat !== "none" ? (evtRepeatUntil?.value || "") : "";
 
   const start = fromInputValue(evtStart?.value, allDay);
-  const end = evtEnd?.value ? fromInputValue(evtEnd.value, allDay) : null;
+  let end = evtEnd?.value ? fromInputValue(evtEnd.value, allDay) : null;
+
+  // If all-day and end equals start, treat as single-day (avoid accidental 2-day)
+  if (allDay && end && end.getTime() === start.getTime()) end = null;
 
   if (end && end.getTime() < start.getTime()) {
     alert("End must be after start.");
@@ -1366,12 +1438,24 @@ function advanceRepeat(date, repeat) {
   return d;
 }
 
+// IMPORTANT: FullCalendar treats all-day "end" as EXCLUSIVE.
+// To make events show on the chosen end date, we add +1 day to end when allDay.
+function makeInclusiveAllDayEnd(endDate) {
+  if (!(endDate instanceof Date) || isNaN(endDate)) return null;
+  const x = new Date(endDate);
+  x.setDate(x.getDate() + 1);
+  return x;
+}
+
 function makeFcEvent({ id, title, start, end, allDay, style, extra }) {
+  let endForFc = end ? new Date(end) : null;
+  if (allDay && endForFc) endForFc = makeInclusiveAllDayEnd(endForFc);
+
   return {
     id,
     title,
     start: start.toISOString(),
-    end: end ? end.toISOString() : undefined,
+    end: endForFc ? endForFc.toISOString() : undefined,
     allDay: !!allDay,
     backgroundColor: style.bg,
     borderColor: style.border,
