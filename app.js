@@ -671,7 +671,7 @@ function initCalendarUI() {
   calendar = new FullCalendar.Calendar(calendarEl, {
     initialView: "dayGridMonth",
     headerToolbar: {
-      left: "prev,next",
+      left: "",
       center: "title",
       right: "dayGridMonth,timeGridWeek,timeGridDay,listCustom"
     },
