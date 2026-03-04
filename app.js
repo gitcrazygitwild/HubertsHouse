@@ -61,7 +61,7 @@ gateForm?.addEventListener("submit", (e) => {
   }
 });
 
-let updatesModalShownThisLoad = true;
+let updatesModalShownThisLoad = false;
 
 // Show/hide gate immediately
 if (isUnlocked()) gate?.classList.add("hidden");
@@ -935,7 +935,8 @@ function renderUpdates() {
   
   function maybeShowUpdatesModal(html, recent) {
   // respect “don’t show”
-  if ((localStorage.getItem(LS_UPDATES_HIDE) || "0") === "1") return;
+  
+   if ((localStorage.getItem(LS_UPDATES_HIDE) || "0") === "1") return;
 
 if (updatesModalShownThisLoad) return;
 
@@ -948,7 +949,7 @@ if (updatesModalShownThisLoad) return;
 
   // show once per page load when there’s truly something new
   openUpdatesModal(html);
-
+updatesModalShownThisLoad = true;
   // update last seen to newest
   localStorage.setItem(LS_UPDATES_LASTSEEN, String(newest));
 }
