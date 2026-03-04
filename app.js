@@ -61,7 +61,7 @@ gateForm?.addEventListener("submit", (e) => {
   }
 });
 
-let updatesModalShownThisLoad = false;
+let updatesModalShownThisLoad = true;
 
 // Show/hide gate immediately
 if (isUnlocked()) gate?.classList.add("hidden");
