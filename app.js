@@ -1297,11 +1297,18 @@ function closeModal() {
 
 function setEndMinFromStart() {
   if (!evtStart || !evtEnd) return;
-  // Works for both type="date" and type="datetime-local"
   evtEnd.min = evtStart.value || "";
 }
 
-// Ensure end >= start. If end is blank or before start, set end = start.
+function addHours(date, hours) {
+  const d = new Date(date);
+  d.setHours(d.getHours() + hours);
+  return d;
+}
+
+// If end is blank OR before start, set it to a sensible default:
+// - all-day: end = start
+// - timed:  end = start + 1 hour
 function clampEndToStart({ alsoFillIfBlank = true } = {}) {
   if (!evtStart || !evtEnd) return;
 
@@ -1313,17 +1320,21 @@ function clampEndToStart({ alsoFillIfBlank = true } = {}) {
 
   const eVal = evtEnd.value;
 
-  // If end is empty, optionally fill it to match start
+  // Decide default end based on mode
+  const sDate = fromInputValue(sVal, allDay);
+  const defaultEndDate = allDay ? sDate : addHours(sDate, 1);
+  const defaultEndVal = toInputValue(defaultEndDate, allDay);
+
+  // If end is empty, optionally fill it
   if (!eVal) {
-    if (alsoFillIfBlank) evtEnd.value = sVal;
+    if (alsoFillIfBlank) evtEnd.value = defaultEndVal;
     return;
   }
 
-  const s = fromInputValue(sVal, allDay);
-  const e = fromInputValue(eVal, allDay);
-
-  if (e.getTime() < s.getTime()) {
-    evtEnd.value = sVal;
+  // If end < start, clamp it
+  const eDate = fromInputValue(eVal, allDay);
+  if (eDate.getTime() < sDate.getTime()) {
+    evtEnd.value = defaultEndVal;
   }
 }
 
