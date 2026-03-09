@@ -693,7 +693,7 @@ function initCalendarUI() {
     views: {
   dayGridMonth: {
     eventDisplay: "block",
-    displayEventTime: false
+    displayEventTime: true
   },
   listCustom: {
     type: "list",
