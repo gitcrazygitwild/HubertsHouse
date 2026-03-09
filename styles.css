@@ -503,6 +503,64 @@ html.cat-mode .cat-tail{
   overflow: hidden; /* key: keep toolbar buttons inside */
 }
 
+/* ---------- Month view: compact 2-line timed events ---------- */
+
+/* Base month-view event chip */
+.fc-dayGridMonth-view .fc-event{
+  border-radius: 10px !important;
+  padding: 2px 6px !important;
+  margin: 2px 2px !important;
+  text-align: left !important;
+  overflow: hidden;
+}
+
+/* All-day events keep the current compact pill look */
+.fc-dayGridMonth-view .fc-daygrid-block-event .fc-event-main{
+  display: block;
+}
+
+/* Timed events: stack time over title */
+.fc-dayGridMonth-view .fc-daygrid-dot-event{
+  display: block !important;
+  padding: 2px 6px !important;
+}
+
+.fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-main{
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 0;
+}
+
+/* Smaller font for timed events */
+.fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-time{
+  display: block !important;
+  font-size: 9px;
+  line-height: 1.05;
+  font-weight: 800;
+  opacity: 0.92;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-title{
+  display: block;
+  font-size: 10px;
+  line-height: 1.05;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip; /* remove the ... */
+  max-width: 100%;
+}
+
+/* Hide the colored dot now that time uses the first row */
+.fc-dayGridMonth-view .fc-event-dot{
+  display: none !important;
+}
+
 /* ---------- FullCalendar tweaks ---------- */
 .fc{
   --fc-page-bg-color: transparent;
@@ -1019,10 +1077,6 @@ html.cat-mode .sparkle-badge{
   text-align:left !important;
 }
 
-/* Hide the dot indicator */
-.fc-dayGridMonth-view .fc-event-dot{
-  display:none !important;
-}
 
 /* Title formatting */
 .fc-dayGridMonth-view .fc-event-title{
