@@ -690,6 +690,17 @@ calendar = new FullCalendar.Calendar(calendarEl, {
   },
   
   eventContent: function(arg) {
+  if (arg.event.allDay) {
+    const title = document.createElement("div")
+    title.className = "fc-title"
+    title.innerText = arg.event.title
+
+    const wrapper = document.createElement("div")
+    wrapper.className = "fc-custom-event fc-custom-event-allday"
+    wrapper.append(title)
+
+    return { domNodes: [wrapper] }
+  }
 
   const dot = document.createElement("span")
   dot.className = "fc-dot"
