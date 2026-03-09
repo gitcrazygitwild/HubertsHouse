@@ -696,8 +696,7 @@ function initCalendarUI() {
     displayEventTime: true,
     eventTimeFormat: {
       hour: "numeric",
-      minute: "2-digit",
-      meridiem: "short"
+      meridiem: "narrow"
     }
   },
   listCustom: {
@@ -705,6 +704,7 @@ function initCalendarUI() {
     duration: { days: 14 },
     buttonText: "List"
   }
+},
 },
 
     selectable: true,
