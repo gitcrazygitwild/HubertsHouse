@@ -560,7 +560,7 @@ html.cat-mode .cat-tail{ animation-duration:4.6s; }
   backdrop-filter: blur(6px);
 }
 
-/* TIMED EVENTS (dot + time same row, title second row) */
+/* TIMED EVENTS (dot + time first row, title full-width second row) */
 .fc-dayGridMonth-view .fc-daygrid-dot-event{
   display: grid !important;
   grid-template-columns: auto 1fr !important;
@@ -571,32 +571,37 @@ html.cat-mode .cat-tail{ animation-duration:4.6s; }
   overflow: hidden !important;
 }
 
-/* dot sits in left column */
+/* dot on the left */
 .fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-dot{
   grid-column: 1 !important;
   grid-row: 1 !important;
   margin: 3px 0 0 0 !important;
 }
 
-/* main content sits in right column */
+/* right-side wrapper takes all remaining width */
 .fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-main{
   grid-column: 2 !important;
   grid-row: 1 !important;
+  width: 100% !important;
   min-width: 0 !important;
   display: block !important;
 }
 
-/* inside main: time first row, title second row */
+/* stack time over title */
 .fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-main-frame{
   display: grid !important;
+  grid-template-columns: 1fr !important;
   grid-template-rows: auto auto !important;
   row-gap: 0 !important;
+  width: 100% !important;
   min-width: 0 !important;
 }
 
+/* time row */
 .fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-time{
   grid-row: 1 !important;
   display: block !important;
+  width: 100% !important;
   font-size: 8px !important;
   line-height: 1 !important;
   font-weight: 800 !important;
@@ -605,15 +610,19 @@ html.cat-mode .cat-tail{ animation-duration:4.6s; }
   padding: 0 !important;
 }
 
+/* title wrapper must also take full width */
 .fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-title-container{
   grid-row: 2 !important;
   display: block !important;
+  width: 100% !important;
   min-width: 0 !important;
   overflow: hidden !important;
 }
 
+/* title text */
 .fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-title{
   display: block !important;
+  width: 100% !important;
   min-width: 0 !important;
   font-size: 9px !important;
   line-height: 1.02 !important;
@@ -624,7 +633,7 @@ html.cat-mode .cat-tail{ animation-duration:4.6s; }
   position: relative !important;
 }
 
-/* fade */
+/* subtle fade */
 .fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-title::after{
   content: "";
   position: absolute;
