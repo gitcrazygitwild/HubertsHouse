@@ -592,12 +592,13 @@ html.cat-mode .cat-tail{ animation-duration:4.6s; }
   padding: 0 !important;
 }
 
-/* title container */
+/* /* title container */
 .fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-title-container{
-  grid-column: 2 !important;
+  grid-column: 1 / -1 !important;
   grid-row: 2 !important;
   min-width: 0 !important;
   display: block !important;
+  padding-left: 14px !important; /* lines title up under the time row */
 }
 
 /* title */
@@ -613,13 +614,13 @@ html.cat-mode .cat-tail{ animation-duration:4.6s; }
   position: relative !important;
 }
 
-/* fade instead of ... */
+/* gentler fade */
 .fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-title::after{
   content: "";
   position: absolute;
   right: 0;
   top: 0;
-  width: 6px;
+  width: 3px;
   height: 100%;
   pointer-events: none;
   background: linear-gradient(to right, rgba(10,14,28,0), rgba(10,14,28,1));
@@ -647,7 +648,7 @@ html.cat-mode .cat-tail{ animation-duration:4.6s; }
   position: absolute;
   right: 0;
   top: 0;
-  width: 6px;
+  width: 3px;
   height: 100%;
   pointer-events: none;
   background: linear-gradient(to right, rgba(10,14,28,0), rgba(10,14,28,1));
