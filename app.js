@@ -711,7 +711,7 @@ calendar = new FullCalendar.Calendar(calendarEl, {
   wrapper.append(row1, title)
 
   return { domNodes: [wrapper] }
-}
+},
 
 views: {
   dayGridMonth: {
