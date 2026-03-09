@@ -503,30 +503,32 @@ html.cat-mode .cat-tail{
   overflow: hidden; /* key: keep toolbar buttons inside */
 }
 
-/* ---------- Month view: compact 2-line timed events ---------- */
-
 /* ---------- Month view: timed events ---------- */
 
-/* Timed events use FullCalendar's dot-event layout */
 .fc-dayGridMonth-view .fc-daygrid-dot-event{
-  display: flex !important;
-  align-items: flex-start !important;
-  gap: 4px !important;
   padding: 2px 6px !important;
   margin: 2px 2px !important;
   text-align: left !important;
   overflow: hidden !important;
 }
 
-/* Dot stays visible and sits on same row as time */
+/* This is the real wrapper FullCalendar uses for time + title */
+.fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-main-frame{
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 4px !important;
+  min-width: 0 !important;
+}
+
+/* Dot */
 .fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-dot{
-  flex: 0 0 auto;
+  flex: 0 0 auto !important;
   margin: 3px 0 0 0 !important;
 }
 
-/* Time also stays on that same top row */
+/* Time */
 .fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-time{
-  flex: 0 0 auto;
+  flex: 0 0 auto !important;
   font-size: 9px !important;
   line-height: 1.05 !important;
   font-weight: 800 !important;
@@ -535,39 +537,22 @@ html.cat-mode .cat-tail{
   padding: 0 !important;
 }
 
-/* Title goes below by stacking inside the main content area */
-.fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-main{
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
+/* Title container */
+.fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-title-container{
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
 }
 
-/* Title formatting */
+/* Title */
 .fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-title{
+  display: block !important;
   font-size: 10px !important;
   line-height: 1.05 !important;
   font-weight: 800 !important;
   white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: clip !important;
-  position: relative;
-}
-
-/* Fade title instead of ... */
-.fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-title::after{
-  content: "";
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 14px;
-  height: 100%;
-  pointer-events: none;
-  background: linear-gradient(
-    to right,
-    rgba(10,14,28,0),
-    rgba(10,14,28,1)
-  );
+  position: relative !important;
 }
 
 /* ALL-DAY events: no ... , use fade */
