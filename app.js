@@ -688,6 +688,30 @@ calendar = new FullCalendar.Calendar(calendarEl, {
     center: "title",
     right: "dayGridMonth,timeGridWeek,timeGridDay,listCustom"
   },
+  
+  eventContent: function(arg) {
+
+  const dot = document.createElement("span")
+  dot.className = "fc-dot"
+
+  const time = document.createElement("span")
+  time.className = "fc-time"
+  time.innerText = arg.timeText
+
+  const title = document.createElement("div")
+  title.className = "fc-title"
+  title.innerText = arg.event.title
+
+  const row1 = document.createElement("div")
+  row1.className = "fc-row1"
+  row1.append(dot, time)
+
+  const wrapper = document.createElement("div")
+  wrapper.className = "fc-custom-event"
+  wrapper.append(row1, title)
+
+  return { domNodes: [wrapper] }
+}
 
 views: {
   dayGridMonth: {
