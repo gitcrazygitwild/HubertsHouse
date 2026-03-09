@@ -560,27 +560,34 @@ html.cat-mode .cat-tail{ animation-duration:4.6s; }
   backdrop-filter: blur(6px);
 }
 
-/* /* TIMED EVENTS (dot + time row 1, title row 2 with full usable width) */
+/* TIMED EVENTS (dot + time first row, title second row) */
 .fc-dayGridMonth-view .fc-daygrid-dot-event{
+  display: block !important;
+  padding: 2px 4px !important;
+  margin: 2px 2px !important;
+  overflow: hidden !important;
+}
+
+/* make the inner wrapper the actual 2-row grid */
+.fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-main{
   display: grid !important;
   grid-template-columns: auto auto 1fr !important;
   grid-template-rows: auto auto !important;
   column-gap: 3px !important;
   row-gap: 0 !important;
   align-items: start !important;
-  padding: 2px 4px !important;
-  margin: 2px 2px !important;
-  overflow: hidden !important;
+  width: 100% !important;
+  min-width: 0 !important;
 }
 
-/* dot */
+/* dot = row 1 col 1 */
 .fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-dot{
   grid-column: 1 !important;
   grid-row: 1 !important;
   margin: 3px 0 0 0 !important;
 }
 
-/* time */
+/* time = row 1 col 2 */
 .fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-time{
   grid-column: 2 !important;
   grid-row: 1 !important;
@@ -592,26 +599,20 @@ html.cat-mode .cat-tail{ animation-duration:4.6s; }
   padding: 0 !important;
 }
 
-/* IMPORTANT: force the title wrapper to actually fill the chip */
-.fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-main{
-  display: contents !important;
-}
-
+/* title wrapper = full second row */
 .fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-title-container{
   grid-column: 1 / 4 !important;
   grid-row: 2 !important;
   display: block !important;
   width: 100% !important;
-  max-width: 100% !important;
   min-width: 0 !important;
   overflow: hidden !important;
 }
 
-/* title */
+/* title text */
 .fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-title{
   display: block !important;
   width: 100% !important;
-  max-width: 100% !important;
   min-width: 0 !important;
   font-size: 9px !important;
   line-height: 1.02 !important;
@@ -621,7 +622,6 @@ html.cat-mode .cat-tail{ animation-duration:4.6s; }
   text-overflow: clip !important;
   position: relative !important;
 }
-
 
 /* fade */
 .fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-title::after{
