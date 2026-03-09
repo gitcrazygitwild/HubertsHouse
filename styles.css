@@ -1085,29 +1085,7 @@ html.cat-mode .sparkle-badge{
 
 /* ---------- Month view: iOS-style event pills ---------- */
 
-/* Fade out long titles instead of using ... */
-.fc-dayGridMonth-view .fc-event-title{
-  position: relative;
-  white-space: nowrap;
-  overflow: hidden;
-}
 
-/* gradient fade */
-.fc-dayGridMonth-view .fc-event-title::after{
-  content: "";
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 16px;
-  height: 100%;
-  pointer-events: none;
-
-  background: linear-gradient(
-    to right,
-    rgba(10,14,28,0),
-    rgba(10,14,28,1)
-  );
-}
 
 
 /* Turn events into rounded chips */
