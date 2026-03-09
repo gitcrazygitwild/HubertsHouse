@@ -690,10 +690,15 @@ function initCalendarUI() {
     },
 
     // List duration is dynamic; we override before switching to listCustom
-    views: {
+  views: {
   dayGridMonth: {
     eventDisplay: "block",
-    displayEventTime: true
+    displayEventTime: true,
+    eventTimeFormat: {
+      hour: "numeric",
+      minute: "2-digit",
+      meridiem: "short"
+    }
   },
   listCustom: {
     type: "list",
