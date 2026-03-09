@@ -704,6 +704,7 @@ calendar = new FullCalendar.Calendar(calendarEl, {
 
   const dot = document.createElement("span")
   dot.className = "fc-dot"
+  dot.style.backgroundColor = arg.event.borderColor || arg.event.backgroundColor || "#fff"
 
   const time = document.createElement("span")
   time.className = "fc-time"
