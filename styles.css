@@ -1087,35 +1087,99 @@ html.cat-mode .sparkle-badge{
 
 
 
+/* ---------- Month view event styling ---------- */
 
-/* Turn events into rounded chips */
+/* common chip look */
 .fc-dayGridMonth-view .fc-event{
-  display:block !important;
-  border-radius:12px !important;
-  padding:2px 6px !important;
-  margin:2px 2px !important;
-  font-size:11px;
-  line-height:1.2;
-  text-align:left !important;
-}
-
-
-/* Title formatting */
-.fc-dayGridMonth-view .fc-event-title{
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: clip;
-  display: block;
-}
-
-/* Make events fill width nicely */
-.fc-dayGridMonth-view .fc-daygrid-event-harness{
-  margin-left:0 !important;
-  margin-right:0 !important;
-}
-
-.fc-dayGridMonth-view .fc-event{
-  backdrop-filter: blur(6px);
+  border-radius: 12px !important;
+  padding: 2px 6px !important;
+  margin: 2px 2px !important;
+  text-align: left !important;
+  overflow: hidden !important;
   box-shadow: 0 3px 6px rgba(0,0,0,.25);
+  backdrop-filter: blur(6px);
+}
+
+/* timed events: dot + time on top row, title below */
+.fc-dayGridMonth-view .fc-daygrid-dot-event{
+  display: block !important;
+}
+
+.fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-main{
+  display: grid !important;
+  grid-template-columns: auto auto 1fr !important;
+  grid-template-rows: auto auto !important;
+  column-gap: 4px !important;
+  row-gap: 1px !important;
+  align-items: start !important;
+  min-width: 0 !important;
+}
+
+.fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-dot{
+  grid-column: 1;
+  grid-row: 1;
+  margin: 3px 0 0 0 !important;
+}
+
+.fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-time{
+  grid-column: 2;
+  grid-row: 1;
+  font-size: 9px !important;
+  line-height: 1.05 !important;
+  font-weight: 800 !important;
+  white-space: nowrap !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-title{
+  grid-column: 2 / 4;
+  grid-row: 2;
+  font-size: 10px !important;
+  line-height: 1.05 !important;
+  font-weight: 800 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: clip !important;
+  position: relative !important;
+  min-width: 0 !important;
+}
+
+.fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-title::after{
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 14px;
+  height: 100%;
+  pointer-events: none;
+  background: linear-gradient(to right, rgba(10,14,28,0), rgba(10,14,28,1));
+}
+
+/* all-day events: keep pill but fade title instead of ... */
+.fc-dayGridMonth-view .fc-daygrid-block-event .fc-event-main{
+  display: block !important;
+  position: relative;
+  min-width: 0;
+}
+
+.fc-dayGridMonth-view .fc-daygrid-block-event .fc-event-title{
+  display: block !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: clip !important;
+  position: relative !important;
+  min-width: 0 !important;
+}
+
+.fc-dayGridMonth-view .fc-daygrid-block-event .fc-event-title::after{
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 14px;
+  height: 100%;
+  pointer-events: none;
+  background: linear-gradient(to right, rgba(10,14,28,0), rgba(10,14,28,1));
 }
 
