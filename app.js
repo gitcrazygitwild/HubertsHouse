@@ -890,18 +890,25 @@ views: {
     },
 
     eventDidMount: (arg) => {
-      const show = shouldShowEvent(arg.event);
-      if (!show) arg.el.style.display = "none";
+  const show = shouldShowEvent(arg.event);
+  if (!show) arg.el.style.display = "none";
 
-      const p = arg.event.extendedProps || {};
-      if (p.isRepeatOccurrence) {
-        arg.event.setProp("editable", false);
-        arg.event.setProp("durationEditable", false);
-        arg.event.setProp("startEditable", false);
-      }
+  const p = arg.event.extendedProps || {};
+  if (p.isRepeatOccurrence) {
+    arg.event.setProp("editable", false);
+    arg.event.setProp("durationEditable", false);
+    arg.event.setProp("startEditable", false);
+  }
 
-      arg.el.style.fontSize = "var(--event-font)";
-    },
+  arg.el.style.fontSize = "var(--event-font)";
+
+  // NEW: make timed month-view events use their event color
+  if (arg.view.type === "dayGridMonth" && !arg.event.allDay) {
+    arg.el.style.backgroundColor = arg.event.backgroundColor || "rgba(122,162,255,0.35)";
+    arg.el.style.borderColor = arg.event.borderColor || "rgba(122,162,255,0.85)";
+    arg.el.style.color = "#eef1f7";
+  }
+},
 
     eventDrop: async (info) => {
       const p = info.event.extendedProps || {};
