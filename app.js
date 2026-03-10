@@ -776,7 +776,33 @@ eventContent: function(arg) {
   if (isMultiDay) {
     wrapper.classList.add("fc-multiday");
   }
+const view = arg.view;
+const date = arg.date;
+const start = arg.event.start;
+const end = arg.event.end;
 
+if (start && end && arg.event.allDay) {
+
+  const startDay = new Date(start);
+  startDay.setHours(0,0,0,0);
+
+  const endDay = new Date(end);
+  endDay.setHours(0,0,0,0);
+
+  const curDay = new Date(date);
+  curDay.setHours(0,0,0,0);
+
+  if (curDay.getTime() === startDay.getTime()) {
+    wrapper.classList.add("multi-start");
+  }
+  else if (curDay.getTime() === endDay.getTime()) {
+    wrapper.classList.add("multi-end");
+  }
+  else {
+    wrapper.classList.add("multi-middle");
+  }
+
+}
   return { domNodes: [wrapper] };
 },
 
