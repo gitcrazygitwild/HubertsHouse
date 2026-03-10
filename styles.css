@@ -113,6 +113,23 @@ input, select, textarea{ font-size:16px; }
   background: rgba(255,107,107,.14);
 }
 
+/* start of multi-day event */
+.multi-start {
+  border-top-right-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+}
+
+/* middle days */
+.multi-middle {
+  border-radius: 0 !important;
+}
+
+/* end day */
+.multi-end {
+  border-top-left-radius: 0 !important;
+  border-bottom-left-radius: 0 !important;
+}
+
 /* ---------- Cards ---------- */
 .card{
   background: var(--card);
