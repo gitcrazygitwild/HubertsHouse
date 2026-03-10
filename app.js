@@ -516,14 +516,6 @@ async function initApp() {
   db = getFirestore(app);
   eventsCol = collection(db, "events");
 
-function getTypeIcon(type) {
-  switch ((type || "").toLowerCase()) {
-    case "trip": return "✈️";
-    case "wedding": return "💍";
-    case "appointment": return "📅";
-    case "party": return "🎉";
-    default: return "";
-  }
 }
 
   initCalendarUI();
