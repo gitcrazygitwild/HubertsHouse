@@ -720,7 +720,7 @@ eventContent: function(arg) {
       case "wedding": return "💍";
       case "appointment": return "📅";
       case "party": return "🎉";
-      default: return "•";
+      default: return "";
     }
   }
 
