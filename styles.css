@@ -324,6 +324,10 @@ html.cat-mode .cat-tail{ animation-duration:4.6s; }
   line-height:1;
 }
 
+.fc-type-icon:empty {
+  display: none;
+}
+
 .fc-title-text{
   min-width:0;
   overflow:hidden;
