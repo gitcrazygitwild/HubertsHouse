@@ -541,14 +541,14 @@ function initUIHooks() {
   nextBtn?.addEventListener("click", () => calendar?.next());
   todayBtn?.addEventListener("click", () => calendar?.today());
 
-updatesClose?.addEventListener("click", closeUpdatesModal);
-updatesDone?.addEventListener("click", () => {
-  if (updatesDontShow?.checked) localStorage.setItem(LS_UPDATES_HIDE, "1");
-  closeUpdatesModal();
-});
-updatesBackdrop?.addEventListener("click", (e) => {
-  if (e.target === updatesBackdrop) closeUpdatesModal();
-});
+  updatesClose?.addEventListener("click", closeUpdatesModal);
+  updatesDone?.addEventListener("click", () => {
+    if (updatesDontShow?.checked) localStorage.setItem(LS_UPDATES_HIDE, "1");
+    closeUpdatesModal();
+  });
+  updatesBackdrop?.addEventListener("click", (e) => {
+    if (e.target === updatesBackdrop) closeUpdatesModal();
+  });
 
   // Search debounce
   let t = null;
@@ -565,6 +565,7 @@ updatesBackdrop?.addEventListener("click", (e) => {
     setSearchUIState();
     applySearchAndFilters(true);
   });
+
   searchTo?.addEventListener("change", () => {
     setSearchUIState();
     applySearchAndFilters(true);
@@ -578,6 +579,7 @@ updatesBackdrop?.addEventListener("click", (e) => {
   fab?.addEventListener("click", () => {
     const start = roundToNextHour(new Date());
     const end = new Date(start.getTime() + 60 * 60 * 1000);
+
     openEventModal({
       mode: "create",
       title: "",
@@ -604,18 +606,14 @@ updatesBackdrop?.addEventListener("click", (e) => {
     preserveDatesOnAllDayToggle(!!evtAllDay.checked);
   });
 
-// Start/end guardrails
-evtStart?.addEventListener("change", () => {
-  // When you pick a new start, end should jump to that start (or clamp if needed)
-  clampEndToStart({ alsoFillIfBlank: true });
-});
+  // Start/end guardrails
+  evtStart?.addEventListener("change", () => {
+    clampEndToStart({ alsoFillIfBlank: true });
+  });
 
-evtEnd?.addEventListener("change", () => {
-  // If user tries to set end before start, clamp it back
-  clampEndToStart({ alsoFillIfBlank: false });
-});
-
-
+  evtEnd?.addEventListener("change", () => {
+    clampEndToStart({ alsoFillIfBlank: false });
+  });
 
   evtOwner?.addEventListener("change", () => {
     const v = evtOwner.value;
@@ -658,8 +656,6 @@ evtEnd?.addEventListener("change", () => {
     addChecklistItemUI(taskChecklist, { text: "", done: false }, true);
   });
 
-
-
   // Jump modal
   jumpClose?.addEventListener("click", closeJumpModal);
   jumpCancel?.addEventListener("click", closeJumpModal);
@@ -671,6 +667,31 @@ evtEnd?.addEventListener("change", () => {
     const year = Number(jumpYearSelect?.value ?? new Date().getFullYear());
     calendar?.gotoDate(new Date(year, month, 1));
     closeJumpModal();
+  });
+
+  // Click legend items to filter owner
+  document.querySelectorAll(".legend-inline .item").forEach((item) => {
+    item.style.cursor = "pointer";
+
+    item.addEventListener("click", () => {
+      const label = item.textContent.trim().toLowerCase();
+
+      let next = "all";
+      if (label.includes("hanry")) next = "hanry";
+      else if (label.includes("karena")) next = "karena";
+      else if (label.includes("both")) next = "both";
+      else if (label.includes("other")) next = "custom";
+
+      if ((ownerFilter?.value || "all") === next) {
+        ownerFilter.value = "all";
+        ownerFilterValue = "all";
+      } else {
+        ownerFilter.value = next;
+        ownerFilterValue = next;
+      }
+
+      applySearchAndFilters(false);
+    });
   });
 
   populateYearSelect();
