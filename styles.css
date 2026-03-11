@@ -306,12 +306,20 @@ html.cat-mode .cat-tail{ animation-duration:4.6s; }
 .fc-row1{
   display:flex;
   align-items:center;
-  justify-content:center;
   gap:4px;
-  min-width:0;
+  width:100%;
   max-width:100%;
+  min-width:0;
   margin-bottom:1px;
   overflow:hidden;
+}
+
+.fc-dot{
+  width:7px;
+  height:7px;
+  border-radius:999px;
+  display:inline-block;
+  flex:0 0 auto;
 }
 
 .fc-time{
@@ -326,17 +334,25 @@ html.cat-mode .cat-tail{ animation-duration:4.6s; }
 .fc-title{
   display:flex;
   align-items:center;
-  justify-content:center;
   gap:4px;
   width:100%;
   max-width:100%;
   min-width:0;
   font-size:9px;
-  line-height:1.05;
+  line-height:1.08;
   font-weight:800;
   white-space:nowrap;
   overflow:hidden;
-  text-align:center;
+}
+
+.fc-type-icon{
+  flex:0 0 auto;
+  font-size:9px;
+  line-height:1;
+}
+
+.fc-type-icon:empty{
+  display:none;
 }
 
 .fc-title-text{
@@ -347,42 +363,6 @@ html.cat-mode .cat-tail{ animation-duration:4.6s; }
   white-space:nowrap;
   overflow:hidden;
   text-overflow:clip;
-  position:relative;
-  text-align:center;
-}
-
-/* timed-event dot */
-.fc-dot{
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  display: inline-block;
-  flex: 0 0 auto;
-}
-
-
-/* event type icon */
-.fc-type-icon{
-  flex: 0 0 auto;
-  font-size: 9px;
-  line-height: 1;
-}
-
-.fc-type-icon:empty{
-  display: none;
-}
-
-
-/* subtle fade on title only */
-.fc-title-text::after{
-  content: "";
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 4px;
-  height: 100%;
-  pointer-events: none;
-  background: linear-gradient(to right, rgba(10,14,28,0), rgba(10,14,28,1));
 }
 
 /* optional small styling boost for multi-day events */
@@ -668,8 +648,8 @@ html.cat-mode .cat-tail{ animation-duration:4.6s; }
 
 /* Common chip look */
 .fc-dayGridMonth-view .fc-event{
-  border-radius: 12px !important;
-  padding: 2px 6px !important;
+  border-radius: 9px !important;
+  padding: 3px 7px !important;
   margin: 2px 2px !important;
   text-align: left !important;
   overflow: hidden !important;
@@ -683,16 +663,17 @@ html.cat-mode .cat-tail{ animation-duration:4.6s; }
   grid-template-columns: auto auto 1fr !important;
   grid-template-rows: auto auto !important;
   column-gap: 4px !important;
-  row-gap: 0 !important;
+  row-gap: 1px !important;
   align-items: start !important;
 
-  padding: 2px 5px !important;
+  padding: 3px 6px !important;
   margin: 2px auto !important;
   overflow: hidden !important;
-  width: calc(100% - 10px) !important;
-  max-width: calc(100% - 10px) !important;
+  width: calc(100% - 8px) !important;
+  max-width: calc(100% - 8px) !important;
   min-width: 0 !important;
   box-sizing: border-box !important;
+  border-radius: 9px !important;
 }
 
 /* dot */
@@ -750,17 +731,7 @@ html.cat-mode .cat-tail{ animation-duration:4.6s; }
   position: relative !important;
 }
 
-/* fade */
-.fc-dayGridMonth-view .fc-daygrid-dot-event .fc-event-title::after{
-  content: "";
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 4px;
-  height: 100%;
-  pointer-events: none;
-  background: linear-gradient(to right, rgba(10,14,28,0), rgba(10,14,28,1));
-}
+
 
 /* ALL-DAY EVENTS */
 
@@ -778,17 +749,6 @@ html.cat-mode .cat-tail{ animation-duration:4.6s; }
   min-width: 0 !important;
 }
 
-/* fade */
-.fc-dayGridMonth-view .fc-daygrid-block-event .fc-event-title::after{
-  content: "";
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 0px;
-  height: 100%;
-  pointer-events: none;
-  background: linear-gradient(to right, rgba(10,14,28,0), rgba(10,14,28,1));
-}
 
 /* ---------- Panels ---------- */
 .panel{ margin-top:12px; }
