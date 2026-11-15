@@ -1,54 +1,38 @@
 // app.js — Hubert’s House
-// Firebase sync + password gate + theme dice + search (with date bounds) + owner filter
+// Household dashboard, authenticated Firebase sync and iCloud calendar integration.
 // Upcoming + Outstanding checklist panels + checklist-focused modal
 // Month title tap = jump-to-month + swipe left/right to change months/weeks/days
 
-// ---------- Gate ----------
-const PASSWORD = "Mack"; // not real security
-const LS_UNLOCK = "huberts_house_unlocked_v1";
-
-const gate = document.getElementById("gate");
-const gateForm = document.getElementById("gateForm");
-const gateInput = document.getElementById("gateInput");
-const rememberDevice = document.getElementById("rememberDevice");
-
-let sessionUnlocked = false;
-
-function isUnlocked() {
-  if (sessionUnlocked) return true;
-  return localStorage.getItem(LS_UNLOCK) === "1";
+import { config } from './config.js';
+import { initHousehold, updateHouseholdEvents, showNotice } from './household.js';
+import { initCloudCalendar, setCloudRange, refreshCloud, saveCloudEvent, deleteCloudEvent } from './cloud-calendar.js';
+import { demoStore, demoEvents } from './demo.js';
+import { dateKey } from './household-model.js';
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence, browserSessionPersistence } from 'https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js';
+const demo = new URLSearchParams(location.search).get('demo') === '1';
+const gate = document.getElementById('gate');
+const gateForm = document.getElementById('gateForm');
+const gateInput = document.getElementById('gateInput');
+const rememberDevice = document.getElementById('rememberDevice');
+let auth, memberVerified = false, dataStarted = false;
+function isUnlocked() { return demo || memberVerified; }
+async function lock() {
+  if (demo) { location.href = location.pathname; return; }
+  await signOut(auth);
+  location.reload();
 }
-
-function unlock() {
-  const remember = rememberDevice?.checked ?? true;
-  if (remember) localStorage.setItem(LS_UNLOCK, "1");
-  sessionUnlocked = true;
-  gate?.classList.add("hidden");
-}
-
-function lock() {
-  sessionUnlocked = false;
-  localStorage.removeItem(LS_UNLOCK);
-  gate?.classList.remove("hidden");
-  closeDetailsModal();
-  closeModal();
-  closeTaskModal();
-  closeJumpModal();
-}
-
-gateForm?.addEventListener("submit", (e) => {
+gateForm?.addEventListener('submit', async e => {
   e.preventDefault();
-  const pw = String(gateInput?.value ?? "").trim();
-  if (pw.toLowerCase() === PASSWORD.toLowerCase()) {
-    unlock();
-    if (gateInput) gateInput.value = "";
-  } else {
-    if (gateInput) {
-      gateInput.value = "";
-      gateInput.focus();
-    }
-    alert("Wrong password.");
-  }
+  const button = document.getElementById('signInBtn'); button.disabled = true;
+  document.getElementById('gateError').textContent = '';
+  try {
+    await setPersistence(auth, rememberDevice.checked ? browserLocalPersistence : browserSessionPersistence);
+    await signInWithEmailAndPassword(auth, document.getElementById('gateEmail').value.trim(), gateInput.value);
+  } catch (error) {
+    document.getElementById('gateError').textContent = error.code === 'auth/operation-not-allowed' || error.code === 'auth/configuration-not-found'
+      ? 'Household sign-in needs to be activated. Use the sample preview while setup is completed.'
+      : error.code === 'auth/network-request-failed' ? 'Could not reach sign-in. Check your connection and try again.' : 'Could not sign in. Check your household email and password.';
+  } finally { gateInput.value = ''; button.disabled = false; }
 });
 
 let updatesModalShownThisLoad = false;
@@ -158,6 +142,10 @@ let detailsOccurrenceStart = null;
 
 function openDetailsModal(payload) {
   detailsDocId = payload.id;
+  const original = rawDocs.find(d => d.id === payload.id);
+  document.getElementById('detailsSource').textContent = original?.icloud ? `${original.calendarName} · iCloud${original.readOnlyReason ? ' · '+original.readOnlyReason : ''}` : 'Hubert’s House';
+  detailsEditBtn.disabled = !!original?.readOnlyReason; detailsDeleteBtn.disabled = !!original?.readOnlyReason;
+  detailsChecklistBtn.classList.toggle('hidden',!!original?.icloud);
   detailsOccurrenceStart = payload.occurrenceStart || null;
 
   const owner = normalizeOwner(payload.owner);
@@ -213,6 +201,7 @@ const eventForm = document.getElementById("eventForm");
 const modalTitle = document.getElementById("modalTitle");
 const editScroll = document.getElementById("editScroll");
 const saveBtnTop = document.getElementById("saveBtnTop");
+const saveBtn = document.getElementById("saveBtn");
 
 const evtTitle = document.getElementById("evtTitle");
 const evtStart = document.getElementById("evtStart");
@@ -280,10 +269,10 @@ function openUpdatesModal(html) {
 
 // ---------- Colors / owners ----------
 const OWNER_STYLE = {
-  hanry:  { bg: "rgba(122,162,255,0.35)", border: "rgba(122,162,255,0.85)" },
-  karena: { bg: "rgba(255,107,107,0.28)", border: "rgba(255,107,107,0.85)" },
-  both:   { bg: "rgba(116,217,155,0.28)", border: "rgba(116,217,155,0.85)" },
-  custom: { bg: "rgba(184,140,255,0.26)", border: "rgba(184,140,255,0.85)" }
+  hanry:  { bg: "#f0ddca", border: "#bc8f62" },
+  karena: { bg: "#e5ddef", border: "#a18ab8" },
+  both:   { bg: "#dfe7d3", border: "#96aa7c" },
+  custom: { bg: "#dbe5eb", border: "#8ba4b2" }
 };
 
 function normalizeOwner(rawOwner) {
@@ -315,24 +304,21 @@ import {
   onSnapshot,
   query,
   orderBy,
-  serverTimestamp
+  serverTimestamp,
+  getDoc,
+  runTransaction
 } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyBEXNyX6vIbHwGCpI3fpVUb5llubOjt9qQ",
-  authDomain: "huberts-house.firebaseapp.com",
-  projectId: "huberts-house",
-  storageBucket: "huberts-house.firebasestorage.app",
-  messagingSenderId: "233498547172",
-  appId: "1:233498547172:web:e250d2f14b0e19c6322df1",
-  measurementId: "G-CX5MN6WBFP"
-};
+const firebaseConfig = config.firebase;
 
 let db, eventsCol;
 let calendar;
 
 // In-memory cache from Firestore
 let rawDocs = [];
+let localDocs = [], cloudDocs = [];
+let eventRequestId = null;
+let savingEvent = false;
 let expandedEvents = [];
 
 let editingDocId = null;
@@ -507,25 +493,93 @@ setSearchUIState();
 
 async function initApp() {
   const app = initializeApp(firebaseConfig);
-  db = getFirestore(app);
-  eventsCol = collection(db, "events");
-
-  initCalendarUI();
-  initUIHooks();
-
-  const q = query(eventsCol, orderBy("start", "asc"));
-  onSnapshot(q, (snap) => {
-    const docs = [];
-    snap.forEach((d) => docs.push({ id: d.id, ...d.data() }));
-    rawDocs = docs;
-
-    expandedEvents = expandRepeats(normalizeDocs(rawDocs));
-    renderCalendarFromCache();
-    renderPanels();
-  }, (err) => {
-    console.error(err);
-    alert("Firebase sync error. Check rules + config.");
+  db = getFirestore(app); eventsCol = collection(db, 'events'); auth = getAuth(app);
+  initCalendarUI(); initUIHooks();
+  if (demo) {
+    gate.classList.add('hidden'); document.getElementById('demoBanner').classList.remove('hidden');
+    document.getElementById('accountLabel').textContent = 'Preview mode. No real household or Apple data is loaded.';
+    startHousehold(demoStore()); localDocs = demoEvents(); rebuildEvents();
+    initCloudCalendar(null,{demo:true,onEvents:() => {},onCalendars:() => {}}); return;
+  }
+  onAuthStateChanged(auth,async user => {
+    if (!user) { memberVerified = false; gate.classList.remove('hidden'); if (dataStarted) location.reload(); return; }
+    try {
+      const member = await getDoc(doc(db, 'households', 'home', 'members', user.uid));
+      if (!member.exists() || member.data().active !== true) {
+        document.getElementById('gateError').textContent = 'This account has not been added to the household yet.';
+        await signOut(auth); return;
+      }
+      memberVerified = true; gate.classList.add('hidden');
+      document.getElementById('accountLabel').textContent = `Signed in as ${user.email || 'household member'}`;
+      if (dataStarted) return; dataStarted = true;
+      startHousehold(firestoreStore());
+      onSnapshot(query(eventsCol, orderBy('start','asc')), snap => {
+        localDocs = snap.docs.map(d => ({id:d.id,...d.data()})); rebuildEvents();
+      }, () => showNotice('The calendar could not sync. Check your connection and household access.'));
+      await initCloudCalendar(app,{
+        onEvents:records => { cloudDocs = records.map(e => ({...e,end:e.editEnd,cloudEnd:e.end,owner:'both',type:'general',checklist:[],repeat:'none'})); rebuildEvents(); },
+        onCalendars:connection => {
+          const select = document.getElementById('evtCalendar'); const current = select.value;
+          select.replaceChildren(new Option('Hubert’s House','household'));
+          for (const c of connection.calendars || []) if (connection.selected.includes(c.id) && c.writable) select.add(new Option(`${c.name} · iCloud`,c.id));
+          if ([...select.options].some(o => o.value === current)) select.value = current;
+        }
+      });
+    } catch { document.getElementById('gateError').textContent = 'Could not verify household access. Check your connection and setup.'; gate.classList.remove('hidden'); }
   });
+}
+function startHousehold(store) {
+  initHousehold({ store, openEvent:(id,occ) => openFromPanel(id,occ,false), newEvent:() => fab.click(), viewChanged:() => calendar?.updateSize() });
+}
+function firestoreStore() {
+  const col = collection(db,'householdItems');
+  const check = (snapshot,item) => { if (!snapshot.exists() || snapshot.data().version !== item.version) throw new Error('This item changed on another device. Try again.'); };
+  return {
+    subscribe(next,status) {
+      return onSnapshot(col,{includeMetadataChanges:true},snap => {
+        next(snap.docs.map(d => ({id:d.id,...d.data()})));
+        status(snap.metadata.hasPendingWrites ? 'Saving changes…' : snap.metadata.fromCache ? 'Offline · showing cached items' : 'Shared household · up to date');
+      },() => status('Could not sync household lists. Check your connection and household access.',true));
+    },
+    async add(data) { const ref = await addDoc(col,{...data,version:0,createdAt:serverTimestamp(),updatedAt:serverTimestamp()}); return { ...data,id:ref.id,version:0 }; },
+    async update(item,patch) {
+      return runTransaction(db,async transaction => {
+        const ref = doc(col,item.id); const snapshot = await transaction.get(ref); check(snapshot,item);
+        const next = {...patch,version:item.version+1,updatedAt:serverTimestamp()}; transaction.update(ref,next);
+        return {...item,...next};
+      });
+    },
+    async remove(item) { await runTransaction(db,async t => { const ref=doc(col,item.id); check(await t.get(ref),item); t.delete(ref); }); },
+    async removeMany(items) { await runTransaction(db,async t => {
+      if (items.length > 400) throw new Error('Clear fewer than 400 bought items at a time.');
+      const snapshots = await Promise.all(items.map(item => t.get(doc(col,item.id))));
+      items.forEach((item,i) => check(snapshots[i],item)); items.forEach(item => t.delete(doc(col,item.id)));
+    }); }
+  };
+}
+function rebuildEvents() {
+  rawDocs = [...localDocs,...cloudDocs];
+  expandedEvents = [...expandRepeats(normalizeDocs(localDocs)),...cloudDocs.map(e => ({
+    id:e.id,title:e.title,start:e.start,end:e.cloudEnd,allDay:e.allDay,
+    backgroundColor:'#dfe8d6',borderColor:'#8da475',textColor:'#34432e',editable:!e.readOnlyReason,
+    extendedProps:{sourceId:e.id,owner:'both',type:'general',notes:e.notes,checklist:[],icloud:true,isRepeatOccurrence:!!e.recurring}
+  }))];
+  renderCalendarFromCache(); renderPanels(); updateHouseholdEvents(expandedEvents);
+}
+async function saveLocalEvent(id,payload) {
+  if (demo) {
+    if (id) { const item=localDocs.find(d => d.id === id); if (item) Object.assign(item,payload,{updatedAt:new Date()}); }
+    else localDocs.push({...payload,id:crypto.randomUUID(),createdAt:new Date(),updatedAt:new Date()});
+    rebuildEvents(); return;
+  }
+  if (id) await updateDoc(doc(db,'events',id),payload);
+  else await addDoc(eventsCol,{...payload,createdAt:serverTimestamp()});
+}
+async function removeEvent(id) {
+  const original = rawDocs.find(d => d.id === id);
+  if (original?.icloud) { await deleteCloudEvent(original); cloudDocs=cloudDocs.filter(d => d.id !== id); rebuildEvents(); await refreshCloud(); }
+  else if (demo) { localDocs=localDocs.filter(d => d.id !== id); rebuildEvents(); }
+  else await deleteDoc(doc(db,'events',id));
 }
 
 // ---------- UI hooks ----------
@@ -594,12 +648,6 @@ function initUIHooks() {
     if (e.target === backdrop) closeModal();
   });
 
-  saveBtnTop?.addEventListener("click", async () => {
-    if (!eventForm) return;
-    if (!eventForm.reportValidity()) return;
-    await handleSave();
-  });
-
   evtAllDay?.addEventListener("change", () => {
     preserveDatesOnAllDayToggle(!!evtAllDay.checked);
   });
@@ -639,7 +687,7 @@ function initUIHooks() {
   deleteBtn?.addEventListener("click", async () => {
     if (!editingDocId) return;
     if (!confirm("Delete this event?")) return;
-    await deleteDoc(doc(db, "events", editingDocId));
+    try { await removeEvent(editingDocId); } catch (e) { showNotice(e.message); return; }
     closeModal();
   });
 
@@ -697,7 +745,7 @@ function initCalendarUI() {
   if (!calendarEl) return;
 
   calendar = new FullCalendar.Calendar(calendarEl, {
-    initialView: "dayGridMonth",
+    initialView: window.innerWidth < 650 ? "listCustom" : "dayGridMonth",
     headerToolbar: {
       left: "",
       center: "title",
@@ -829,7 +877,7 @@ function initCalendarUI() {
     longPressDelay: 350,
     selectLongPressDelay: 350,
 
-    datesSet: () => hookMonthTitleClick(),
+    datesSet: info => { hookMonthTitleClick(); if (!demo) setCloudRange(info.start.toISOString(),info.end.toISOString()); },
 
     dateClick: (info) => {
       if (calendar?.view?.type === "dayGridMonth") {
@@ -914,7 +962,7 @@ function initCalendarUI() {
       if (arg.view.type === "dayGridMonth" && !arg.event.allDay) {
         arg.el.style.backgroundColor = arg.event.backgroundColor || "rgba(122,162,255,0.35)";
         arg.el.style.borderColor = arg.event.borderColor || "rgba(122,162,255,0.85)";
-        arg.el.style.color = "#eef1f7";
+        arg.el.style.color = "#30372d";
       }
     },
 
@@ -925,7 +973,7 @@ function initCalendarUI() {
         alert("Repeating events: edit the series instead (no single-instance moves yet).");
         return;
       }
-      await persistMovedEvent(info.event);
+      try { await persistMovedEvent(info.event); } catch (e) { info.revert(); showNotice(e.message); }
     },
 
     eventResize: async (info) => {
@@ -935,7 +983,7 @@ function initCalendarUI() {
         alert("Repeating events: edit the series instead (no single-instance resizes yet).");
         return;
       }
-      await persistMovedEvent(info.event);
+      try { await persistMovedEvent(info.event); } catch (e) { info.revert(); showNotice(e.message); }
     }
   });
 
@@ -1080,7 +1128,7 @@ function renderUpdates() {
   });
 
   function maybeShowUpdatesModal(_html, recentItems) {
-    if ((localStorage.getItem(LS_UPDATES_HIDE) || "0") === "1") return;
+    if ((localStorage.getItem(LS_UPDATES_HIDE) || "1") === "1") return;
     if (updatesModalShownThisLoad) return;
 
     const lastSeenMs = Number(localStorage.getItem(LS_UPDATES_LASTSEEN) || "0");
@@ -1372,6 +1420,12 @@ function openEventModal(payload) {
 
   editingDocId = isEdit ? payload.id : null;
   editingOccurrenceStart = payload.occurrenceStart || null;
+  eventRequestId = crypto.randomUUID();
+  const original = rawDocs.find(d => d.id === editingDocId);
+  const destination = document.getElementById('evtCalendar');
+  destination.value = original?.icloud ? original.calendarId : 'household';
+  destination.disabled = isEdit;
+  updateDestinationUI();
 
   if (modalTitle) modalTitle.textContent = isEdit ? "Edit event" : "New event";
   deleteBtn?.classList.toggle("hidden", !isEdit);
@@ -1397,6 +1451,7 @@ function openEventModal(payload) {
 
   renderChecklistUI(checklistEl, payload.checklist || []);
   if (evtNotes) evtNotes.value = payload.notes || "";
+  updateDestinationUI();
 
   backdrop?.classList.remove("hidden");
 
@@ -1502,11 +1557,27 @@ detailsEditBtn?.addEventListener("click", () => {
 detailsDeleteBtn?.addEventListener("click", async () => {
   if (!detailsDocId) return;
   if (!confirm("Delete this event?")) return;
-  await deleteDoc(doc(db, "events", detailsDocId));
+  try { await removeEvent(detailsDocId); } catch (e) { showNotice(e.message); return; }
   closeDetailsModal();
 });
 
+function updateDestinationUI() {
+  const cloud = document.getElementById('evtCalendar').value !== 'household';
+  document.getElementById('evtCalendarHint').textContent = cloud ? 'Saves directly to iCloud. Create repeats and invitations in Apple Calendar.' : 'Shared with everyone in Hubert’s House.';
+  evtRepeat.closest('.row').classList.toggle('hidden',cloud);
+  checklistEl.closest('.field').classList.toggle('hidden',cloud);
+  evtOwner.closest('.row').classList.toggle('hidden',cloud);
+  ownerCustomWrap.classList.toggle('hidden',cloud || evtOwner.value !== 'custom');
+}
+document.getElementById('evtCalendar').addEventListener('change',updateDestinationUI);
 async function handleSave() {
+  if (savingEvent) return;
+  savingEvent = true; saveBtn.disabled = true; saveBtnTop.disabled = true;
+  try { await saveEventValues(); }
+  catch (e) { showNotice(e.message || 'Could not save this event. Try again.'); }
+  finally { savingEvent = false; saveBtn.disabled = false; saveBtnTop.disabled = false; }
+}
+async function saveEventValues() {
   const title = (evtTitle?.value || "").trim();
   if (!title) return;
 
@@ -1522,6 +1593,7 @@ async function handleSave() {
   const repeatUntil = repeat !== "none" ? (evtRepeatUntil?.value || "") : "";
 
   const start = fromInputValue(evtStart?.value, allDay);
+  if (!start || isNaN(start)) throw new Error("Choose a valid start date.");
   let end = evtEnd?.value ? fromInputValue(evtEnd.value, allDay) : null;
 
   if (allDay && end && end.getTime() === start.getTime()) end = null;
@@ -1548,13 +1620,15 @@ async function handleSave() {
     updatedAt: serverTimestamp()
   };
 
-  if (editingDocId) {
-    await updateDoc(doc(db, "events", editingDocId), payload);
+  const destination = document.getElementById('evtCalendar').value;
+  if (destination !== 'household') {
+    const original = rawDocs.find(d => d.id === editingDocId);
+    await saveCloudEvent({title,notes,allDay,start:start.toISOString(),end:(end || addHours(start,1)).toISOString(),
+      startLocal:evtStart.value,endLocal:evtEnd.value || toInputValue(addHours(start,1),false),startDate:evtStart.value.slice(0,10),endDate:evtEnd.value.slice(0,10) || evtStart.value.slice(0,10),repeat:'none'},original,destination,eventRequestId);
+    closeModal(); showNotice('Saved to iCloud.'); await refreshCloud();
   } else {
-    await addDoc(eventsCol, { ...payload, createdAt: serverTimestamp() });
+    await saveLocalEvent(editingDocId,payload); closeModal(); showNotice(demo ? 'Saved in this sample preview.' : 'Event saved for the household.');
   }
-
-  closeModal();
 }
 
 async function persistMovedEvent(fcEvent) {
@@ -1567,7 +1641,16 @@ async function persistMovedEvent(fcEvent) {
     allDay: fcEvent.allDay,
     updatedAt: serverTimestamp()
   };
-  await updateDoc(doc(db, "events", sourceId), patch);
+  const original = rawDocs.find(d => d.id === sourceId);
+  if (original?.icloud) {
+    const lastDay = fcEvent.end ? new Date(fcEvent.end) : new Date(fcEvent.start);
+    if (fcEvent.allDay && fcEvent.end) lastDay.setDate(lastDay.getDate()-1);
+    await saveCloudEvent({title:original.title,notes:original.notes || '',allDay:fcEvent.allDay,start:patch.start,end:patch.end || addHours(fcEvent.start,1).toISOString(),startLocal:toInputValue(fcEvent.start,false),endLocal:toInputValue(fcEvent.end || addHours(fcEvent.start,1),false),startDate:dateKey(fcEvent.start),endDate:dateKey(lastDay),repeat:'none'},original,original.calendarId,crypto.randomUUID());
+    await refreshCloud();
+  } else {
+    if (fcEvent.allDay && fcEvent.end) { const inclusive=new Date(fcEvent.end); inclusive.setDate(inclusive.getDate()-1); patch.end=inclusive.toISOString(); }
+    await saveLocalEvent(sourceId,patch);
+  }
 }
 
 // ---------- Task modal ----------
@@ -1599,7 +1682,7 @@ function openTaskModal(docData, occurrenceStart) {
 async function taskAutoSaveHandler() {
   if (!taskDocId) return;
   const checklist = readChecklistUI(taskChecklist);
-  await updateDoc(doc(db, "events", taskDocId), { checklist, updatedAt: serverTimestamp() });
+  try { await saveLocalEvent(taskDocId, { checklist, updatedAt: serverTimestamp() }); } catch (e) { showNotice(e.message); }
   taskChecklist?.addEventListener("change", taskAutoSaveHandler, { once: true });
   taskChecklist?.addEventListener("blur", taskAutoSaveHandler, { once: true, capture: true });
 }
@@ -1784,7 +1867,7 @@ function makeFcEvent({ id, title, start, end, allDay, style, extra }) {
     allDay: !!allDay,
     backgroundColor: style.bg,
     borderColor: style.border,
-    textColor: "#e9ecf1",
+    textColor: "#30372d",
     extendedProps: extra
   };
 }
@@ -1887,9 +1970,6 @@ function escapeHtml(s) {
 }
 
 // ---------- Start ----------
-initApp().catch((err) => {
-  console.error("INIT FAIL:", err);
-  const msg =
-    (err && (err.code || err.name)) ? `${err.code || err.name}: ${err.message || err}` : String(err);
-  alert("Firebase init failed:\n" + msg);
+initApp().catch(() => {
+  document.getElementById('gateError').textContent = 'The app could not start. Check your connection and reload.';
 });

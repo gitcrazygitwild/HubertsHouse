@@ -1,0 +1,76 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { JSDOM, VirtualConsole } from 'jsdom';
+const read = path => readFile(new URL(`../${path}`,import.meta.url),'utf8');
+const clean = source => source.replace(/^import\b[\s\S]*?;\s*$/gm,'').replace(/\bexport\s+(?=(?:async\s+)?(?:function|const|class|let))/g,'');
+const settle = () => new Promise(r => setTimeout(r,30));
+async function fixture(options = {}) {
+  const errors=[]; const console=new VirtualConsole(); console.on('jsdomError',e => errors.push(e));
+  const dom=new JSDOM(await read('index.html'),{url:options.live ? 'https://house.example/' : 'https://house.example/?demo=1',runScripts:'outside-only',pretendToBeVisual:true,virtualConsole:console});
+  const w=dom.window;
+  w.structuredClone=structuredClone; w.confirm=() => true; w.alert=message => {throw new Error(message);};
+  w.HTMLDialogElement.prototype.showModal=function(){this.open=true;}; w.HTMLDialogElement.prototype.close=function(){this.open=false;};
+  Object.assign(w,{config:{firebase:{},calendarServiceEnabled:false},initializeApp:() => ({}),getFirestore:() => ({}),collection:() => ({}),getAuth:() => ({}),onAuthStateChanged:(_auth,callback) => callback({uid:'nonmember',email:'outsider@example.com'}),getDoc:async () => ({exists:() => false}),doc:(...args) => args,signOut:async () => {},serverTimestamp:() => new Date(),getFunctions:() => ({}),httpsCallable:() => {throw new Error('Demo must not call the calendar service');}});
+  // Real FullCalendar is exercised in a DOM. This is not a visual browser test.
+  w.eval(await read('node_modules/fullcalendar/index.global.js'));
+  async function module(file,names,extra='') { w.eval(`(() => { ${extra}\n${clean(await read(file))}\nObject.assign(window,{${names.join(',')}}); })();`); }
+  await module('household-model.js',['dateKey','dueLabel','completionPatch','validateItem','escapeHTML','OWNERS','CATEGORIES']);
+  await module('demo.js',['demoStore','demoEvents']);
+  await module('household.js',['initHousehold','updateHouseholdEvents','showNotice'],'const esc=escapeHTML;');
+  await module('cloud-calendar.js',['initCloudCalendar','setCloudRange','refreshCloud','saveCloudEvent','deleteCloudEvent'],'const esc=escapeHTML;');
+  w.eval(clean(await read('app.js')) + ';window.__testApp={getDocs:()=>rawDocs,persistMovedEvent};'); await settle();
+  return {dom,w,doc:w.document,errors};
+}
+test('sample preview keeps data isolated and supports navigation, grocery editing and recurring chore undo', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  assert.ok(doc.getElementById('gate').classList.contains('hidden'));
+  assert.ok(!doc.getElementById('demoBanner').classList.contains('hidden'));
+  assert.equal(doc.getElementById('statGroceries').textContent,'5');
+  doc.querySelector('[data-view="groceries"]').click();
+  assert.ok(!doc.getElementById('view-groceries').classList.contains('hidden'));
+  const input=doc.getElementById('quickGrocery'); input.value='<img src=x onerror=alert(1)>';
+  doc.getElementById('quickGroceryForm').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true})); await settle();
+  assert.equal(doc.querySelectorAll('#groceryGroups .item-row').length,6); assert.equal(doc.querySelector('#groceryGroups img'),null);
+  const item=[...doc.querySelectorAll('#groceryGroups .item-row')].find(r => r.textContent.includes('<img'));
+  item.querySelector('[data-edit-item]').click(); assert.equal(doc.getElementById('itemDialog').open,true);
+  doc.getElementById('itemTitle').value='Apples'; doc.getElementById('itemCategory').value='Produce'; doc.getElementById('itemQuantity').value='6';
+  doc.getElementById('itemForm').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true})); await settle();
+  assert.equal(doc.getElementById('itemDialog').open,false); assert.ok(doc.getElementById('groceryGroups').textContent.includes('Apples'));
+  const apple=[...doc.querySelectorAll('#groceryGroups .item-row')].find(r => r.textContent.includes('Apples')); apple.querySelector('input').click(); await settle();
+  assert.match(doc.getElementById('groceryCount').textContent,/1 in the basket/);
+  doc.getElementById('clearBought').click(); await settle(); assert.equal(doc.querySelectorAll('#groceryGroups .item-row').length,5);
+  doc.querySelector('[data-view="tasks"]').click();
+  const chore=doc.querySelector('#taskGroups [data-complete="d1"]'); chore.click(); await settle();
+  assert.equal(doc.querySelector('#taskGroups [data-complete="d1"]').checked,false);
+  assert.match(doc.getElementById('notice').textContent,/Next up/); doc.querySelector('#notice button').click(); await settle();
+  assert.equal(doc.querySelector('#taskGroups [data-complete="d1"]').closest('.item-row').querySelector('.item-meta span').textContent,'Today');
+  doc.querySelector('[data-kind="task"]').click();
+  doc.querySelector('#view-tasks [data-add-kind]').click();
+  doc.getElementById('itemTitle').value='Book a cabin'; doc.getElementById('itemList').value='Weekend away';
+  doc.getElementById('itemForm').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true})); await settle();
+  assert.match(doc.getElementById('taskGroups').textContent,/Weekend away/);
+  assert.deepEqual(errors,[]);
+});
+test('the top event save creates only one event, and household all-day drag boundaries stay inclusive', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  doc.getElementById('quickEvent').click();
+  assert.ok(!doc.getElementById('modalBackdrop').classList.contains('hidden'));
+  doc.getElementById('evtTitle').value='One event, one click';
+  doc.getElementById('saveBtnTop').click(); await settle();
+  assert.ok(doc.getElementById('modalBackdrop').classList.contains('hidden'));
+  assert.equal(w.__testApp.getDocs().filter(d => d.title === 'One event, one click').length,1);
+  const id=w.__testApp.getDocs().find(d => d.title === 'One event, one click').id;
+  await w.__testApp.persistMovedEvent({id,extendedProps:{},allDay:true,start:new w.Date('2026-11-15T00:00:00'),end:new w.Date('2026-11-18T00:00:00')});
+  assert.equal(new Date(w.__testApp.getDocs().find(d => d.id === id).end).getDate(),17);
+  assert.deepEqual(errors,[]);
+});
+test('a signed-in Firebase account without household membership cannot open the dashboard', async t => {
+  const {dom,doc,errors,w}=await fixture({live:true}); t.after(() => dom.window.close());
+  assert.ok(!doc.getElementById('gate').classList.contains('hidden'));
+  assert.match(doc.getElementById('gateError').textContent,/not been added to the household/);
+  assert.equal(w.__testApp.getDocs().length,0);
+  const ids=[...doc.querySelectorAll('[id]')].map(x => x.id);
+  assert.equal(ids.length,new Set(ids).size,'HTML element IDs must be unique');
+  assert.deepEqual(errors,[]);
+});
