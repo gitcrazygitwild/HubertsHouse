@@ -1,6 +1,6 @@
 # Activate household sign-in and iCloud
 
-The repository is configured for the existing Firebase project **huberts-house**. The new frontend needs the steps below before replacing the live GitHub Pages version. Keep the current live frontend in place until sign-in, membership, and rules are ready. No data migration is required: household events keep using the original `events` collection.
+The repository is configured for the existing Firebase project **huberts-house**. The live app is **https://huberts-house.web.app**. Authentication, membership rules, and the private calendar functions are deployed as of November 15, 2026. Existing users can start at step 4 to connect their Apple account. Steps 1–3 document provisioning a new deployment. No data migration is required: household events keep using the original `events` collection.
 
 ## 1. Enable real household accounts
 
@@ -25,7 +25,7 @@ firebase login
 firebase deploy --only firestore:rules --project huberts-house
 ```
 
-Create a 32-byte encryption key directly in Secret Manager without placing it in Git or a file:
+For a **new deployment only**, create a 32-byte encryption key directly in Secret Manager without placing it in Git or a file. The live project already has `CALENDAR_ENCRYPTION_KEY` version 1; do not run the key-generation command again there:
 
 ```sh
 openssl rand -base64 32 | firebase functions:secrets:set CALENDAR_ENCRYPTION_KEY --data-file=- --project huberts-house
@@ -61,7 +61,7 @@ The build copies only frontend files into `dist/`. It excludes server code, test
 3. At [account.apple.com](https://account.apple.com), create an app-specific password named “Hubert’s House” under Sign-In and Security. Apple requires two-factor authentication for app-specific passwords. Use an app-specific password, not the Apple Account password.
 4. Enter the Apple Account email and app-specific password in the app. The password is cleared from the form after submission and is never retained in browser storage.
 5. Select the calendars to show and save the selection. No calendars are selected automatically on a first connection.
-6. When adding an event, choose a writable iCloud calendar in the **Calendar** field. “Hubert’s House” continues to mean an event stored only in the household database.
+6. Optionally choose the iCloud calendar under **Default for new events** (saved for this account on this device). When adding an event, choose a writable iCloud calendar in the **Calendar** field. “Hubert’s House” continues to mean an event stored only in the household database.
 
 Connect each household member’s Apple account under their own sign-in. An iCloud calendar already shared between members can be selected by either member. A tablet left signed in can access that member’s selected calendars; choose a shared household calendar if that is the intended display audience.
 
@@ -80,4 +80,4 @@ Use a disposable test calendar and event for the initial checks:
 - Open phone and display sessions, add a grocery item, complete a recurring chore, and confirm the other session updates. Verify that completing the same item from stale sessions reports a conflict.
 - Check signed-out reads are denied, a non-member Firebase account is denied, and members cannot directly read `privateCalendarConnections`.
 
-No live Apple credentials or Firebase deployment credentials were available during implementation, so these live checks remain required. Automated tests use simulated provider responses and never contact or modify real calendars.
+The deployed functions are ACTIVE with zero minimum instances and a maximum of one instance per function. Build-image cleanup is set to one day. The private Apple connection and the live Apple round trip still require the account owner to connect in the app. Automated tests use simulated provider responses and never contact or modify real calendars. The deployment environment allows Google APIs but blocks direct calls to the public `cloudfunctions.net` URLs, so the live callable response must also be confirmed from the app. These usage controls are not a spending cap.

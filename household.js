@@ -3,7 +3,7 @@ import { eventsOnDay, localDate, eventEnd } from './calendar-model.js';
 import { renderHTML } from './dom.js';
 const $ = id => document.getElementById(id);
 let store, items = [], events = [], currentKind = 'chore', taskFocus = 'all', openEvent, newEvent, viewChanged, onData;
-let noticeTimer, wakeLock, displayMode = false, activeView = 'today';
+let noticeTimer, wakeLock, displayMode = false, activeView = 'today', monitorFullscreen = false;
 const titles = { today: 'Today at home', calendar: 'Life, all together.', tasks: 'Chores & checklists', groceries: 'The grocery list', settings: 'Your house, your way' };
 export function showNotice(message, action) {
   const el = $('notice'); el.textContent = message; el.classList.remove('hidden');
@@ -21,10 +21,12 @@ export function showView(view) {
 }
 async function setDisplayMode(on) {
   displayMode = on; document.body.classList.toggle('display-mode', on);
+  document.body.classList.toggle('monitor-mode', on);
+  if (on) showView('today');
   localStorage.setItem('hh_display', on ? '1' : '0');
   $('displayBtn').setAttribute('aria-pressed', String(on));
-  $('displayBtn').textContent = on ? 'Exit display' : 'Display mode';
-  $('settingsDisplayBtn').textContent = on ? 'Turn off display mode' : 'Turn on display mode';
+  $('displayBtn').textContent = on ? 'Exit monitor' : '⛶ Monitor mode';
+  $('settingsDisplayBtn').textContent = on ? 'Exit monitor mode' : 'Open monitor mode';
   if (wakeLock) { await wakeLock.release().catch(() => {}); wakeLock = null; }
   if (on && document.visibilityState === 'visible') {
     try {
@@ -35,6 +37,21 @@ async function setDisplayMode(on) {
     } catch { $('wakeStatus').textContent = 'Screen wake lock is unavailable. Adjust your device’s auto-lock setting for a shared display.'; }
   } else if (!on) $('wakeStatus').textContent = '';
   requestAnimationFrame(() => viewChanged?.(activeView));
+}
+async function toggleMonitor() {
+  if (displayMode) {
+    monitorFullscreen = false;
+    setDisplayMode(false);
+    if (document.fullscreenElement) await document.exitFullscreen().catch(() => {});
+    return;
+  }
+  // Request fullscreen directly from the click so browser user activation is retained.
+  const request = document.documentElement.requestFullscreen?.();
+  setDisplayMode(true);
+  try {
+    if (!request) throw new Error('unsupported');
+    await request; monitorFullscreen = !!document.fullscreenElement;
+  } catch { showNotice('Monitor layout is on. This browser does not support full screen; use its full-screen controls if available.'); }
 }
 function tick() {
   const now = new Date();
@@ -61,8 +78,12 @@ export function initHousehold(options) {
   $('resetTaskFilters').addEventListener('click', () => { taskFocus = 'all'; $('taskSearch').value = ''; render(); });
   $('houseOwner').addEventListener('change', render); $('showCompleted').addEventListener('change', render);
   $('quickEvent').addEventListener('click', () => newEvent());
-  $('displayBtn').addEventListener('click', () => setDisplayMode(!displayMode));
-  $('settingsDisplayBtn').addEventListener('click', () => setDisplayMode(!displayMode));
+  $('displayBtn').addEventListener('click', toggleMonitor);
+  $('settingsDisplayBtn').addEventListener('click', toggleMonitor);
+  document.addEventListener('fullscreenchange', () => {
+    if (monitorFullscreen && !document.fullscreenElement) { monitorFullscreen = false; setDisplayMode(false); }
+  });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape' && displayMode && !document.fullscreenElement) setDisplayMode(false); });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { tick(); if (displayMode) setDisplayMode(true); } });
   $('closeItemDialog').addEventListener('click', () => $('itemDialog').close());
   $('itemDialog').addEventListener('click', e => { if (e.target === $('itemDialog')) { const r = e.target.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) e.target.close(); } });

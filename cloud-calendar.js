@@ -4,7 +4,9 @@ import { escapeHTML as esc } from './household-model.js';
 import { showNotice } from './household.js';
 const $ = id => document.getElementById(id);
 let functions, connection = {connected:false}, onEvents, onCalendars, demo = false, checkedAt, lastError = '', range;
-let inFlight = null, generation = 0;
+let inFlight = null, generation = 0, lastAttempt = 0, loadedRangeKey = '';
+const POLL_MS = 5 * 60000;
+const rangeKey = () => range ? `${range.start}/${range.end}` : '';
 export const cloudState = () => connection;
 async function call(name,data = {}) { const result = await httpsCallable(functions,name,{timeout:120000})(data); return result.data; }
 function message(error) { return error.code === 'functions/not-found' ? 'The iCloud service has not been deployed yet.' : error.message || 'iCloud is unavailable. Try again shortly.'; }
@@ -23,14 +25,23 @@ export async function initCloudCalendar(app, options) {
   if (demo || !config.calendarServiceEnabled) return;
   try { connection = await call('calendarStatus'); render(); onCalendars(connection); await refreshCloud(); }
   catch (e) { lastError = message(e); render(); }
-  setInterval(() => { if (document.visibilityState === 'visible') refreshCloud(); },60000);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshCloud(); });
+  setInterval(() => { if (document.visibilityState === 'visible') refreshCloud({force:false}); },POLL_MS);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshCloud({force:false}); });
 }
-export function setCloudRange(start,end) { range = {start,end}; refreshCloud(); }
-export async function refreshCloud() {
+export function setCloudRange(start,end) {
+  if (range?.start === start && range?.end === end) return;
+  range = {start,end}; refreshCloud({force:false});
+}
+export async function refreshCloud({force = true} = {}) {
   if (!connection.connected || demo || !config.calendarServiceEnabled) return;
+  if (!force && inFlight) { await inFlight; return refreshCloud({force:false}); }
+  const nowMs = Date.now();
+  const withinBaseline = !range || (+new Date(range.start) >= nowMs - 7 * 86400000 && +new Date(range.end) <= nowMs + 50 * 86400000);
+  if (!force && nowMs - lastAttempt < POLL_MS && (withinBaseline || rangeKey() === loadedRangeKey)) return;
   const version = ++generation;
   if (inFlight) { await inFlight; if (!connection.connected || version !== generation) return; }
+  lastAttempt = Date.now();
+  const requestedRange = rangeKey();
   inFlight = (async () => {
     try {
       const now = new Date(), from = new Date(now.getTime() - 7 * 86400000), to = new Date(now.getTime() + 50 * 86400000);
@@ -45,9 +56,9 @@ export async function refreshCloud() {
       const results = await Promise.all(ranges.map(r => call('calendarEvents',r)));
       if (version !== generation) return;
       const records = new Map(); for (const result of results) for (const event of result.events) records.set(event.id,event);
-      onEvents([...records.values()]); checkedAt = results[0].checkedAt; lastError = ''; status();
+      loadedRangeKey = requestedRange; onEvents([...records.values()]); checkedAt = results[0].checkedAt; lastError = ''; status();
       if ($('cloudError')) $('cloudError').textContent = '';
-      if ($('cloudChecked')) $('cloudChecked').textContent = `Last checked ${new Date(checkedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}. Checks every minute while this page is open.`;
+      if ($('cloudChecked')) $('cloudChecked').textContent = `Last checked ${new Date(checkedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}. Checks every five minutes while this page is open.`;
     } catch (e) { if (version !== generation) return; lastError = message(e); status(); if ($('cloudError')) $('cloudError').textContent = lastError; }
   })();
   try { await inFlight; } finally { inFlight = null; }
@@ -55,7 +66,7 @@ export async function refreshCloud() {
 function render() {
   status(); const panel = $('icloudPanel');
   if (demo || !config.calendarServiceEnabled) {
-    panel.innerHTML = `<div class="connection-note"><strong>${demo ? 'Explore the house first.' : 'One-time setup needed'}</strong><p>${demo ? 'This preview uses sample events. Your Apple Account is never connected in preview mode.' : 'Your private calendar service needs to be activated before connecting iCloud. After setup, you can choose calendars and use an Apple app-specific password here.'}</p></div><p class="tiny">iCloud updates appear here on refresh and every minute while open. Regular events can be created, edited, and deleted. Recurring events and invitations appear here; manage those in Apple Calendar.</p>`;
+    panel.innerHTML = `<div class="connection-note"><strong>${demo ? 'Explore the house first.' : 'One-time setup needed'}</strong><p>${demo ? 'This preview uses sample events. Your Apple Account is never connected in preview mode.' : 'Your private calendar service needs to be activated before connecting iCloud. After setup, you can choose calendars and use an Apple app-specific password here.'}</p></div><p class="tiny">iCloud updates appear here on refresh and every five minutes while open. Regular events can be created, edited, and deleted. Recurring events and invitations appear here; manage those in Apple Calendar.</p>`;
     return;
   }
   if (!connection.connected) {
@@ -69,7 +80,7 @@ function render() {
     });
     return;
   }
-  panel.innerHTML = `<p>Choose up to six calendars to show. Only the calendars you select are loaded. Anyone using this signed-in device can see and edit your selected writable calendars.</p><form id="calendarChoices">${connection.calendars.map(c => `<label class="calendar-choice"><input type="checkbox" name="calendar" value="${esc(c.id)}" ${connection.selected.includes(c.id) ? 'checked' : ''} /><span>${esc(c.name)}${!c.writable ? ' · read-only' : ''}</span></label>`).join('')}<div class="connection-actions"><button class="btn btn-primary" type="submit">Save calendar selection</button><button type="button" class="btn" id="refreshCloud">Refresh now</button><button type="button" class="btn" id="disconnectCloud">Disconnect</button></div></form><p id="cloudChecked" class="tiny">${checkedAt ? `Last checked ${esc(new Date(checkedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}))}. ` : ''}Checks every minute while this page is open.</p><p class="tiny">Recurring events and invitations are displayed here. Manage them in Apple Calendar. Event checklists stay in Hubert’s House calendars.</p><p id="cloudError" class="form-error" role="alert">${esc(lastError)}</p>`;
+  panel.innerHTML = `<p>Choose up to six calendars to show. Only the calendars you select are loaded. Anyone using this signed-in device can see and edit your selected writable calendars.</p><form id="calendarChoices">${connection.calendars.map(c => `<label class="calendar-choice"><input type="checkbox" name="calendar" value="${esc(c.id)}" ${connection.selected.includes(c.id) ? 'checked' : ''} /><span>${esc(c.name)}${!c.writable ? ' · read-only' : ''}</span></label>`).join('')}<div class="connection-actions"><button class="btn btn-primary" type="submit">Save calendar selection</button><button type="button" class="btn" id="refreshCloud">Refresh now</button><button type="button" class="btn" id="disconnectCloud">Disconnect</button></div></form><p id="cloudChecked" class="tiny">${checkedAt ? `Last checked ${esc(new Date(checkedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}))}. ` : ''}Checks every five minutes while this page is open.</p><p class="tiny">Recurring events and invitations are displayed here. Manage them in Apple Calendar. Event checklists stay in Hubert’s House calendars.</p><p id="cloudError" class="form-error" role="alert">${esc(lastError)}</p>`;
   $('calendarChoices').addEventListener('submit',async e => {
     e.preventDefault(); const selected = [...e.currentTarget.querySelectorAll('input:checked')].map(x => x.value);
     if (selected.length > 6) { $('cloudError').textContent = 'Choose up to six calendars.'; return; }

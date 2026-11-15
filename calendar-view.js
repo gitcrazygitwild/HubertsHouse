@@ -92,18 +92,7 @@ export function initCalendarExperience({ calendar, getEvents, getFilteredEvents,
     const day = event.target.closest('[data-week-day]');
     if (day) { showView('calendar'); selectDay(day.dataset.weekDay, true); window.scrollTo({ top: 0, behavior: 'smooth' }); }
   });
-  $('fullscreenBtn').hidden = !document.fullscreenEnabled;
-  $('fullscreenBtn').addEventListener('click', async () => {
-    try {
-      if (document.fullscreenElement) await document.exitFullscreen();
-      else await document.documentElement.requestFullscreen();
-    } catch { showNotice('Full screen is unavailable in this browser. Try Display mode.'); }
-  });
-  document.addEventListener('fullscreenchange', () => {
-    $('fullscreenBtn').setAttribute('aria-label', document.fullscreenElement ? 'Exit full screen' : 'Enter full screen');
-    $('fullscreenBtn').title = document.fullscreenElement ? 'Exit full screen' : 'Full screen';
-    calendar.updateSize();
-  });
+  document.addEventListener('fullscreenchange', () => calendar.updateSize());
   setInterval(() => { if (document.visibilityState === 'visible') render(); }, 30000);
   render();
   return { render, selectDay };

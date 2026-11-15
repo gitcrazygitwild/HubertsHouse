@@ -1,3 +1,5 @@
+import { overlappingEvents, preferredCalendar } from './event-planning.js';
+import { initCatCrew } from './cat-crew.js';
 // app.js — Hubert’s House
 // Household dashboard, authenticated Firebase sync and iCloud calendar integration.
 // Upcoming + Outstanding checklist panels + checklist-focused modal
@@ -453,6 +455,7 @@ function stopBlinking() {
 }
 
 // ---------- Init ----------
+initCatCrew();
 initDashboard({ onAppearanceChange: () => calendar?.updateSize() });
 ensureCatLinkMarkup();
 setCatMode((localStorage.getItem(LS_CATMODE) || "0") === "1");
@@ -503,6 +506,9 @@ async function initApp() {
           select.replaceChildren(new Option('Hubert’s House','household'));
           for (const c of connection.calendars || []) if (connection.selected.includes(c.id) && c.writable) select.add(new Option(`${c.name} · iCloud`,c.id));
           if ([...select.options].some(o => o.value === current)) select.value = current;
+          const preference = document.getElementById('defaultCalendar');
+          preference.replaceChildren(...[...select.options].map(option => option.cloneNode(true)));
+          preference.value = defaultCalendar();
         }
       });
     } catch { document.getElementById('gateError').textContent = 'Could not verify household access. Check your connection and setup.'; gate.classList.remove('hidden'); }
@@ -562,6 +568,7 @@ function rebuildEvents() {
     extendedProps:{sourceId:e.id,owner:'both',type:'general',notes:e.notes,checklist:[],icloud:true,isRepeatOccurrence:!!e.recurring}
   }))];
   renderCalendarFromCache(); renderPanels(); updateHouseholdEvents(expandedEvents);
+  if (!backdrop?.classList.contains("hidden")) updateEventOverlap();
 }
 async function saveLocalEvent(id,payload) {
   if (demo) {
@@ -1332,7 +1339,7 @@ function openEventModal(payload) {
   eventRequestId = crypto.randomUUID();
   const original = rawDocs.find(d => d.id === editingDocId);
   const destination = document.getElementById('evtCalendar');
-  destination.value = original?.icloud ? original.calendarId : 'household';
+  destination.value = isEdit ? (original?.icloud ? original.calendarId : 'household') : defaultCalendar();
   destination.disabled = isEdit;
   updateDestinationUI();
 
@@ -1363,6 +1370,7 @@ function openEventModal(payload) {
   updateDestinationUI();
 
   backdrop?.classList.remove("hidden");
+  updateEventOverlap();
 
   scrollToTopSafely(editScroll);
   setTimeout(() => evtTitle?.focus(), 0);
@@ -1469,6 +1477,30 @@ detailsDeleteBtn?.addEventListener("click", async () => {
   try { await removeEvent(detailsDocId); } catch (e) { showNotice(e.message); return; }
   closeDetailsModal();
 });
+
+function calendarPreferenceKey() { return `hh_default_calendar_${auth?.currentUser?.uid || (demo ? 'preview' : 'signed-out')}`; }
+function defaultCalendar() {
+  let saved;
+  try { saved = localStorage.getItem(calendarPreferenceKey()); } catch {}
+  const calendars = [...document.getElementById('evtCalendar').options].map(option => ({id:option.value,writable:true,selected:true}));
+  return preferredCalendar(saved, calendars);
+}
+document.getElementById('defaultCalendar').addEventListener('change', event => {
+  try { localStorage.setItem(calendarPreferenceKey(), event.target.value); } catch {}
+  showNotice('Default calendar saved on this device.');
+});
+function updateEventOverlap() {
+  const box = document.getElementById('eventOverlap');
+  const cloud = document.getElementById('evtCalendar').value !== 'household';
+  const overlaps = overlappingEvents({ id:editingDocId, start:evtStart.value, end:evtEnd.value, allDay:evtAllDay.checked,
+    owner:cloud ? 'both' : evtOwner.value, ownerCustom:evtOwnerCustom.value }, expandedEvents);
+  box.replaceChildren(); box.classList.toggle('hidden', !overlaps.length);
+  if (!overlaps.length) return;
+  const label = document.createElement('strong'); label.textContent = 'A little heads-up: plans overlap'; box.append(label);
+  const names = overlaps.slice(0, 3).map(event => event.title || 'Untitled event').join(' · ');
+  box.append(document.createTextNode(`${names}${overlaps.length > 3 ? ` + ${overlaps.length - 3} more` : ''}. You can still save. Checks the loaded calendars and this occurrence.`));
+}
+for (const type of ['input', 'change']) document.getElementById('eventForm').addEventListener(type, updateEventOverlap);
 
 function updateDestinationUI() {
   const cloud = document.getElementById('evtCalendar').value !== 'household';

@@ -9,12 +9,13 @@
   <meta name="description" content="A little more together. The calendar, chores, checklists, and shopping for Hubert’s House." />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="manifest" href="./manifest.webmanifest" />
-  <link rel="stylesheet" href="./styles.css?v=20261115_v5" />
-  <link rel="stylesheet" href="./home.css?v=20261115_v5" />
-  <link rel="stylesheet" href="./calendar.css?v=20261115_v5" />
-  <link rel="stylesheet" href="./home-upgrades.css?v=20261115_v5" />
-  <link rel="stylesheet" href="./compact.css?v=20261115_v5" />
-  <link rel="stylesheet" href="./home-calendar.css?v=20261115_v5" />
+  <link rel="stylesheet" href="./styles.css?v=20261115_v6" />
+  <link rel="stylesheet" href="./home.css?v=20261115_v6" />
+  <link rel="stylesheet" href="./calendar.css?v=20261115_v6" />
+  <link rel="stylesheet" href="./home-upgrades.css?v=20261115_v6" />
+  <link rel="stylesheet" href="./compact.css?v=20261115_v6" />
+  <link rel="stylesheet" href="./home-calendar.css?v=20261115_v6" />
+  <link rel="stylesheet" href="./connected-home.css?v=20261115_v6" />
 </head>
 <body>
 
@@ -77,7 +78,7 @@
         <button type="button" data-view="settings"><span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3" fill="currentColor" stroke="none"/><circle cx="15" cy="17" r="3" fill="currentColor" stroke="none"/></svg></span><span>Settings</span></button>
       </nav>
       <div class="sidebar-bottom">
-        <div class="house-people"><span class="avatar hanry">h</span><span class="avatar karena">K</span><div>hanry & Karena<small>At home with Hubert</small></div></div>
+        <div class="house-people"><span class="avatar hanry">h</span><span class="avatar karena">K</span><div>hanry & Karena<small>Hubert, Mack & Mia</small></div></div>
       </div>
     </aside>
     <main class="house-main">
@@ -88,7 +89,7 @@
           <a id="weatherAppLink" class="app-link weather-app-link" href="https://gitcrazygitwild.github.io/Miateorology/" target="_blank" rel="noopener noreferrer" title="Open Miateorology"><span class="app-link-icon" data-weather-icon aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M18 9h12v22a9 9 0 1 1-12 0Z" fill="#f5f4eb" stroke="#8a9b8b" stroke-width="2.4"/></svg></span><span class="app-link-name">Miateorology<small>Today’s weather</small></span><span class="app-link-arrow" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M5 3h8v8M13 3 3 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>
           <a id="catLink" class="app-link flapurr-app-link" href="https://gitcrazygitwild.github.io/Flapurr/" target="_blank" rel="noopener noreferrer" title="Play Flapurr"><img class="app-link-icon" src="./flapurr-icon.svg" alt="" /><span class="app-link-name">Flapurr<small>A little play break</small></span><span class="app-link-arrow" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M5 3h8v8M13 3 3 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>
         </nav>
-        <div class="header-actions"><span id="houseClock" class="house-clock"></span><button id="fullscreenBtn" class="btn fullscreen-button" type="button" aria-label="Enter full screen" title="Full screen"><span aria-hidden="true">⛶</span></button><button id="displayBtn" class="btn" type="button" aria-pressed="false">Display mode</button><button id="quickEvent" class="btn btn-primary" type="button" title="Add event (N)" aria-keyshortcuts="N">＋ <span>Add event</span></button></div>
+        <div class="header-actions"><span id="houseClock" class="house-clock"></span><button id="displayBtn" class="btn" type="button" aria-pressed="false">⛶ Monitor mode</button><button id="quickEvent" class="btn btn-primary" type="button" title="Add event (N)" aria-keyshortcuts="N">＋ <span>Add event</span></button></div>
       </header>
       <section id="view-today" class="house-view">
         <section class="home-calendar" aria-labelledby="homeCalendarTitle">
@@ -130,6 +131,7 @@
         <div class="home-stats"><button type="button" data-go="calendar"><span class="stat-icon peach">▦</span><span><strong id="statEvents">—</strong><small>on today’s calendar</small></span><span>→</span></button><button type="button" data-go="tasks"><span class="stat-icon sage">✓</span><span><strong id="statTasks">—</strong><small>things to take care of</small></span><span>→</span></button><button type="button" data-go="groceries"><span class="stat-icon lavender">♧</span><span><strong id="statGroceries">—</strong><small>on the grocery list</small></span><span>→</span></button></div>
         <div class="home-columns"><section class="home-card"><div class="section-heading"><div><span class="eyebrow">MAKE ROOM FOR WHAT MATTERS</span><h2>On the horizon</h2></div><button type="button" class="text-link" data-go="calendar">Calendar →</button></div><div id="homeAgenda" class="agenda-list"><p class="empty-state">Loading your calendar…</p></div></section><section class="home-card"><div class="section-heading"><div><span class="eyebrow">SMALL THINGS, SHARED</span><h2>Around the house</h2></div><button type="button" class="round-add" data-add-kind="chore" aria-label="Add a chore">＋</button></div><div id="homeChores"></div><button type="button" class="text-link card-footer-link" data-go="tasks">All chores & checklists →</button></section></div>
         <aside id="tinyMission" class="tiny-mission" aria-labelledby="missionTitle"><img src="./flapurr-icon.svg" alt="" /><div><span id="missionTitle" class="eyebrow">HUBERT’S TINY MISSION</span><p id="missionText"></p><small id="missionStatus" role="status"></small></div><button id="missionDone" type="button" aria-pressed="false">Done</button></aside>
+        <section id="catCrew" class="cat-crew" aria-label="Hubert, Mack and Mia"></section>
         <div class="home-footnote"><span>Made for your household. A place for everything.</span><button type="button" id="homeSyncStatus" class="text-link" data-go="settings">iCloud · setup needed</button></div>
       </section>
       <section id="view-calendar" class="house-view hidden" aria-label="Calendar">
@@ -263,9 +265,9 @@
       </section>
       <section id="view-settings" class="house-view hidden" aria-label="Settings">
         <div class="view-intro"><div><h2>Make yourself at home.</h2><p>Your calendars, your display, your household.</p></div></div>
-        <section class="home-card settings-card"><div class="section-heading"><div><div class="eyebrow">CONNECTED CALENDARS</div><h2>Apple Calendar</h2></div><span id="icloudBadge" class="status-badge">Not connected</span></div><p>Keep your iCloud calendars and Hubert’s House in step. Add or edit an event here and it updates in Apple Calendar.</p><div id="icloudPanel"></div></section>
+        <section class="home-card settings-card"><div class="section-heading"><div><div class="eyebrow">CONNECTED CALENDARS</div><h2>Apple Calendar</h2></div><span id="icloudBadge" class="status-badge">Not connected</span></div><p>Keep your iCloud calendars and Hubert’s House in step. Add or edit an event here and it updates in Apple Calendar.</p><div id="icloudPanel"></div><label class="field default-calendar-field"><span>Default for new events</span><select id="defaultCalendar"><option value="household">Hubert’s House</option></select><small class="muted">Saved for your account on this device. You can change the destination on each new event.</small></label></section>
         <section class="home-card settings-card appearance-settings"><h2>A look that feels like home.</h2><p>Choose a palette and how much breathing room you like. Saved on this device.</p><div class="appearance-label">Color palette</div><div class="palette-options" role="group" aria-label="Color palette"><button type="button" data-palette-choice="sage"><span class="palette-swatch sage"></span>Sage</button><button type="button" data-palette-choice="coast"><span class="palette-swatch coast"></span>Coast</button><button type="button" data-palette-choice="clay"><span class="palette-swatch clay"></span>Clay</button></div><div class="appearance-label">Spacing</div><div class="density-options" role="group" aria-label="Page spacing"><button type="button" data-density-choice="compact">Compact</button><button type="button" data-density-choice="comfortable">Comfortable</button></div><label class="inline-field shortcut-setting"><input id="keyboardShortcuts" type="checkbox" checked /> Enable keyboard shortcuts</label><p class="keyboard-note"><kbd>N</kbd> new event · <kbd>/</kbd> search the calendar. Shortcuts pause while you type.</p></section>
-        <section class="home-card settings-card"><h2>At a glance</h2><p>Display mode enlarges the dashboard for a shared screen. On supported devices, it keeps the screen awake while this page is visible.</p><button type="button" id="settingsDisplayBtn" class="btn">Turn on display mode</button><p id="wakeStatus" class="muted tiny"></p><div class="settings-buttons"><button id="catModeBtn" class="btn" type="button">🐾 Cat mode</button></div></section>
+        <section class="home-card settings-card"><h2>At a glance</h2><p>Monitor mode fills the screen with your week, the time, and your resident supervisors. It keeps supported devices awake while this page is visible. Press Escape or Exit monitor to return.</p><button type="button" id="settingsDisplayBtn" class="btn">Open monitor mode</button><p id="wakeStatus" class="muted tiny"></p><div class="settings-buttons"><button id="catModeBtn" class="btn" type="button">🐾 Cat mode</button></div></section>
         <section class="home-card settings-card"><h2>Your household</h2><div class="house-people"><span class="avatar hanry">h</span><span class="avatar karena">K</span><div>hanry & Karena<small id="houseDataStatus" role="status">Connecting…</small></div></div><p id="accountLabel" class="muted"></p><button id="logoutBtn" class="btn" type="button">Sign out</button></section>
       </section>
       <button id="fab" class="fab hidden" type="button" aria-label="Add event">＋</button>
@@ -355,6 +357,7 @@
             </label>
           </div>
 
+          <div id="eventOverlap" class="event-overlap hidden" role="status" aria-live="polite"></div>
           <label class="check">
             <input id="evtAllDay" type="checkbox" />
             <span>All day</span>
@@ -511,6 +514,6 @@
 
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
-  <script type="module" src="./app.js?v=20261115_v5"></script>
+  <script type="module" src="./app.js?v=20261115_v6"></script>
 </body>
 </html>

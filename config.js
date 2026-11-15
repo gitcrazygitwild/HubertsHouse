@@ -11,5 +11,5 @@ export const config = {
   functionsRegion: "us-central1",
   // Set true after completing docs/SETUP.md. The UI never claims a connection
   // or accepts an Apple credential until the private service is deployed.
-  calendarServiceEnabled: false
+  calendarServiceEnabled: true
 };

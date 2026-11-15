@@ -8,7 +8,7 @@ import { encryptCredential, decryptCredential } from './crypto.js';
 initializeApp();
 const db = getFirestore();
 const encryptionKey = defineSecret('CALENDAR_ENCRYPTION_KEY');
-const options = { region:'us-central1', secrets:[encryptionKey], timeoutSeconds:120, memory:'256MiB', maxInstances:5, cors:true };
+const options = { region:'us-central1', secrets:[encryptionKey], timeoutSeconds:120, memory:'256MiB', cpu:'gcf_gen1', concurrency:1, minInstances:0, maxInstances:1, cors:true };
 const publicCalendars = calendars => calendars.map(({url,...calendar}) => calendar);
 function endpoint(handler) {
   return onCall(options, async request => {

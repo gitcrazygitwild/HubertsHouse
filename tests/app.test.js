@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { JSDOM, VirtualConsole } from 'jsdom';
 process.env.TZ = 'America/New_York';
 const read = path => readFile(new URL(`../${path}`,import.meta.url),'utf8');
-const clean = source => source.replace(/^import\b[\s\S]*?;\s*$/gm,'').replace(/\bexport\s+(?=(?:async\s+)?(?:function|const|class|let))/g,'');
+const clean = source => source.replace(/^export \{[^}]*\} from [^;]+;$/gm,'').replace(/^import\b[\s\S]*?;\s*$/gm,'').replace(/\bexport\s+(?=(?:async\s+)?(?:function|const|class|let))/g,'');
 const settle = () => new Promise(r => setTimeout(r,30));
 async function fixture(options = {}) {
   const errors=[]; const console=new VirtualConsole(); console.on('jsdomError',e => errors.push(e));
@@ -20,6 +20,8 @@ async function fixture(options = {}) {
   await module('calendar-model.js',['localDate','startOfDay','nextDay','eventEnd','eventsOnDay','checklistProgress']);
   await module('dom.js',['renderHTML']);
   await module('daily-content.js',['dailyContent']);
+  await module('event-planning.js',['overlappingEvents','preferredCalendar']);
+  await module('cat-crew.js',['initCatCrew']);
   await module('dashboard.js',['initDashboard']);
   await module('event-templates.js',['eventTemplate']);
   await module('demo.js',['demoStore','demoEvents']);
@@ -31,6 +33,7 @@ async function fixture(options = {}) {
   await module('cloud-calendar.js',['initCloudCalendar','setCloudRange','refreshCloud','saveCloudEvent','deleteCloudEvent'],'const esc=escapeHTML;');
   await module('calendar-view.js',['initCalendarExperience','calendarEventContent'],'const esc=escapeHTML;');
   await module('home-calendar.js',['initHomeCalendar','homeCalendarWeek'],'const esc=escapeHTML;');
+  await module('weather-shared.js',['richmondDay','forecastCondition','weatherIcon']);
   await module('weather.js',['initWeather'],'const esc=escapeHTML;');
   await module('week-brief.js',['renderWeekBrief'],'const esc=escapeHTML;');
   w.eval(clean(await read('app.js')) + ';window.__testApp={getDocs:()=>rawDocs,persistMovedEvent,redraw:()=>updateHouseholdEvents(expandedEvents)};'); await settle();
