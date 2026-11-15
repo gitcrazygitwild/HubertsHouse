@@ -8,6 +8,7 @@ import { initHousehold, updateHouseholdEvents, showNotice, showView } from './ho
 import { initCloudCalendar, setCloudRange, refreshCloud, saveCloudEvent, deleteCloudEvent } from './cloud-calendar.js';
 import { demoStore, demoEvents } from './demo.js';
 import { initDashboard } from './dashboard.js';
+import { initHomeCalendar } from './home-calendar.js';
 import { eventTemplate } from './event-templates.js';
 import { initWeather } from './weather.js';
 import { renderWeekBrief } from './week-brief.js';
@@ -318,7 +319,7 @@ import {
 const firebaseConfig = config.firebase;
 
 let db, eventsCol;
-let calendar, calendarExperience;
+let calendar, calendarExperience, homeCalendar;
 
 // In-memory cache from Firestore
 let rawDocs = [];
@@ -463,16 +464,17 @@ async function initApp() {
   initCalendarUI(); initUIHooks(); initWeather({ demo });
   calendarExperience = initCalendarExperience({ calendar, getEvents: () => expandedEvents, getFilteredEvents: getVisibleEvents,
     openEvent: (id, occurrence) => openFromPanel(id, occurrence, false),
-    addEvent: day => {
-      const start = new Date(day); start.setHours(9, 0, 0, 0);
-      openEventModal({ mode: 'create', title: '', start, end: new Date(start.getTime() + 3600000), allDay: false, owner: 'both', type: 'general', repeat: 'none', notes: '', checklist: [] });
-    }
+    addEvent: addEventOnDay
+  });
+  homeCalendar = initHomeCalendar({ getEvents: () => expandedEvents,
+    openEvent: (id, occurrence) => openFromPanel(id, occurrence, false), addEvent: addEventOnDay,
+    onRangeChange: range => { if (!demo && !document.getElementById('view-today').classList.contains('hidden')) setCloudRange(range.start.toISOString(), range.end.toISOString()); }
   });
   if (demo) {
     gate.classList.add('hidden'); document.getElementById('demoBanner').classList.remove('hidden');
     document.getElementById('accountLabel').textContent = 'Preview mode. No real household or Apple data is loaded.';
     startHousehold(demoStore()); localDocs = demoEvents(); rebuildEvents();
-    document.getElementById('calendarDataStatus').textContent = 'Sample calendar';
+    setCalendarStatus('Sample calendar', 'ready');
     initCloudCalendar(null,{demo:true,onEvents:() => {},onCalendars:() => {}}); return;
   }
   onAuthStateChanged(auth,async user => {
@@ -489,12 +491,9 @@ async function initApp() {
       startHousehold(firestoreStore());
       onSnapshot(query(eventsCol, orderBy('start','asc')), { includeMetadataChanges: true }, snap => {
         localDocs = snap.docs.map(d => ({id:d.id,...d.data()})); rebuildEvents();
-        const status = document.getElementById('calendarDataStatus');
-        status.textContent = snap.metadata.hasPendingWrites ? 'Saving changes…' : snap.metadata.fromCache ? 'Cached calendar' : 'Shared · up to date';
-        status.dataset.state = snap.metadata.fromCache ? 'offline' : 'ready';
+        setCalendarStatus(snap.metadata.hasPendingWrites ? 'Saving changes…' : snap.metadata.fromCache ? 'Cached calendar' : 'Shared · up to date', snap.metadata.fromCache ? 'offline' : 'ready');
       }, () => {
-        document.getElementById('calendarDataStatus').textContent = 'Sync unavailable';
-        document.getElementById('calendarDataStatus').dataset.state = 'offline';
+        setCalendarStatus('Sync unavailable', 'offline');
         showNotice('The calendar could not sync. Check your connection and household access.');
       });
       await initCloudCalendar(app,{
@@ -509,8 +508,25 @@ async function initApp() {
     } catch { document.getElementById('gateError').textContent = 'Could not verify household access. Check your connection and setup.'; gate.classList.remove('hidden'); }
   });
 }
+function setCalendarStatus(message, state) {
+  for (const id of ['calendarDataStatus', 'homeCalendarStatus']) {
+    const element = document.getElementById(id); element.textContent = message; element.dataset.state = state;
+  }
+}
+function addEventOnDay(day) {
+  const start = new Date(day); start.setHours(9, 0, 0, 0);
+  openEventModal({ mode: 'create', title: '', start, end: new Date(start.getTime() + 3600000), allDay: false, owner: 'both', type: 'general', repeat: 'none', notes: '', checklist: [] });
+}
 function startHousehold(store) {
-  initHousehold({ store, onData: (events, items) => renderWeekBrief(events, items), openEvent:(id,occ) => openFromPanel(id,occ,false), newEvent:() => fab.click(), viewChanged:() => calendar?.updateSize() });
+  initHousehold({ store, onData: (events, items) => { renderWeekBrief(events, items); homeCalendar?.render(); },
+    openEvent:(id,occ) => openFromPanel(id,occ,false), newEvent:() => fab.click(), viewChanged: view => {
+      calendar?.updateSize();
+      if (!demo) {
+        const range = view === 'today' ? homeCalendar?.getRange() : view === 'calendar' ? { start: calendar.view.activeStart, end: calendar.view.activeEnd } : null;
+        if (range) setCloudRange(range.start.toISOString(), range.end.toISOString());
+      }
+    }
+  });
 }
 function firestoreStore() {
   const col = collection(db,'householdItems');

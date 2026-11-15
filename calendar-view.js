@@ -71,12 +71,6 @@ export function initCalendarExperience({ calendar, getEvents, getFilteredEvents,
       if (!next.allDay && minutes > 0 && minutes < 60) countdown = ` · in ${minutes} min`;
       html('nextEventCard', `<div class="eyebrow next-label">${happening ? next.allDay ? 'HAPPENING TODAY' : 'HAPPENING NOW' : 'UP NEXT'}${esc(countdown.toUpperCase())}</div><button type="button" ${eventAttrs(next)}><h2>${esc(next.title)}</h2><p>${esc(next.allDay ? `${happening ? 'Today' : day} · All day` : `${happening ? 'Now' : day} · ${time(start)}${next.end ? ` – ${time(next.end)}` : ''}`)}</p><span class="next-footer"><span class="next-owner">${esc(ownerNames[ownerOf(next)])}</span><span class="next-arrow" aria-hidden="true">&#8594;</span></span></button>`);
     } else html('nextEventCard', '<span class="next-empty-icon" aria-hidden="true">✳</span><div class="eyebrow">LOOKING GOOD</div><h2>A little room<br />to breathe.</h2><p>Your next plan will appear here.</p>');
-
-    html('homeWeek', Array.from({ length: 7 }, (_, offset) => {
-      const date = startOfDay(now); date.setDate(date.getDate() + offset);
-      const plans = eventsOnDay(allEvents, date), key = dateKey(date);
-      return `<button type="button" class="week-day${offset === 0 ? ' is-today' : ''}" data-week-day="${key}" aria-label="${esc(date.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' }))}, ${plans.length} plans"><span class="week-day-name">${offset === 0 ? 'Today' : esc(date.toLocaleDateString([], { weekday: 'short' }))}</span><span class="week-day-number">${date.getDate()}</span><span class="week-day-count">${plans.length ? `${plans.length} plan${plans.length === 1 ? '' : 's'}` : 'All clear'}</span><span class="week-day-dots" aria-hidden="true">${plans.slice(0, 5).map(event => `<span class="person-dot ${ownerOf(event)}"></span>`).join('')}</span></button>`;
-    }).join(''));
   }
 
   document.querySelectorAll('[data-calendar-view]').forEach(button => button.addEventListener('click', () => {

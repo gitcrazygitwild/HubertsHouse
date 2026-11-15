@@ -30,6 +30,7 @@ async function fixture(options = {}) {
   await module('household.js',['initHousehold','updateHouseholdEvents','showNotice','showView'],'const esc=escapeHTML;');
   await module('cloud-calendar.js',['initCloudCalendar','setCloudRange','refreshCloud','saveCloudEvent','deleteCloudEvent'],'const esc=escapeHTML;');
   await module('calendar-view.js',['initCalendarExperience','calendarEventContent'],'const esc=escapeHTML;');
+  await module('home-calendar.js',['initHomeCalendar','homeCalendarWeek'],'const esc=escapeHTML;');
   await module('weather.js',['initWeather'],'const esc=escapeHTML;');
   await module('week-brief.js',['renderWeekBrief'],'const esc=escapeHTML;');
   w.eval(clean(await read('app.js')) + ';window.__testApp={getDocs:()=>rawDocs,persistMovedEvent,redraw:()=>updateHouseholdEvents(expandedEvents)};'); await settle();
@@ -172,5 +173,28 @@ test('a failed task update restores the checkbox and permits retry when cached m
   assert.equal(checkbox.checked,false);
   assert.equal(checkbox.disabled,false);
   assert.match(doc.getElementById('notice').textContent,/connection interrupted/);
+  assert.deepEqual(errors,[]);
+});
+
+test('Today contains the live week calendar and adding there updates both calendar views', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  assert.ok(doc.querySelector('#view-today > :first-child').classList.contains('home-calendar'));
+  assert.equal(doc.querySelectorAll('#homeWeek .home-week-day').length,7);
+  assert.ok(doc.querySelector('#homeWeek [data-home-event="sample7"]'));
+  doc.querySelector('#homeWeek [data-home-event="sample1"]').click();
+  assert.ok(!doc.getElementById('detailsBackdrop').classList.contains('hidden'));
+  assert.equal(w.location.hash,'#today');
+  doc.getElementById('detailsClose').click();
+  const chosen = [...doc.querySelectorAll('[data-home-add]')].at(-1);
+  chosen.click();
+  assert.equal(doc.getElementById('evtStart').value.slice(0,10),chosen.dataset.homeAdd);
+  doc.getElementById('evtTitle').value='From the home calendar';
+  doc.getElementById('saveBtnTop').click(); await settle();
+  const created = w.__testApp.getDocs().find(event=>event.title==='From the home calendar');
+  assert.ok(doc.querySelector(`#homeWeek [data-home-event="${created.id}"]`));
+  assert.ok([...doc.querySelectorAll('#calendarGrid .smart-event-title')].some(el=>el.textContent==='From the home calendar'));
+  doc.querySelector('[data-owner="karena"]').click();
+  assert.ok(doc.querySelector('#homeWeek [data-home-event="sample7"]'), 'Home always shows everyone, independent of full-calendar filters');
+  assert.equal(doc.getElementById('homeCalendarStatus').textContent,'Sample calendar');
   assert.deepEqual(errors,[]);
 });

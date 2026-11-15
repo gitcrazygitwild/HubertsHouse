@@ -2,7 +2,7 @@
 
 A household dashboard for hanry, Karena, and Hubert, designed for a phone and a shared display.
 
-- Today: upcoming plans, chores, and a grocery count.
+- Today: a full seven-day calendar at the top, with event titles, times, household colors, and checklist counts. Open or add a plan directly from the week; browse previous/next weeks or return to Today. Weather, daily moments, chores, and groceries follow below.
 - App links: Miateorology with a daily forecast icon and Flapurr with a flying-cat icon, available on phones and shared displays.
 - Weather: Richmond high/low, rain chance, wind, and a three-day outlook from Miateorology's published forecast feed; Fahrenheit/Celsius is a device preference.
 - Weekly brief: seven-day plan counts, dated to-dos (including overdue items), the busiest day, open evenings, and overlapping timed events for the same household members.
@@ -27,6 +27,8 @@ The frontend is deployed at **https://huberts-house.web.app**, with Firebase Aut
 The weather card selects today's date in `America/New_York`, refreshes every 15 minutes while visible, and labels the forecast's issue time. It can use a saved forecast when a refresh fails; forecasts older than 72 hours or missing today's date are shown as unavailable. It requires no new Firebase service or paid API. Preview mode uses a labeled sample forecast.
 
 The weekly brief uses the display's local time. Open evenings have no calendar events between 5 and 10 pm. Overlap checks exclude all-day events and separate members' plans; an event assigned to both members participates in either member's overlap check. The brief reads existing data without changing it.
+
+The home calendar shows today plus the following six local dates, including all-day, overnight, and repeating events. It reads the same household event snapshot as the full calendar and stays independent of its search and person filters. Clock refreshes advance the week after local midnight; a manually browsed week stays selected until **Today** is pressed. Seven columns fit desktop and landscape displays, with a readable week agenda on phones. **Display mode** enlarges the calendar for an unattended screen and requests the existing screen wake lock.
 
 Daily moments follow the device's local calendar date and rotate through a curated 14-day collection; tiny missions repeat weekly. Quotes are original encouragement attributed to Hubert’s House. The daily content works offline without an API; appearance, shortcut preferences, and mission completion stay on the device. Templates save nothing until you submit the event form.
 

@@ -17,7 +17,7 @@ export function showView(view) {
   document.querySelectorAll('[data-view]').forEach(el => { el.classList.toggle('active', el.dataset.view === view); if (el.dataset.view === view) el.setAttribute('aria-current', 'page'); else el.removeAttribute('aria-current'); });
   $('viewTitle').textContent = titles[view];
   history.replaceState(null, '', `${location.pathname}${location.search}#${view}`);
-  if (view === 'calendar') requestAnimationFrame(() => viewChanged?.(view));
+  if (view === 'calendar' || view === 'today') requestAnimationFrame(() => viewChanged?.(view));
 }
 async function setDisplayMode(on) {
   displayMode = on; document.body.classList.toggle('display-mode', on);
