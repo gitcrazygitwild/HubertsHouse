@@ -2,7 +2,7 @@ import { dateKey, dueLabel, completionPatch, validateItem, escapeHTML as esc, OW
 const $ = id => document.getElementById(id);
 let store, items = [], events = [], currentKind = 'chore', openEvent, newEvent, viewChanged;
 let noticeTimer, wakeLock, displayMode = false, activeView = 'today';
-const titles = { today: 'Today at home', calendar: 'The household calendar', tasks: 'Chores & checklists', groceries: 'The grocery list', settings: 'Your house, your way' };
+const titles = { today: 'Today at home', calendar: 'Life, all together.', tasks: 'Chores & checklists', groceries: 'The grocery list', settings: 'Your house, your way' };
 export function showNotice(message, action) {
   const el = $('notice'); el.textContent = message; el.classList.remove('hidden');
   if (action) { const b = document.createElement('button'); b.textContent = action.label; b.onclick = () => { el.classList.add('hidden'); Promise.resolve(action.run()).catch(e => showNotice(e.message)); }; el.append(b); }

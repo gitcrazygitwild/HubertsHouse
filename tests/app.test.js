@@ -17,8 +17,9 @@ async function fixture(options = {}) {
   async function module(file,names,extra='') { w.eval(`(() => { ${extra}\n${clean(await read(file))}\nObject.assign(window,{${names.join(',')}}); })();`); }
   await module('household-model.js',['dateKey','dueLabel','completionPatch','validateItem','escapeHTML','OWNERS','CATEGORIES']);
   await module('demo.js',['demoStore','demoEvents']);
-  await module('household.js',['initHousehold','updateHouseholdEvents','showNotice'],'const esc=escapeHTML;');
+  await module('household.js',['initHousehold','updateHouseholdEvents','showNotice','showView'],'const esc=escapeHTML;');
   await module('cloud-calendar.js',['initCloudCalendar','setCloudRange','refreshCloud','saveCloudEvent','deleteCloudEvent'],'const esc=escapeHTML;');
+  await module('calendar-view.js',['initCalendarExperience','calendarEventContent'],'const esc=escapeHTML;');
   w.eval(clean(await read('app.js')) + ';window.__testApp={getDocs:()=>rawDocs,persistMovedEvent};'); await settle();
   return {dom,w,doc:w.document,errors};
 }
@@ -72,5 +73,34 @@ test('a signed-in Firebase account without household membership cannot open the 
   assert.equal(w.__testApp.getDocs().length,0);
   const ids=[...doc.querySelectorAll('[id]')].map(x => x.id);
   assert.equal(ids.length,new Set(ids).size,'HTML element IDs must be unique');
+  assert.deepEqual(errors,[]);
+});
+
+test('calendar person filters include shared plans, day selection opens the agenda, and adding uses the selected date', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  doc.querySelector('[data-view="calendar"]').click();
+  doc.querySelector('[data-owner="karena"]').click(); await settle();
+  assert.equal(doc.querySelector('[data-owner="karena"]').getAttribute('aria-pressed'),'true');
+  assert.ok(doc.querySelector('.fc-event.owner-karena'));
+  assert.ok(doc.querySelector('.fc-event.owner-both'));
+  assert.equal(doc.querySelector('.fc-event.owner-hanry'),null);
+  doc.querySelector('[data-owner="all"]').click();
+  const chosen = doc.querySelector('#homeWeek [data-week-day]');
+  const selectedDate = chosen.dataset.weekDay;
+  const dayButton = doc.querySelector(`.fc-daygrid-day[data-date="${selectedDate}"] .fc-daygrid-day-number`);
+  dayButton.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Enter',bubbles:true})); await settle();
+  assert.equal(dayButton.getAttribute('aria-pressed'),'true');
+  assert.ok(doc.querySelector('#selectedDayEvents [data-calendar-event]'));
+  doc.querySelector('#selectedDayEvents [data-calendar-event]').click();
+  assert.ok(!doc.getElementById('detailsBackdrop').classList.contains('hidden'));
+  doc.getElementById('detailsClose').click();
+  doc.getElementById('addToDay').click();
+  assert.equal(doc.getElementById('evtStart').value.slice(0,10),selectedDate);
+  doc.getElementById('evtTitle').value='Plan from the day agenda';
+  doc.getElementById('saveBtnTop').click(); await settle();
+  assert.ok(doc.getElementById('selectedDayEvents').textContent.includes('Plan from the day agenda'));
+  doc.querySelector('[data-calendar-view="timeGridWeek"]').click(); await settle();
+  assert.equal(w.localStorage.getItem('hh_calendar_view'),'timeGridWeek');
+  assert.equal(doc.querySelector('[data-calendar-view="timeGridWeek"]').getAttribute('aria-pressed'),'true');
   assert.deepEqual(errors,[]);
 });

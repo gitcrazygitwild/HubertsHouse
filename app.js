@@ -8,6 +8,7 @@ import { initHousehold, updateHouseholdEvents, showNotice } from './household.js
 import { initCloudCalendar, setCloudRange, refreshCloud, saveCloudEvent, deleteCloudEvent } from './cloud-calendar.js';
 import { demoStore, demoEvents } from './demo.js';
 import { dateKey } from './household-model.js';
+import { initCalendarExperience, calendarEventContent } from './calendar-view.js';
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence, browserSessionPersistence } from 'https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js';
 const demo = new URLSearchParams(location.search).get('demo') === '1';
 const gate = document.getElementById('gate');
@@ -81,8 +82,7 @@ function setSearchUIState() {
 
   searchClearBtn?.classList.toggle("hidden", !hasText);
 
-  // Dates button visible when searching OR dates already set
-  searchFiltersBtn?.classList.toggle("hidden", !(hasText || hasDates));
+  searchFiltersBtn?.classList.toggle("is-active", hasDates);
 }
 
 searchClearBtn?.addEventListener("click", () => {
@@ -94,6 +94,7 @@ searchClearBtn?.addEventListener("click", () => {
 
 searchFiltersBtn?.addEventListener("click", () => {
   searchFilters?.classList.toggle("hidden");
+  searchFiltersBtn?.setAttribute("aria-expanded", String(!searchFilters?.classList.contains("hidden")));
   searchFiltersBtn?.classList.toggle(
     "is-active",
     !searchFilters?.classList.contains("hidden")
@@ -102,6 +103,7 @@ searchFiltersBtn?.addEventListener("click", () => {
 
 closeSearchFiltersBtn?.addEventListener("click", () => {
   searchFilters?.classList.add("hidden");
+  searchFiltersBtn?.setAttribute("aria-expanded", "false");
   searchFiltersBtn?.classList.remove("is-active");
 });
 
@@ -111,6 +113,7 @@ document.addEventListener("click", (e) => {
   const wrap = document.querySelector(".search-wrap");
   if (wrap && !wrap.contains(e.target)) {
     searchFilters.classList.add("hidden");
+    searchFiltersBtn?.setAttribute("aria-expanded", "false");
     searchFiltersBtn?.classList.remove("is-active");
   }
 });
@@ -312,7 +315,7 @@ import {
 const firebaseConfig = config.firebase;
 
 let db, eventsCol;
-let calendar;
+let calendar, calendarExperience;
 
 // In-memory cache from Firestore
 let rawDocs = [];
@@ -495,10 +498,18 @@ async function initApp() {
   const app = initializeApp(firebaseConfig);
   db = getFirestore(app); eventsCol = collection(db, 'events'); auth = getAuth(app);
   initCalendarUI(); initUIHooks();
+  calendarExperience = initCalendarExperience({ calendar, getEvents: () => expandedEvents, getFilteredEvents: getVisibleEvents,
+    openEvent: (id, occurrence) => openFromPanel(id, occurrence, false),
+    addEvent: day => {
+      const start = new Date(day); start.setHours(9, 0, 0, 0);
+      openEventModal({ mode: 'create', title: '', start, end: new Date(start.getTime() + 3600000), allDay: false, owner: 'both', type: 'general', repeat: 'none', notes: '', checklist: [] });
+    }
+  });
   if (demo) {
     gate.classList.add('hidden'); document.getElementById('demoBanner').classList.remove('hidden');
     document.getElementById('accountLabel').textContent = 'Preview mode. No real household or Apple data is loaded.';
     startHousehold(demoStore()); localDocs = demoEvents(); rebuildEvents();
+    document.getElementById('calendarDataStatus').textContent = 'Sample calendar';
     initCloudCalendar(null,{demo:true,onEvents:() => {},onCalendars:() => {}}); return;
   }
   onAuthStateChanged(auth,async user => {
@@ -513,9 +524,16 @@ async function initApp() {
       document.getElementById('accountLabel').textContent = `Signed in as ${user.email || 'household member'}`;
       if (dataStarted) return; dataStarted = true;
       startHousehold(firestoreStore());
-      onSnapshot(query(eventsCol, orderBy('start','asc')), snap => {
+      onSnapshot(query(eventsCol, orderBy('start','asc')), { includeMetadataChanges: true }, snap => {
         localDocs = snap.docs.map(d => ({id:d.id,...d.data()})); rebuildEvents();
-      }, () => showNotice('The calendar could not sync. Check your connection and household access.'));
+        const status = document.getElementById('calendarDataStatus');
+        status.textContent = snap.metadata.hasPendingWrites ? 'Saving changes…' : snap.metadata.fromCache ? 'Cached calendar' : 'Shared · up to date';
+        status.dataset.state = snap.metadata.fromCache ? 'offline' : 'ready';
+      }, () => {
+        document.getElementById('calendarDataStatus').textContent = 'Sync unavailable';
+        document.getElementById('calendarDataStatus').dataset.state = 'offline';
+        showNotice('The calendar could not sync. Check your connection and household access.');
+      });
       await initCloudCalendar(app,{
         onEvents:records => { cloudDocs = records.map(e => ({...e,end:e.editEnd,cloudEnd:e.end,owner:'both',type:'general',checklist:[],repeat:'none'})); rebuildEvents(); },
         onCalendars:connection => {
@@ -712,151 +730,46 @@ function initUIHooks() {
     closeJumpModal();
   });
 
-  document.querySelectorAll(".legend-inline .item").forEach((item) => {
-    item.style.cursor = "pointer";
-
-    item.addEventListener("click", () => {
-      const label = item.textContent.trim().toLowerCase();
-
-      let next = "all";
-      if (label.includes("hanry")) next = "hanry";
-      else if (label.includes("karena")) next = "karena";
-      else if (label.includes("both")) next = "both";
-      else if (label.includes("other")) next = "custom";
-
-      if ((ownerFilter?.value || "all") === next) {
-        ownerFilter.value = "all";
-        ownerFilterValue = "all";
-      } else {
-        ownerFilter.value = next;
-        ownerFilterValue = next;
-      }
-
-      applySearchAndFilters(false);
-    });
-  });
-
   populateYearSelect();
 }
 
 // ---------- Calendar ----------
 function initCalendarUI() {
-  const calendarEl = document.getElementById("calendar");
+  const calendarEl = document.getElementById("calendarGrid");
   if (!calendarEl) return;
 
   calendar = new FullCalendar.Calendar(calendarEl, {
-    initialView: window.innerWidth < 650 ? "listCustom" : "dayGridMonth",
-    headerToolbar: {
-      left: "",
-      center: "title",
-      right: "dayGridMonth,timeGridWeek,timeGridDay,listCustom"
+    initialView: ['dayGridMonth', 'timeGridWeek', 'timeGridDay', 'listCustom'].includes(localStorage.getItem('hh_calendar_view'))
+      ? localStorage.getItem('hh_calendar_view') : window.innerWidth < 650 ? 'listCustom' : 'dayGridMonth',
+    headerToolbar: false,
+    eventContent: calendarEventContent,
+    eventClassNames: arg => [`owner-${normalizeOwner(arg.event.extendedProps?.owner)}`],
+    dayHeaderContent: info => {
+      const weekday = info.date.toLocaleDateString([], { weekday: 'short' });
+      return info.view.type === 'dayGridMonth' ? { html: escapeHtml(weekday) }
+        : { html: `<span class="week-column-label">${escapeHtml(weekday)}</span><span class="week-column-number">${info.date.getDate()}</span>` };
     },
-
-    eventContent: function(arg) {
-      function formatMonthTime(date) {
-        if (!date) return "";
-
-        const mins = date.getMinutes();
-        const opts = {
-          hour: "numeric",
-          minute: mins === 0 ? undefined : "2-digit"
-        };
-
-        let s = date.toLocaleTimeString([], opts).toLowerCase();
-        s = s.replace(" am", "a").replace(" pm", "p").replace(":00", "");
-        return s;
-      }
-
-      function getTypeIcon(type) {
-        switch ((type || "").toLowerCase()) {
-          case "trip": return "✈️";
-          case "wedding": return "💍";
-          case "appointment": return "📅";
-          case "party": return "🎉";
-          default: return "";
-        }
-      }
-
-      const wrapper = document.createElement("div");
-      wrapper.className = "fc-custom-event";
-
-      const isAllDay = arg.event.allDay;
-
-      if (!isAllDay) {
-        const dot = document.createElement("span");
-        dot.className = "fc-dot";
-
-        const bg =
-          arg.event.backgroundColor ||
-          arg.event.extendedProps?.backgroundColor ||
-          "#7aa2ff";
-
-        dot.style.background = bg;
-
-        const time = document.createElement("span");
-        time.className = "fc-time";
-        time.innerText = formatMonthTime(arg.event.start);
-
-        const row1 = document.createElement("div");
-        row1.className = "fc-row1";
-        row1.append(dot, time);
-
-        wrapper.append(row1);
-      }
-
-      const icon = document.createElement("span");
-      icon.className = "fc-type-icon";
-      icon.innerText = getTypeIcon(arg.event.extendedProps?.type);
-
-      const titleText = document.createElement("span");
-      titleText.className = "fc-title-text";
-      titleText.innerText = arg.event.title;
-
-      const title = document.createElement("div");
-      title.className = "fc-title";
-      title.append(icon, titleText);
-
-      wrapper.append(title);
-
-      const start = arg.event.start;
-      const end = arg.event.end;
-      const date = arg.date;
-
-      const isMultiDay =
-        isAllDay &&
-        start &&
-        end &&
-        (new Date(end).getTime() - new Date(start).getTime()) > 24 * 60 * 60 * 1000;
-
-      if (isMultiDay) {
-        wrapper.classList.add("fc-multiday");
-      }
-
-      if (start && end && arg.event.allDay) {
-        const startDay = new Date(start);
-        startDay.setHours(0,0,0,0);
-
-        const endDay = new Date(end);
-        endDay.setHours(0,0,0,0);
-
-        const curDay = new Date(date);
-        curDay.setHours(0,0,0,0);
-
-        if (curDay.getTime() === startDay.getTime()) {
-          wrapper.classList.add("multi-start");
-        } else if (curDay.getTime() === endDay.getTime()) {
-          wrapper.classList.add("multi-end");
-        } else {
-          wrapper.classList.add("multi-middle");
-        }
-      }
-
-      return { domNodes: [wrapper] };
+    dayMaxEvents: 3,
+    fixedWeekCount: false,
+    eventDisplay: 'block',
+    slotMinTime: '00:00:00',
+    scrollTime: '07:00:00',
+    slotDuration: '00:30:00',
+    eventMinHeight: 30,
+    expandRows: true,
+    dayCellDidMount: info => {
+      const number = info.el.querySelector('.fc-daygrid-day-number');
+      if (!number) return;
+      number.setAttribute('role', 'button'); number.setAttribute('tabindex', '0');
+      number.setAttribute('aria-label', `Show plans for ${info.date.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}`);
+      number.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); calendarExperience?.selectDay(info.date); }
+      });
     },
 
     views: {
       dayGridMonth: {
-        eventDisplay: "auto",
+        eventDisplay: "block",
         displayEventTime: true,
         eventTimeFormat: {
           hour: "numeric",
@@ -866,7 +779,7 @@ function initCalendarUI() {
       listCustom: {
         type: "list",
         duration: { days: 14 },
-        buttonText: "List"
+        buttonText: "Agenda"
       }
     },
 
@@ -877,11 +790,14 @@ function initCalendarUI() {
     longPressDelay: 350,
     selectLongPressDelay: 350,
 
-    datesSet: info => { hookMonthTitleClick(); if (!demo) setCloudRange(info.start.toISOString(),info.end.toISOString()); },
+    datesSet: info => {
+      calendarExperience?.render({ rangeChanged: true });
+      if (!demo) setCloudRange(info.start.toISOString(),info.end.toISOString());
+    },
 
     dateClick: (info) => {
       if (calendar?.view?.type === "dayGridMonth") {
-        calendar.changeView("timeGridDay", info.date);
+        calendarExperience?.selectDay(info.date);
       } else {
         const start = new Date(info.date);
         const end = new Date(start.getTime() + 60 * 60 * 1000);
@@ -903,8 +819,12 @@ function initCalendarUI() {
     },
 
     select: (info) => {
+      if (info.view.type === 'dayGridMonth' && dateKey(new Date(info.end.getTime() - 1)) === dateKey(info.start)) {
+        calendarExperience?.selectDay(info.start); calendar.unselect(); return;
+      }
       const start = info.start;
-      const end = info.end || new Date(start.getTime() + 60 * 60 * 1000);
+      const end = info.end ? new Date(info.end) : new Date(start.getTime() + 60 * 60 * 1000);
+      if (info.allDay) end.setDate(end.getDate() - 1);
       openEventModal({
         mode: "create",
         title: "",
@@ -957,13 +877,7 @@ function initCalendarUI() {
         arg.event.setProp("startEditable", false);
       }
 
-      arg.el.style.fontSize = "var(--event-font)";
-
-      if (arg.view.type === "dayGridMonth" && !arg.event.allDay) {
-        arg.el.style.backgroundColor = arg.event.backgroundColor || "rgba(122,162,255,0.35)";
-        arg.el.style.borderColor = arg.event.borderColor || "rgba(122,162,255,0.85)";
-        arg.el.style.color = "#30372d";
-      }
+      arg.el.title = `${arg.event.title} · ${arg.event.allDay ? 'All day' : arg.event.start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
     },
 
     eventDrop: async (info) => {
@@ -993,7 +907,7 @@ function initCalendarUI() {
 }
 
 function hookMonthTitleClick() {
-  const title = document.querySelector(".fc-toolbar-title");
+  const title = document.getElementById("calendarTitle");
   if (!title) return;
   title.style.cursor = "pointer";
   title.title = "Jump to month";
@@ -1057,8 +971,11 @@ function attachSwipe(el) {
 // ---------- Rendering ----------
 function renderCalendarFromCache() {
   if (!calendar) return;
-  calendar.removeAllEvents();
-  for (const e of getVisibleEvents()) calendar.addEvent(e);
+  calendar.batchRendering(() => {
+    calendar.removeAllEventSources();
+    calendar.addEventSource(getVisibleEvents());
+  });
+  calendarExperience?.render();
 }
 
 function renderPanels() {
@@ -1285,7 +1202,7 @@ function openListViewForSearch() {
   }
 
   calendar.setOption("views", {
-    listCustom: { type: "list", duration: { days }, buttonText: "List" }
+    listCustom: { type: "list", duration: { days }, buttonText: "Agenda" }
   });
 
   calendar.changeView("listCustom");

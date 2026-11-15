@@ -677,7 +677,7 @@ html.cat-mode .cat-tail{ animation-duration:4.6s; }
 .dot-custom{ background:#bb86fc; }
 
 /* ---------- Calendar shell ---------- */
-#calendar{
+#calendarGrid{
   border: 1px solid rgba(255,255,255,.18);
   border-radius: 18px;
   padding: 10px;

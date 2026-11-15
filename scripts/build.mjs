@@ -1,5 +1,5 @@
 import { mkdir, copyFile, rm } from 'node:fs/promises';
-const files = ['index.html', 'app.js', 'styles.css', 'home.css', 'household.js',
+const files = ['index.html', 'app.js', 'styles.css', 'home.css', 'calendar.css', 'calendar-view.js', 'household.js',
   'household-model.js', 'cloud-calendar.js', 'config.js', 'demo.js', 'icon.svg', 'manifest.webmanifest'];
 await rm('dist', { recursive: true, force: true });
 await mkdir('dist', { recursive: true });
