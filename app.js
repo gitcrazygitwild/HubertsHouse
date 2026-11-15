@@ -4,9 +4,11 @@
 // Month title tap = jump-to-month + swipe left/right to change months/weeks/days
 
 import { config } from './config.js';
-import { initHousehold, updateHouseholdEvents, showNotice } from './household.js';
+import { initHousehold, updateHouseholdEvents, showNotice, showView } from './household.js';
 import { initCloudCalendar, setCloudRange, refreshCloud, saveCloudEvent, deleteCloudEvent } from './cloud-calendar.js';
 import { demoStore, demoEvents } from './demo.js';
+import { initDashboard } from './dashboard.js';
+import { eventTemplate } from './event-templates.js';
 import { initWeather } from './weather.js';
 import { renderWeekBrief } from './week-brief.js';
 import { dateKey } from './household-model.js';
@@ -46,7 +48,6 @@ else gate?.classList.remove("hidden");
 
 // ---------- Topbar / controls ----------
 const logoutBtn = document.getElementById("logoutBtn");
-const themeBtn = document.getElementById("themeBtn");
 const catModeBtn = document.getElementById("catModeBtn");
 
 // Calendar nav buttons in the card row
@@ -339,46 +340,6 @@ let searchText = "";
 // Filter state
 let ownerFilterValue = "all";
 
-// ---------- Theme (dice) ----------
-const LS_THEME = "huberts_house_theme_v1";
-const LS_DESIGNS = "huberts_house_designs_v1";
-const LS_FONT_DISPLAY = "huberts_house_font_display_v1";
-
-const THEMES = ["aurora", "sunset", "mint", "grape", "mono"];
-const DISPLAY_FONTS = [
-  '-apple-system,system-ui,"SF Pro Display","Segoe UI",Roboto,Helvetica,Arial,sans-serif',
-  '"Avenir Next",-apple-system,system-ui,Roboto,Helvetica,Arial,sans-serif',
-  '"Trebuchet MS",-apple-system,system-ui,Roboto,Helvetica,Arial,sans-serif',
-  '"Georgia",-apple-system,system-ui,Roboto,Helvetica,Arial,sans-serif'
-];
-
-function applyTheme(theme, designsOn, fontDisplay) {
-  document.documentElement.dataset.theme = theme;
-  document.documentElement.classList.toggle("designs-on", !!designsOn);
-  if (fontDisplay) document.documentElement.style.setProperty("--font-display", fontDisplay);
-}
-
-function restoreTheme() {
-  const theme = localStorage.getItem(LS_THEME) || "aurora";
-  const designsOn = (localStorage.getItem(LS_DESIGNS) || "1") === "1";
-  const fontDisplay = localStorage.getItem(LS_FONT_DISPLAY) || DISPLAY_FONTS[0];
-  applyTheme(theme, designsOn, fontDisplay);
-}
-
-function pickTheme() {
-  const theme = THEMES[Math.floor(Math.random() * THEMES.length)];
-  const designsOn = Math.random() < 0.8;
-  const fontDisplay = DISPLAY_FONTS[Math.floor(Math.random() * DISPLAY_FONTS.length)];
-
-  localStorage.setItem(LS_THEME, theme);
-  localStorage.setItem(LS_DESIGNS, designsOn ? "1" : "0");
-  localStorage.setItem(LS_FONT_DISPLAY, fontDisplay);
-
-  applyTheme(theme, designsOn, fontDisplay);
-}
-
-themeBtn?.addEventListener("click", () => pickTheme());
-
 // ---------- Cat link ----------
 function ensureCatLinkMarkup() {
   const a = document.querySelector(".catlink");
@@ -491,7 +452,7 @@ function stopBlinking() {
 }
 
 // ---------- Init ----------
-restoreTheme();
+initDashboard({ onAppearanceChange: () => calendar?.updateSize() });
 ensureCatLinkMarkup();
 setCatMode((localStorage.getItem(LS_CATMODE) || "0") === "1");
 setSearchUIState();
@@ -604,6 +565,16 @@ async function removeEvent(id) {
 
 // ---------- UI hooks ----------
 function initUIHooks() {
+  document.querySelectorAll('[data-event-template]').forEach(button => button.addEventListener('click', () => {
+    if (isUnlocked()) openEventModal(eventTemplate(button.dataset.eventTemplate));
+  }));
+  document.addEventListener('keydown', event => {
+    if (!isUnlocked() || !document.getElementById('keyboardShortcuts').checked || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.isComposing || event.repeat) return;
+    if (event.target.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]') || document.querySelector('dialog[open], .modal-backdrop:not(.hidden)')) return;
+    if (event.key.toLowerCase() === 'n') { event.preventDefault(); fab.click(); }
+    if (event.key === '/') { event.preventDefault(); showView('calendar'); requestAnimationFrame(() => searchInput?.focus()); }
+  });
+
   prevBtn?.addEventListener("click", () => calendar?.prev());
   nextBtn?.addEventListener("click", () => calendar?.next());
   todayBtn?.addEventListener("click", () => calendar?.today());
@@ -746,8 +717,11 @@ function initCalendarUI() {
     headerToolbar: false,
     eventContent: calendarEventContent,
     eventClassNames: arg => [`owner-${normalizeOwner(arg.event.extendedProps?.owner)}`],
+    dayHeaderFormat: { weekday: 'short' },
     dayHeaderContent: info => {
-      const weekday = info.date.toLocaleDateString([], { weekday: 'short' });
+      // Month headers use abstract UTC weekdays. FullCalendar's formatted text
+      // avoids shifting them back a day in timezones west of UTC.
+      const weekday = info.text;
       return info.view.type === 'dayGridMonth' ? { html: escapeHtml(weekday) }
         : { html: `<span class="week-column-label">${escapeHtml(weekday)}</span><span class="week-column-number">${info.date.getDate()}</span>` };
     },

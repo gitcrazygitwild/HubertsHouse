@@ -51,3 +51,13 @@ export function dueLabel(item, today = dateKey()) {
 export function escapeHTML(value) {
   return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
+
+export function filterTaskItems(items, { timing = 'all', text = '', today = dateKey() } = {}) {
+  const needle = text.trim().toLocaleLowerCase();
+  return items.filter(item => {
+    if (timing === 'today' && item.due !== today) return false;
+    if (timing === 'overdue' && (item.completed || !item.due || item.due >= today)) return false;
+    if (timing === 'anytime' && item.due) return false;
+    return !needle || `${item.title} ${item.list || ''}`.toLocaleLowerCase().includes(needle);
+  });
+}

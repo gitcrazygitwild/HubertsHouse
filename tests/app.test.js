@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { JSDOM, VirtualConsole } from 'jsdom';
+process.env.TZ = 'America/New_York';
 const read = path => readFile(new URL(`../${path}`,import.meta.url),'utf8');
 const clean = source => source.replace(/^import\b[\s\S]*?;\s*$/gm,'').replace(/\bexport\s+(?=(?:async\s+)?(?:function|const|class|let))/g,'');
 const settle = () => new Promise(r => setTimeout(r,30));
@@ -15,14 +16,23 @@ async function fixture(options = {}) {
   // Real FullCalendar is exercised in a DOM. This is not a visual browser test.
   w.eval(await read('node_modules/fullcalendar/index.global.js'));
   async function module(file,names,extra='') { w.eval(`(() => { ${extra}\n${clean(await read(file))}\nObject.assign(window,{${names.join(',')}}); })();`); }
-  await module('household-model.js',['dateKey','dueLabel','completionPatch','validateItem','escapeHTML','OWNERS','CATEGORIES']);
+  await module('household-model.js',['dateKey','dueLabel','completionPatch','validateItem','escapeHTML','OWNERS','CATEGORIES','filterTaskItems']);
+  await module('calendar-model.js',['localDate','startOfDay','nextDay','eventEnd','eventsOnDay','checklistProgress']);
+  await module('dom.js',['renderHTML']);
+  await module('daily-content.js',['dailyContent']);
+  await module('dashboard.js',['initDashboard']);
+  await module('event-templates.js',['eventTemplate']);
   await module('demo.js',['demoStore','demoEvents']);
+  if (options.failItemUpdate) {
+    const originalStore = w.demoStore;
+    w.demoStore = () => ({ ...originalStore(), update: async () => { throw new Error('The connection interrupted this save.'); } });
+  }
   await module('household.js',['initHousehold','updateHouseholdEvents','showNotice','showView'],'const esc=escapeHTML;');
   await module('cloud-calendar.js',['initCloudCalendar','setCloudRange','refreshCloud','saveCloudEvent','deleteCloudEvent'],'const esc=escapeHTML;');
-  await module('calendar-view.js',['initCalendarExperience','calendarEventContent','eventsOnDay'],'const esc=escapeHTML;');
+  await module('calendar-view.js',['initCalendarExperience','calendarEventContent'],'const esc=escapeHTML;');
   await module('weather.js',['initWeather'],'const esc=escapeHTML;');
   await module('week-brief.js',['renderWeekBrief'],'const esc=escapeHTML;');
-  w.eval(clean(await read('app.js')) + ';window.__testApp={getDocs:()=>rawDocs,persistMovedEvent};'); await settle();
+  w.eval(clean(await read('app.js')) + ';window.__testApp={getDocs:()=>rawDocs,persistMovedEvent,redraw:()=>updateHouseholdEvents(expandedEvents)};'); await settle();
   return {dom,w,doc:w.document,errors};
 }
 test('sample preview keeps data isolated and supports navigation, grocery editing and recurring chore undo', async t => {
@@ -81,6 +91,7 @@ test('a signed-in Firebase account without household membership cannot open the 
 test('calendar person filters include shared plans, day selection opens the agenda, and adding uses the selected date', async t => {
   const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
   doc.querySelector('[data-view="calendar"]').click();
+  assert.deepEqual([...doc.querySelectorAll('.fc-col-header-cell-cushion')].map(el=>el.textContent), ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], 'Month headers must match the weekday columns in New York time');
   doc.querySelector('[data-owner="karena"]').click(); await settle();
   assert.equal(doc.querySelector('[data-owner="karena"]').getAttribute('aria-pressed'),'true');
   assert.ok(doc.querySelector('.fc-event.owner-karena'));
@@ -104,5 +115,62 @@ test('calendar person filters include shared plans, day selection opens the agen
   doc.querySelector('[data-calendar-view="timeGridWeek"]').click(); await settle();
   assert.equal(w.localStorage.getItem('hh_calendar_view'),'timeGridWeek');
   assert.equal(doc.querySelector('[data-calendar-view="timeGridWeek"]').getAttribute('aria-pressed'),'true');
+  assert.deepEqual(errors,[]);
+});
+
+test('templates open editable drafts, create once on save, and show checklist progress without affecting existing events', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  const before=JSON.stringify(w.__testApp.getDocs());
+  doc.querySelector('[data-event-template="appointment"]').click();
+  assert.equal(doc.getElementById('evtTitle').value,'Appointment');
+  assert.equal(doc.querySelectorAll('#checklist .checkitem').length,2);
+  assert.equal(JSON.stringify(w.__testApp.getDocs()),before);
+  doc.getElementById('evtTitle').value='Appointment from a template';
+  doc.getElementById('saveBtnTop').click(); await settle();
+  assert.equal(w.__testApp.getDocs().filter(x=>x.title==='Appointment from a template').length,1);
+  assert.ok(doc.querySelector('.event-checklist-progress[aria-label="0 of 2 checklist items complete"]'));
+  doc.querySelector('[data-event-template="day-off"]').click();
+  doc.getElementById('saveBtnTop').click(); await settle();
+  const saved = w.__testApp.getDocs().find(x=>x.title==='Day off');
+  assert.equal(saved.allDay,true);
+  assert.equal(saved.end,null,'A one-day template must not create an extra all-day date');
+  assert.deepEqual(errors,[]);
+});
+
+test('task filters combine with search, unchanged snapshots retain focused controls, and shortcuts respect typing and settings', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  doc.querySelector('[data-view="tasks"]').click();
+  doc.querySelector('[data-task-focus="today"]').click();
+  assert.equal(doc.querySelectorAll('#taskGroups .item-row').length,2);
+  const input=doc.getElementById('taskSearch'); input.value='WATER';
+  input.dispatchEvent(new w.Event('input',{bubbles:true}));
+  assert.equal(doc.querySelectorAll('#taskGroups .item-row').length,1);
+  const control=doc.querySelector('#taskGroups [data-edit-item]'); control.focus();
+  w.__testApp.redraw();
+  assert.equal(doc.activeElement,control);
+  assert.equal(doc.querySelector('#taskGroups [data-edit-item]'),control);
+  input.dispatchEvent(new w.KeyboardEvent('keydown',{key:'n',bubbles:true,cancelable:true}));
+  assert.ok(doc.getElementById('modalBackdrop').classList.contains('hidden'));
+  doc.getElementById('resetTaskFilters').click();
+  assert.equal(doc.querySelectorAll('#taskGroups .item-row').length,3);
+  doc.body.dispatchEvent(new w.KeyboardEvent('keydown',{key:'/',bubbles:true,cancelable:true})); await settle();
+  assert.equal(doc.activeElement.id,'searchInput');
+  const toggle=doc.getElementById('keyboardShortcuts'); toggle.click();
+  doc.body.dispatchEvent(new w.KeyboardEvent('keydown',{key:'n',bubbles:true,cancelable:true}));
+  assert.ok(doc.getElementById('modalBackdrop').classList.contains('hidden'));
+  toggle.click();
+  doc.body.dispatchEvent(new w.KeyboardEvent('keydown',{key:'n',bubbles:true,cancelable:true}));
+  assert.ok(!doc.getElementById('modalBackdrop').classList.contains('hidden'));
+  assert.deepEqual(errors,[]);
+});
+
+test('a failed task update restores the checkbox and permits retry when cached markup is unchanged', async t => {
+  const {dom,doc,errors}=await fixture({failItemUpdate:true}); t.after(() => dom.window.close());
+  doc.querySelector('[data-view="tasks"]').click();
+  const checkbox=doc.querySelector('#taskGroups [data-complete="d1"]'); checkbox.click(); await settle();
+  assert.equal(doc.querySelector('#taskGroups [data-complete="d1"]'),checkbox);
+  assert.equal(checkbox.checked,false);
+  assert.equal(checkbox.disabled,false);
+  assert.match(doc.getElementById('notice').textContent,/connection interrupted/);
   assert.deepEqual(errors,[]);
 });

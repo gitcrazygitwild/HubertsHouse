@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { eventsOnDay } from '../calendar-view.js';
+import { eventsOnDay } from '../calendar-model.js';
 
 process.env.TZ = 'America/New_York';
 

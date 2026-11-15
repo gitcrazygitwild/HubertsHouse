@@ -1,13 +1,7 @@
 import { dateKey, escapeHTML as esc } from './household-model.js';
-import { eventsOnDay } from './calendar-view.js';
+import { eventsOnDay, localDate, eventEnd } from './calendar-model.js';
+import { renderHTML } from './dom.js';
 
-const eventDate = value => new Date(typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00` : value);
-function eventEnd(event) {
-  if (event.end) return eventDate(event.end);
-  const end = eventDate(event.start);
-  if (event.allDay) end.setDate(end.getDate() + 1); else end.setHours(end.getHours() + 1);
-  return end;
-}
 function sharedPeople(a, b) {
   const ownerA = a.extendedProps?.owner || 'both', ownerB = b.extendedProps?.owner || 'both';
   if (ownerA === 'both' || ownerB === 'both') return true;
@@ -19,20 +13,20 @@ export function buildWeekBrief(events, items, now = new Date()) {
   const start = new Date(now); start.setHours(0, 0, 0, 0);
   const end = new Date(start); end.setDate(end.getDate() + 7);
   const days = Array.from({ length: 7 }, (_, i) => { const day = new Date(start); day.setDate(day.getDate() + i); return day; });
-  const plans = events.filter(event => eventDate(event.start) < end && eventEnd(event) > start);
+  const plans = events.filter(event => localDate(event.start) < end && eventEnd(event) > start);
   const counts = days.map(day => ({ date: dateKey(day), count: eventsOnDay(plans, day).length }));
   const busiest = [...counts].sort((a,b) => b.count - a.count)[0];
   const due = items.filter(item => ['chore','task'].includes(item.kind) && !item.completed && /^\d{4}-\d{2}-\d{2}$/.test(item.due || '') && item.due < dateKey(end));
   const overdue = due.filter(item => item.due < dateKey(start));
   const openEvenings = days.filter(day => {
     const from = new Date(day), to = new Date(day); from.setHours(17); to.setHours(22);
-    return to > now && !plans.some(event => eventDate(event.start) < to && eventEnd(event) > from);
+    return to > now && !plans.some(event => localDate(event.start) < to && eventEnd(event) > from);
   });
-  const timed = plans.filter(event => !event.allDay).sort((a,b) => eventDate(a.start) - eventDate(b.start));
+  const timed = plans.filter(event => !event.allDay).sort((a,b) => localDate(a.start) - localDate(b.start));
   const overlaps = [];
   for (let i = 0; i < timed.length; i++) {
-    for (let j = i + 1; j < timed.length && eventDate(timed[j].start) < eventEnd(timed[i]); j++) {
-      const overlapStart = new Date(Math.max(eventDate(timed[i].start), eventDate(timed[j].start), start));
+    for (let j = i + 1; j < timed.length && localDate(timed[j].start) < eventEnd(timed[i]); j++) {
+      const overlapStart = new Date(Math.max(localDate(timed[i].start), localDate(timed[j].start), start));
       const overlapEnd = new Date(Math.min(eventEnd(timed[i]), eventEnd(timed[j]), end));
       if (overlapStart < overlapEnd && sharedPeople(timed[i], timed[j])) overlaps.push({ date: dateKey(overlapStart), titles: [timed[i].title, timed[j].title] });
     }
@@ -55,6 +49,6 @@ export function renderWeekBrief(events, items, now = new Date()) {
     ? `<button type="button" class="brief-insight" data-week-day="${brief.busiest.date}"><span class="brief-insight-icon" aria-hidden="true">▦</span><span><strong>${esc(dayName(brief.busiest.date))} has the most going on</strong><small>${brief.busiest.count} plan${brief.busiest.count === 1 ? '' : 's'} · take a look at the day</small></span><span aria-hidden="true">→</span></button>`
     : '<div class="brief-insight"><span class="brief-insight-icon" aria-hidden="true">✳</span><span><strong>A little room to make plans</strong><small>Your next seven days are clear.</small></span></div>';
   const clashes = brief.overlaps.length ? `<button type="button" class="brief-insight has-overlap" data-week-day="${brief.overlaps[0].date}"><span class="brief-insight-icon" aria-hidden="true">!</span><span><strong>${brief.overlaps.length} schedule overlap${brief.overlaps.length === 1 ? '' : 's'} to check</strong><small>${esc(brief.overlaps[0].titles.join(' + '))}</small></span><span aria-hidden="true">→</span></button>` : '';
-  document.getElementById('briefInsights').innerHTML = busiest + clashes;
+  renderHTML(document.getElementById('briefInsights'), busiest + clashes);
   document.getElementById('briefDueNote').textContent = brief.overdue ? `${brief.overdue} overdue · includes chores & checklists` : 'Dated chores & checklists';
 }

@@ -1,6 +1,8 @@
-import { dateKey, dueLabel, completionPatch, validateItem, escapeHTML as esc, OWNERS, CATEGORIES } from './household-model.js';
+import { dateKey, dueLabel, completionPatch, validateItem, escapeHTML as esc, OWNERS, CATEGORIES, filterTaskItems } from './household-model.js';
+import { eventsOnDay, localDate, eventEnd } from './calendar-model.js';
+import { renderHTML } from './dom.js';
 const $ = id => document.getElementById(id);
-let store, items = [], events = [], currentKind = 'chore', openEvent, newEvent, viewChanged, onData;
+let store, items = [], events = [], currentKind = 'chore', taskFocus = 'all', openEvent, newEvent, viewChanged, onData;
 let noticeTimer, wakeLock, displayMode = false, activeView = 'today';
 const titles = { today: 'Today at home', calendar: 'Life, all together.', tasks: 'Chores & checklists', groceries: 'The grocery list', settings: 'Your house, your way' };
 export function showNotice(message, action) {
@@ -52,11 +54,16 @@ export function initHousehold(options) {
     document.querySelectorAll('[data-kind]').forEach(x => x.classList.toggle('active', x === b));
     const add = document.querySelector('#view-tasks [data-add-kind]'); add.dataset.addKind = currentKind; add.textContent = currentKind === 'chore' ? '＋ Add a chore' : '＋ Add a checklist item'; render();
   }));
+  document.querySelectorAll('[data-task-focus]').forEach(button => button.addEventListener('click', () => {
+    taskFocus = button.dataset.taskFocus; render();
+  }));
+  $('taskSearch').addEventListener('input', render);
+  $('resetTaskFilters').addEventListener('click', () => { taskFocus = 'all'; $('taskSearch').value = ''; render(); });
   $('houseOwner').addEventListener('change', render); $('showCompleted').addEventListener('change', render);
   $('quickEvent').addEventListener('click', () => newEvent());
   $('displayBtn').addEventListener('click', () => setDisplayMode(!displayMode));
   $('settingsDisplayBtn').addEventListener('click', () => setDisplayMode(!displayMode));
-  document.addEventListener('visibilitychange', () => { if (displayMode && document.visibilityState === 'visible') setDisplayMode(true); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { tick(); if (displayMode) setDisplayMode(true); } });
   $('closeItemDialog').addEventListener('click', () => $('itemDialog').close());
   $('itemDialog').addEventListener('click', e => { if (e.target === $('itemDialog')) { const r = e.target.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) e.target.close(); } });
   $('itemForm').addEventListener('submit', saveItem);
@@ -90,9 +97,9 @@ export function initHousehold(options) {
       const patch = completionPatch(item); const updated = await store.update(item, patch);
       const recurring = item.kind === 'chore' && item.cadence !== 'none';
       showNotice(recurring ? `Done. Next up: ${dueLabel({ due: patch.due })}.` : patch.completed ? 'Checked off. Nicely done.' : 'Back on the list.', { label: 'Undo', run: () => store.update(updated, before) });
-    } catch (error) { showNotice(friendlyError(error)); render(); }
+    } catch (error) { checkbox.checked = !!item.completed; checkbox.disabled = false; showNotice(friendlyError(error)); render(); }
   });
-  showView(location.hash.slice(1)); tick(); setInterval(tick, 30000);
+  showView(location.hash.slice(1)); tick(); setInterval(() => { if (document.visibilityState === 'visible') tick(); }, 30000);
   if (localStorage.getItem('hh_display') === '1') setDisplayMode(true);
 }
 export function updateHouseholdEvents(next) { events = next; render(); }
@@ -143,24 +150,26 @@ function render() {
   const pending = items.filter(x => !x.completed && x.kind !== 'grocery');
   const due = pending.filter(x => !x.due || x.due <= today);
   const groceries = items.filter(x => x.kind === 'grocery');
-  const todayEvents = events.filter(e => { const start = new Date(e.start); const end = e.end ? new Date(e.end) : start; return dateKey(start) <= today && (dateKey(start) === today || end > new Date(`${today}T00:00:00`)); });
+  const todayEvents = eventsOnDay(events, now);
   $('statEvents').textContent = todayEvents.length; $('statTasks').textContent = due.length; $('statGroceries').textContent = groceries.filter(x => !x.completed).length;
   $('daySummary').textContent = todayEvents.length ? `${todayEvents.length} plan${todayEvents.length === 1 ? '' : 's'} today. ${due.length ? `${due.length} little thing${due.length === 1 ? '' : 's'} to take care of.` : 'A little room to breathe.'}` : 'A little room to breathe. Make today your own.';
-  const upcoming = events.filter(e => (e.end ? new Date(e.end) : new Date(e.start)) >= (e.allDay ? new Date(`${today}T00:00:00`) : now)).sort((a,b) => new Date(a.start) - new Date(b.start)).slice(0, 5);
-  $('homeAgenda').innerHTML = upcoming.length ? upcoming.map(e => {
-    const d = new Date(e.start), owner = e.extendedProps?.owner || 'both';
+  const upcoming = events.filter(e => eventEnd(e) > (e.allDay ? new Date(`${today}T00:00:00`) : now)).sort((a,b) => localDate(a.start) - localDate(b.start)).slice(0, 5);
+  renderHTML($('homeAgenda'), upcoming.length ? upcoming.map(e => {
+    const d = localDate(e.start), owner = e.extendedProps?.owner || 'both';
     const time = e.allDay ? 'All day' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     return `<button type="button" class="agenda-row" data-open-event="${esc(e.extendedProps?.sourceId || e.id)}" data-occ="${esc(d.toISOString())}"><span class="agenda-date">${esc(d.toLocaleDateString([], { weekday: 'short' }).toUpperCase())}<strong>${d.getDate()}</strong>${esc(d.toLocaleDateString([], { month: 'short' }))}</span><span class="agenda-copy ${esc(owner)}"><strong>${esc(e.title)}</strong><small>${esc(time)}${e.extendedProps?.icloud ? ' · iCloud' : ''}</small></span><span class="agenda-owner">${esc(OWNERS[owner] || 'Both')}</span></button>`;
-  }).join('') : empty('Nothing coming up yet.', 'Add your first plan, or connect an iCloud calendar in Settings.');
+  }).join('') : empty('Nothing coming up yet.', 'Add your first plan, or connect an iCloud calendar in Settings.'));
   const sorted = [...pending].sort((a,b) => (a.due || '9999').localeCompare(b.due || '9999'));
-  $('homeChores').innerHTML = sorted.length ? sorted.slice(0, 5).map(itemHTML).join('') : empty('A fresh start for your home.', 'Add a chore or a checklist item to get everyone on the same page.');
+  renderHTML($('homeChores'), sorted.length ? sorted.slice(0, 5).map(itemHTML).join('') : empty('A fresh start for your home.', 'Add a chore or a checklist item to get everyone on the same page.'));
   const owner = $('houseOwner').value, completed = $('showCompleted').checked;
   const allTasks = items.filter(x => x.kind === currentKind && (owner === 'all' || x.owner === owner));
-  const tasks = allTasks.filter(x => completed || !x.completed).sort((a,b) => Number(a.completed) - Number(b.completed) || (a.due || '9999').localeCompare(b.due || '9999'));
+  const tasks = filterTaskItems(allTasks.filter(x => completed || !x.completed), { timing: taskFocus, text: $('taskSearch').value, today }).sort((a,b) => Number(a.completed) - Number(b.completed) || (a.due || '9999').localeCompare(b.due || '9999'));
+  document.querySelectorAll('[data-task-focus]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.taskFocus === taskFocus)));
+  $('resetTaskFilters').hidden = taskFocus === 'all' && !$('taskSearch').value;
   const doneToday = allTasks.filter(x => x.lastCompletedAt && dateKey(new Date(x.lastCompletedAt)) === today).length;
-  $('tasksProgress').textContent = `${doneToday} taken care of today · ${allTasks.filter(x => !x.completed).length} on the list`;
-  $('taskGroups').innerHTML = tasks.length ? groupsHTML(tasks, x => x.completed ? 'Completed' : currentKind === 'task' ? x.list || 'Everyday checklist' : x.due && x.due < today ? 'Needs a little love' : x.due === today ? 'For today' : x.due ? 'Coming up' : 'Anytime') : empty('All clear here.', `Add ${currentKind === 'chore' ? 'a chore' : 'a checklist item'} to share the load.`);
+  $('tasksProgress').textContent = `${doneToday} taken care of today · ${tasks.length} shown · ${allTasks.filter(x => !x.completed).length} still to do`;
+  renderHTML($('taskGroups'), tasks.length ? groupsHTML(tasks, x => x.completed ? 'Completed' : currentKind === 'task' ? x.list || 'Everyday checklist' : x.due && x.due < today ? 'Needs a little love' : x.due === today ? 'For today' : x.due ? 'Coming up' : 'Anytime') : taskFocus !== 'all' || $('taskSearch').value.trim() ? empty('No matches here.', 'Try a different timing filter or clear your search.') : empty('All clear here.', `Add ${currentKind === 'chore' ? 'a chore' : 'a checklist item'} to share the load.`));
   $('groceryCount').textContent = `${groceries.filter(x => !x.completed).length} to pick up · ${groceries.filter(x => x.completed).length} in the basket`;
   $('clearBought').disabled = !groceries.some(x => x.completed);
-  $('groceryGroups').innerHTML = groceries.length ? groupsHTML([...groceries].sort((a,b) => Number(a.completed) - Number(b.completed) || a.title.localeCompare(b.title)), x => x.completed ? 'In the basket' : x.category || 'Other', [...CATEGORIES, 'In the basket']) : empty('The list is ready when you are.', 'Add the first thing you need. It’ll be here on your next store run.');
+  renderHTML($('groceryGroups'), groceries.length ? groupsHTML([...groceries].sort((a,b) => Number(a.completed) - Number(b.completed) || a.title.localeCompare(b.title)), x => x.completed ? 'In the basket' : x.category || 'Other', [...CATEGORIES, 'In the basket']) : empty('The list is ready when you are.', 'Add the first thing you need. It’ll be here on your next store run.'));
 }
