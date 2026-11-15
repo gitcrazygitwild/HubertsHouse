@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.js",
-    "check": "node --check app.js && node --check household.js && node --check calendar-view.js && node --check cloud-calendar.js && node --check functions/index.js",
+    "check": "node --check app.js && node --check household.js && node --check calendar-view.js && node --check weather.js && node --check week-brief.js && node --check cloud-calendar.js && node --check functions/index.js",
     "build": "node scripts/build.mjs"
   },
   "devDependencies": {

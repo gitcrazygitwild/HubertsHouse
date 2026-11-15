@@ -1,6 +1,6 @@
 import { dateKey, dueLabel, completionPatch, validateItem, escapeHTML as esc, OWNERS, CATEGORIES } from './household-model.js';
 const $ = id => document.getElementById(id);
-let store, items = [], events = [], currentKind = 'chore', openEvent, newEvent, viewChanged;
+let store, items = [], events = [], currentKind = 'chore', openEvent, newEvent, viewChanged, onData;
 let noticeTimer, wakeLock, displayMode = false, activeView = 'today';
 const titles = { today: 'Today at home', calendar: 'Life, all together.', tasks: 'Chores & checklists', groceries: 'The grocery list', settings: 'Your house, your way' };
 export function showNotice(message, action) {
@@ -41,6 +41,7 @@ function tick() {
   render();
 }
 export function initHousehold(options) {
+  onData = options.onData;
   store = options.store; openEvent = options.openEvent; newEvent = options.newEvent; viewChanged = options.viewChanged;
   store.subscribe(next => { items = next; render(); }, (message, error = false) => { $('houseDataStatus').textContent = message; if (error) showNotice(message); });
   document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
@@ -137,6 +138,7 @@ function groupsHTML(list, key, sortKeys) {
 }
 function render() {
   if (!$('homeAgenda')) return;
+  onData?.(events, items);
   const today = dateKey(), now = new Date();
   const pending = items.filter(x => !x.completed && x.kind !== 'grocery');
   const due = pending.filter(x => !x.due || x.due <= today);

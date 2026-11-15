@@ -19,7 +19,9 @@ async function fixture(options = {}) {
   await module('demo.js',['demoStore','demoEvents']);
   await module('household.js',['initHousehold','updateHouseholdEvents','showNotice','showView'],'const esc=escapeHTML;');
   await module('cloud-calendar.js',['initCloudCalendar','setCloudRange','refreshCloud','saveCloudEvent','deleteCloudEvent'],'const esc=escapeHTML;');
-  await module('calendar-view.js',['initCalendarExperience','calendarEventContent'],'const esc=escapeHTML;');
+  await module('calendar-view.js',['initCalendarExperience','calendarEventContent','eventsOnDay'],'const esc=escapeHTML;');
+  await module('weather.js',['initWeather'],'const esc=escapeHTML;');
+  await module('week-brief.js',['renderWeekBrief'],'const esc=escapeHTML;');
   w.eval(clean(await read('app.js')) + ';window.__testApp={getDocs:()=>rawDocs,persistMovedEvent};'); await settle();
   return {dom,w,doc:w.document,errors};
 }

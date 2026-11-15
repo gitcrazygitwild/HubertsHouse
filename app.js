@@ -7,6 +7,8 @@ import { config } from './config.js';
 import { initHousehold, updateHouseholdEvents, showNotice } from './household.js';
 import { initCloudCalendar, setCloudRange, refreshCloud, saveCloudEvent, deleteCloudEvent } from './cloud-calendar.js';
 import { demoStore, demoEvents } from './demo.js';
+import { initWeather } from './weather.js';
+import { renderWeekBrief } from './week-brief.js';
 import { dateKey } from './household-model.js';
 import { initCalendarExperience, calendarEventContent } from './calendar-view.js';
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence, browserSessionPersistence } from 'https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js';
@@ -497,7 +499,7 @@ setSearchUIState();
 async function initApp() {
   const app = initializeApp(firebaseConfig);
   db = getFirestore(app); eventsCol = collection(db, 'events'); auth = getAuth(app);
-  initCalendarUI(); initUIHooks();
+  initCalendarUI(); initUIHooks(); initWeather({ demo });
   calendarExperience = initCalendarExperience({ calendar, getEvents: () => expandedEvents, getFilteredEvents: getVisibleEvents,
     openEvent: (id, occurrence) => openFromPanel(id, occurrence, false),
     addEvent: day => {
@@ -547,7 +549,7 @@ async function initApp() {
   });
 }
 function startHousehold(store) {
-  initHousehold({ store, openEvent:(id,occ) => openFromPanel(id,occ,false), newEvent:() => fab.click(), viewChanged:() => calendar?.updateSize() });
+  initHousehold({ store, onData: (events, items) => renderWeekBrief(events, items), openEvent:(id,occ) => openFromPanel(id,occ,false), newEvent:() => fab.click(), viewChanged:() => calendar?.updateSize() });
 }
 function firestoreStore() {
   const col = collection(db,'householdItems');

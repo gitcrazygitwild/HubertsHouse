@@ -3,6 +3,9 @@
 A household dashboard for hanry, Karena, and Hubert, designed for a phone and a shared display.
 
 - Today: upcoming plans, chores, and a grocery count.
+- App links: Miateorology with a daily forecast icon and Flapurr with a flying-cat icon, available on phones and shared displays.
+- Weather: Richmond high/low, rain chance, wind, and a three-day outlook from Miateorology's published forecast feed; Fahrenheit/Celsius is a device preference.
+- Weekly brief: seven-day plan counts, dated to-dos (including overdue items), the busiest day, open evenings, and overlapping timed events for the same household members.
 - Calendar: the existing month/week/day/agenda views, household events, event checklists, search, and owner filters.
 - Chores and checklists: assignments, due dates, named lists, recurring chores, completion and undo.
 - Groceries: a shared list with quantities, aisle grouping, check-off, and clearing bought items.
@@ -11,11 +14,15 @@ A household dashboard for hanry, Karena, and Hubert, designed for a phone and a 
 
 ## Current activation status
 
-The implementation is in source; the Firebase backend and new sign-in configuration still need deployment. `calendarServiceEnabled` defaults to `false`. No Apple account is connected and no existing household records are migrated or changed by the build.
+The frontend is deployed at **https://huberts-house.web.app**, with Firebase Authentication and household membership rules enabled. `calendarServiceEnabled` is `false`; the private iCloud service has not been deployed. No Apple account is connected and no existing household records are migrated or changed by the build.
 
 **[Complete the one-time setup](docs/SETUP.md)** before deploying the new frontend to replace the existing site. The old cosmetic password gate has been replaced with Firebase Authentication and explicit household membership.
 
 `?demo=1` opens a labeled sample-data preview. All demo changes live in memory and reset on reload. It never reads or writes the household database or calls iCloud.
+
+The weather card selects today's date in `America/New_York`, refreshes every 15 minutes while visible, and labels the forecast's issue time. It can use a saved forecast when a refresh fails; forecasts older than 72 hours or missing today's date are shown as unavailable. It requires no new Firebase service or paid API. Preview mode uses a labeled sample forecast.
+
+The weekly brief uses the display's local time. Open evenings have no calendar events between 5 and 10 pm. Overlap checks exclude all-day events and separate members' plans; an event assigned to both members participates in either member's overlap check. The brief reads existing data without changing it.
 
 ## Development
 

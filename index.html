@@ -9,9 +9,10 @@
   <meta name="description" content="A little more together. The calendar, chores, checklists, and shopping for Hubert’s House." />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="manifest" href="./manifest.webmanifest" />
-  <link rel="stylesheet" href="./styles.css?v=20261115_v2" />
-  <link rel="stylesheet" href="./home.css?v=20261115_v2" />
-  <link rel="stylesheet" href="./calendar.css?v=20261115_v2" />
+  <link rel="stylesheet" href="./styles.css?v=20261115_v3" />
+  <link rel="stylesheet" href="./home.css?v=20261115_v3" />
+  <link rel="stylesheet" href="./calendar.css?v=20261115_v3" />
+  <link rel="stylesheet" href="./home-upgrades.css?v=20261115_v3" />
 </head>
 <body>
 
@@ -75,20 +76,36 @@
       </nav>
       <div class="sidebar-bottom">
         <div class="house-people"><span class="avatar hanry">h</span><span class="avatar karena">K</span><div>hanry & Karena<small>At home with Hubert</small></div></div>
-        <a href="https://gitcrazygitwild.github.io/Miateorology/" target="_blank" rel="noopener" class="sidebar-link">☀ Miateorology <span>→</span></a>
-        <a id="catLink" href="https://gitcrazygitwild.github.io/Flapurr/" target="_blank" rel="noopener" class="sidebar-link">♞ A little play break <span>→</span></a>
       </div>
     </aside>
     <main class="house-main">
       <div id="demoBanner" class="demo-banner hidden">Preview · sample data only <a href="./">Back to sign in</a></div>
       <header class="house-header">
         <div><div id="houseDate" class="eyebrow"></div><h1 id="viewTitle">Today at home</h1></div>
+        <nav class="app-links" aria-label="Our apps">
+          <a id="weatherAppLink" class="app-link weather-app-link" href="https://gitcrazygitwild.github.io/Miateorology/" target="_blank" rel="noopener noreferrer" title="Open Miateorology"><span class="app-link-icon" data-weather-icon aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M18 9h12v22a9 9 0 1 1-12 0Z" fill="#f5f4eb" stroke="#8a9b8b" stroke-width="2.4"/></svg></span><span class="app-link-name">Miateorology<small>Today’s weather</small></span><span class="app-link-arrow" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M5 3h8v8M13 3 3 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>
+          <a id="catLink" class="app-link flapurr-app-link" href="https://gitcrazygitwild.github.io/Flapurr/" target="_blank" rel="noopener noreferrer" title="Play Flapurr"><img class="app-link-icon" src="./flapurr-icon.svg" alt="" /><span class="app-link-name">Flapurr<small>A little play break</small></span><span class="app-link-arrow" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M5 3h8v8M13 3 3 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>
+        </nav>
         <div class="header-actions"><span id="houseClock" class="house-clock"></span><button id="fullscreenBtn" class="btn fullscreen-button" type="button" aria-label="Enter full screen" title="Full screen"><span aria-hidden="true">⛶</span></button><button id="displayBtn" class="btn" type="button" aria-pressed="false">Display mode</button><button id="quickEvent" class="btn btn-primary" type="button">＋ <span>Add event</span></button></div>
       </header>
       <section id="view-today" class="house-view">
         <div class="welcome-card">
           <div><div class="eyebrow">THE GOOD KIND OF BUSY</div><h2>A little more<br /><em>together.</em></h2><p id="daySummary">Your plans, your people, your place.</p><button type="button" class="text-link" data-go="calendar">See the calendar <span aria-hidden="true">→</span></button></div>
           <div class="house-art" aria-hidden="true"><div class="art-sun"></div><svg viewBox="0 0 260 180"><path d="M5 163h250M30 162v-44m-12 18 12 8 13-20M206 163v-51m-10 10 10 13 18-27" fill="none" stroke="#708267" stroke-width="3"/><path d="M52 105 132 30l80 75v58H52z" fill="#e8cbb2"/><path d="m42 107 90-85 90 85" fill="none" stroke="#805e45" stroke-width="5" stroke-linecap="round"/><path d="M113 163v-48a19 19 0 0 1 38 0v48" fill="#9baf8c"/><rect x="71" y="101" width="25" height="27" rx="3" fill="#fff6dc"/><path d="M83 101v27m-12-14h25" stroke="#805e45" stroke-width="2"/><path d="M165 154c-3-16 1-27 12-27l-3-14 11 8 12-5-1 15c15 8 14 25-1 29h-24c-18 0-28-13-20-21" fill="#424b3e" stroke="#424b3e" stroke-width="5" stroke-linecap="round"/><path d="m181 135 2 1m9-1 2-1" stroke="#f5f3eb" stroke-width="2"/></svg><span>Life’s better under one roof.</span></div>
+        </div>
+        <div class="home-insights">
+          <section class="home-weather-card" aria-labelledby="weatherTitle">
+            <div class="insight-card-header"><div><span class="eyebrow">A LOOK OUTSIDE</span><h2 id="weatherTitle">Richmond, today.</h2></div><div class="weather-actions"><button id="weatherUnits" type="button" aria-label="Show temperatures in Celsius">°F</button><button id="weatherRefresh" type="button" aria-label="Refresh weather" title="Refresh weather">↻</button></div></div>
+            <div id="weatherContent"><p class="weather-loading">Checking the forecast…</p></div>
+            <div class="weather-card-footer"><span id="weatherStatus" role="status"></span><a href="https://gitcrazygitwild.github.io/Miateorology/" target="_blank" rel="noopener noreferrer">Miateorology →</a></div>
+          </section>
+          <section class="week-brief-card" aria-labelledby="weekBriefTitle">
+            <div class="insight-card-header"><div><span class="eyebrow">THE WEEK AHEAD</span><h2 id="weekBriefTitle">A little head start.</h2></div><span id="briefDates" class="brief-date-range"></span></div>
+            <div class="brief-stats"><button type="button" data-go="calendar"><strong id="briefPlans">—</strong><span>calendar plans</span></button><button type="button" data-go="tasks"><strong id="briefDue">—</strong><span>to-dos due</span></button><button type="button" id="briefEveningLink" title="No calendar plans between 5 and 10 pm"><strong id="briefEvenings">—</strong><span>open evenings</span></button></div>
+            <p id="briefDueNote" class="brief-footnote"></p>
+            <div id="briefInsights"></div>
+            <p class="brief-evening-note">Open evenings have no calendar plans from 5–10 pm.</p>
+          </section>
         </div>
         <section class="week-glance" aria-labelledby="weekGlanceTitle">
           <div class="section-heading"><div><span class="eyebrow">A LITTLE LOOK AHEAD</span><h2 id="weekGlanceTitle">Your next seven days</h2></div><button type="button" class="text-link" data-go="calendar">Open calendar →</button></div>
@@ -475,6 +492,6 @@
 
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
-  <script type="module" src="./app.js?v=20261115_v2"></script>
+  <script type="module" src="./app.js?v=20261115_v3"></script>
 </body>
 </html>
