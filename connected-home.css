@@ -1,0 +1,29 @@
+.event-overlap { padding: 12px 14px; border: 1px solid #ddbf85; background: #fcf3df; color: #71562d; border-radius: 12px; font-size: 12px; line-height: 1.6; }
+.event-overlap strong { display: block; }
+.cat-crew { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 12px 22px; margin: 16px 0; border: 1px solid var(--border); border-radius: 18px; background: linear-gradient(115deg, var(--soft), var(--card)); }
+.crew-intro .eyebrow { font-size: 8px; letter-spacing: 1.5px; }
+.crew-intro p { font: italic 16px/1.5 Georgia, serif; color: var(--muted); margin: 6px 0 0; }
+.crew-cats { display: flex; gap: 12px; }
+.crew-cats button { display: flex; flex-direction: column; align-items: center; border: 1px solid transparent; background: transparent; border-radius: 14px; padding: 3px 8px 7px; cursor: pointer; color: var(--text); font-size: 10px; }
+.crew-cats button[aria-pressed="true"] { background: var(--card); border-color: var(--border); }
+.crew-cats svg { width: 65px; height: 65px; transition: transform .2s; }
+.crew-cats button:hover svg { transform: rotate(-5deg); }
+/* Fullscreen is a complete workspace, with the same navigation and content. */
+.monitor-mode .house-header { margin-bottom: 18px; }
+.monitor-mode .house-header .house-clock { display: block; font-size: 24px; font-variant-numeric: tabular-nums; }
+.monitor-mode .house-header #displayBtn { display: block; white-space: nowrap; }
+.monitor-mode .home-calendar { min-height: 0; }
+@media (min-width: 901px) {
+  body.monitor-mode .house-sidebar { width: 185px; padding: 24px 14px; }
+  .monitor-mode .house-brand { justify-content: flex-start; font-size: 24px; }
+  .monitor-mode .house-brand > span, .monitor-mode .sidebar-bottom, .monitor-mode .house-nav button > span:last-child { display: block; }
+  .monitor-mode .house-nav button { justify-content: flex-start; font-size: 12px; gap: 12px; }
+  .monitor-mode .house-main { margin-left: 185px; padding: 24px; }
+  .monitor-mode .home-week-day { min-height: 300px; }
+}
+@media (max-width: 650px) {
+  .cat-crew { gap: 10px; padding: 14px; flex-direction: column; text-align: center; }
+  .crew-cats { gap: 20px; }.crew-intro p { font-size: 14px; }
+  .monitor-mode .house-main { padding: 12px; }.monitor-mode .house-clock { font-size: 20px; }
+}
+@media (prefers-reduced-motion: reduce) { .crew-cats svg { transition: none; } }

@@ -1,0 +1,57 @@
+name: Deploy to Firebase
+# Deploys Hosting, Cloud Functions and Firestore rules to the huberts-house
+# Firebase project whenever main changes, after the same checks as check.yml.
+# Can also be started by hand from the Actions tab ("Run workflow").
+#
+# Signs in to Google with Workload Identity Federation: GitHub proves which
+# repository and branch is running, and Google lets only this repo's main
+# branch act as the github-deployer service account. No keys or secrets are
+# stored in GitHub. One-time Google Cloud setup: docs/SETUP.md, section
+# "Automatic deploys from GitHub".
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # lets the job request a GitHub identity token for Google
+
+concurrency:
+  group: firebase-deploy
+  cancel-in-progress: false # never interrupt a deploy halfway
+
+env:
+  FIREBASE_PROJECT: huberts-house
+  WIF_PROVIDER: projects/233498547172/locations/global/workloadIdentityPools/github/providers/github-repo
+  DEPLOY_SERVICE_ACCOUNT: github-deployer@huberts-house.iam.gserviceaccount.com
+  FIREBASE_TOOLS_VERSION: 15.34.2
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
+      - run: npm ci
+      - run: npm --prefix functions ci
+      # Same gate as check.yml: nothing deploys unless checks, tests and build pass.
+      - run: npm run check
+      - run: npm test
+      - run: npm run build
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOY_SERVICE_ACCOUNT }}
+      - name: Deploy hosting, functions and Firestore rules
+        run: >-
+          npx --yes firebase-tools@${{ env.FIREBASE_TOOLS_VERSION }}
+          deploy --only hosting,functions,firestore:rules
+          --project ${{ env.FIREBASE_PROJECT }}
+          --non-interactive

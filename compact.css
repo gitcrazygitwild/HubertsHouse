@@ -1,0 +1,290 @@
+/* A smaller everyday layout, with coordinated palettes for every shared surface. */
+:root, :root[data-palette="sage"] {
+  --bg: #f6f5f0;
+  --bg2: #f6f5f0;
+  --card: #fffefa;
+  --card2: #f0f2e9;
+  --text: #293c34;
+  --muted: #687568;
+  --border: #dfe3d7;
+  --border2: #e9ece2;
+  --accent: #365e4b;
+  --sidebar: #eef0e7;
+  --soft: #e8eedf;
+  --soft-ink: #48623c;
+  --weather: #f4f0e5;
+  --warm: #f8eee3;
+  --cool: #edf1e8;
+  --lavender: #f1edf6;
+}
+:root[data-palette="coast"] {
+  --bg: #f1f5f6;
+  --bg2: #f1f5f6;
+  --card: #fcfefe;
+  --card2: #eaf1f4;
+  --text: #293f49;
+  --muted: #5e7480;
+  --border: #d9e3e7;
+  --border2: #e5ecef;
+  --accent: #365f74;
+  --sidebar: #e7eff2;
+  --soft: #e0edf1;
+  --soft-ink: #3d6574;
+  --weather: #eef4f6;
+  --warm: #f6efe5;
+  --cool: #e8f1f4;
+  --lavender: #eceff8;
+}
+:root[data-palette="clay"] {
+  --bg: #f8f3ee;
+  --bg2: #f8f3ee;
+  --card: #fffdfa;
+  --card2: #f5ebe3;
+  --text: #4c3831;
+  --muted: #806c60;
+  --border: #e8dcd2;
+  --border2: #efe5dd;
+  --accent: #8c503d;
+  --sidebar: #f0e7de;
+  --soft: #f2e2d7;
+  --soft-ink: #82533e;
+  --weather: #f6ede1;
+  --warm: #f8e9e0;
+  --cool: #edf0e6;
+  --lavender: #f3eaf0;
+}
+.house-sidebar { background: var(--sidebar); }
+.house-nav button { color: var(--muted); }
+.house-nav button:hover { background: var(--soft); }
+.house-nav button.active, .next-event-card, .week-day.is-today {
+  background: var(--accent); border-color: var(--accent); color: white;
+}
+.house-nav button.active:hover { background: var(--accent); filter: brightness(.95); }
+.sidebar-bottom .avatar.karena { border-color: var(--sidebar); }
+.app-link, .week-brief-card, .day-agenda-card, .week-day, .search-shell, .calendar-search-area .search { background: var(--card); }
+.app-link-name, .house-clock { color: var(--text); }
+.btn:hover, .week-day:hover, .person-chip:hover { background: var(--soft); }
+.btn-primary:hover { background: var(--accent); }
+.week-day.is-today:hover { background: var(--accent); filter: brightness(1.08); }
+.person-chip.active, .brief-insight { background: var(--soft); color: var(--soft-ink); border-color: var(--border); }
+.brief-insight-icon { background: var(--card); color: var(--accent); }
+.brief-insight.has-overlap { background: var(--warm); color: #8b5638; }
+.brief-insight.has-overlap .brief-insight-icon { background: #f0dec6; color: #845b3c; }
+.segmented, .calendar-views, .connection-note { background: var(--card2); }
+.segmented button.active, .calendar-views button.active { background: var(--card); color: var(--accent); }
+.home-weather-card { background: var(--weather); border-color: var(--border); }
+.weather-temperatures strong, .weather-condition, .weather-outlook strong, .weather-card-footer a,
+.brief-stats button, .list-group h3 { color: var(--accent); }
+.weather-temperatures > span, .weather-now small, .weather-facts, .weather-outlook > div,
+.weather-outlook strong small, .weather-card-footer, .brief-stats span, .brief-footnote,
+.brief-evening-note, .brief-date-range, .brief-insight small, .insight-card-header .eyebrow { color: var(--muted); }
+.weather-outlook, .weather-facts span + span { border-color: var(--border); }
+.fc {
+  --fc-border-color: var(--border2);
+  --fc-today-bg-color: var(--soft);
+  --fc-page-bg-color: var(--card);
+  --fc-neutral-bg-color: var(--card2);
+  --fc-list-event-hover-bg-color: var(--soft);
+}
+.fc .fc-col-header-cell, .fc .fc-day-other,
+.fc .fc-day-sat:not(.fc-day-today), .fc .fc-day-sun:not(.fc-day-today) { background: var(--card); }
+.fc .fc-timegrid-col.fc-day-today { background: var(--soft); }
+.fc .fc-day-today .fc-daygrid-day-number { background: var(--accent); }
+.fc .is-selected-day .fc-daygrid-day-frame { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.fc .fc-list-day-cushion { background: var(--card2); color: var(--accent); }
+.field input, .field select, .field textarea, .gate-input, .panel-card { background: var(--card); border-color: var(--border); }
+.gate { background: var(--sidebar); }.gate-card { background: var(--card); }
+
+/* Keep the welcome, leave the room for the useful parts. */
+.welcome-card.compact-welcome, .display-mode .welcome-card.compact-welcome {
+  min-height: 0; padding: 20px 24px; border-radius: 18px; gap: 18px;
+  align-items: center; background: var(--soft); border-color: var(--border);
+}
+.compact-welcome > div:first-child { min-width: 0; }
+.welcome-card.compact-welcome h2, .display-mode .welcome-card.compact-welcome h2 {
+  font-size: clamp(27px, 2.4vw, 34px); line-height: 1.15; margin: 7px 0 6px; color: var(--text);
+}
+.welcome-card.compact-welcome h2 em { color: var(--soft-ink); }
+.welcome-card.compact-welcome p { margin: 0; max-width: none; font-size: 12px; color: var(--muted); }
+.compact-welcome .eyebrow { font-size: 8px; letter-spacing: 1.3px; }
+.quick-plans { flex-shrink: 0; }
+.quick-plans > div { display: flex; gap: 6px; margin: 7px 0 6px; }
+.quick-plans button {
+  border: 1px solid var(--border); background: var(--card); color: var(--accent);
+  padding: 7px 10px; min-height: 36px; border-radius: 9px; font-size: 11px; cursor: pointer;
+}
+.quick-plans button:hover { border-color: var(--accent); }
+.quick-plans small { font-size: 9px; color: var(--muted); }
+kbd { font: inherit; border: 1px solid var(--border); border-bottom-width: 2px; padding: 1px 4px; border-radius: 4px; background: var(--card); }
+
+.daily-moments { margin: 17px 0; }
+.daily-heading { display: flex; justify-content: space-between; align-items: center; margin: 0 2px 9px; }
+.daily-heading .eyebrow { font-size: 8px; letter-spacing: 1.3px; }
+#dailyDate { font-size: 10px; color: var(--muted); }
+.daily-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; align-items: start; }
+.daily-card { padding: 15px 16px; border: 1px solid var(--border); border-radius: 14px; min-width: 0; align-self: stretch; }
+.daily-quote { background: var(--warm); }.daily-fact { background: var(--cool); }
+.daily-word { background: var(--card); }.daily-joke { background: var(--lavender); }
+.daily-label { font-size: 10px; color: var(--muted); font-weight: 550; display: flex; align-items: center; gap: 7px; margin-bottom: 9px; }
+.daily-label > span { font: 20px/1 Georgia, serif; color: var(--accent); }
+.daily-word .daily-label > span { font-size: 14px; }
+.daily-card p, .daily-card summary { font-size: 12px; line-height: 1.65; margin: 0; color: var(--text); }
+.daily-card blockquote { font: 19px/1.35 Georgia, serif; letter-spacing: -.25px; margin: 0 0 10px; }
+.daily-card cite { font-size: 9px; font-style: normal; color: var(--muted); }
+.word-heading { display: flex; gap: 7px; align-items: baseline; flex-wrap: wrap; margin-bottom: 4px; }
+.word-heading h3 { font: 23px/1.15 Georgia, serif; margin: 0; letter-spacing: -.4px; }
+.word-heading > span { font-size: 9px; font-style: italic; color: var(--muted); }
+.daily-card summary { cursor: pointer; }
+.word-example { margin-top: 6px; }
+.word-example summary { font-size: 10px; color: var(--muted); padding-block: 3px; }
+.word-example p { font-style: italic; margin-top: 5px; }
+#dailyJoke summary { list-style: none; padding-block: 2px; }
+#dailyJoke summary::-webkit-details-marker { display: none; }
+#dailyJoke summary small { display: block; color: var(--muted); font-size: 9px; margin-top: 8px; }
+#dailyJoke[open] summary small { display: none; }
+#dailyJokeAnswer { margin-top: 9px; font-weight: 550; color: var(--accent); }
+summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; border-radius: 3px; }
+
+.event-checklist-progress { display: flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 9px; font-weight: 500; line-height: 1.3; white-space: nowrap; }
+.event-checklist-progress.is-complete { opacity: .75; }
+.event-checklist-track { display: block; width: 40px; height: 3px; background: #00000014; border-radius: 3px; overflow: hidden; margin-left: 2px; }
+.event-checklist-track i { display: block; height: 100%; background: var(--event-ink, var(--accent)); border-radius: inherit; }
+.fc-timegrid-event-short .event-checklist-progress { display: none; }
+
+.task-focus-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.task-focus-options { display: flex; gap: 5px; flex-wrap: wrap; }
+.task-focus-options button { border: 1px solid var(--border); background: var(--card); color: var(--muted); padding: 7px 13px; border-radius: 20px; font-size: 12px; min-height: 36px; cursor: pointer; }
+.task-focus-options button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: white; }
+.task-search { flex: 1; min-width: 150px; max-width: 350px; }
+.task-search input { width: 100%; min-height: 38px; padding: 8px 13px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); color: var(--text); font-size: 12px; }
+.task-search input::placeholder { color: var(--muted); }
+
+.appearance-label { font-size: 12px; font-weight: 550; margin: 18px 0 9px; }
+.palette-options, .density-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.palette-options button, .density-options button { display: flex; align-items: center; gap: 9px; border: 1px solid var(--border); background: var(--card); color: var(--text); min-height: 44px; padding: 8px 16px; border-radius: 10px; font-size: 12px; cursor: pointer; }
+.palette-options button[aria-pressed="true"], .density-options button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--soft); }
+.palette-swatch { display: block; width: 21px; height: 21px; border-radius: 50%; border: 1px solid #0000000a; }
+.palette-swatch.sage { background: linear-gradient(135deg, #e8eedf 50%, #365e4b 50%); }
+.palette-swatch.coast { background: linear-gradient(135deg, #e0edf1 50%, #365f74 50%); }
+.palette-swatch.clay { background: linear-gradient(135deg, #f2e2d7 50%, #8c503d 50%); }
+.appearance-settings .keyboard-note { font-size: 12px; margin: 0; }
+.shortcut-setting { margin: 20px 0 7px; }
+.shortcut-setting input { width: 16px; height: 16px; flex-shrink: 0; margin: 0; padding: 0; accent-color: var(--accent); }
+
+.tiny-mission { display: flex; align-items: center; gap: 14px; margin-top: 17px; padding: 15px 20px; border: 1px dashed var(--border); border-radius: 16px; background: var(--card); }
+.tiny-mission > img { width: 42px; height: 42px; flex-shrink: 0; }
+.tiny-mission > div { min-width: 0; flex: 1; }
+.tiny-mission .eyebrow { font-size: 8px; letter-spacing: 1.4px; }
+.tiny-mission p { font-size: 13px; margin: 3px 0; }
+.tiny-mission small { display: block; font-size: 10px; color: var(--muted); }
+.tiny-mission button { border: 1px solid var(--border); background: var(--soft); color: var(--accent); border-radius: 9px; min-height: 40px; padding: 8px 14px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.tiny-mission.is-done { background: var(--soft); border-style: solid; }
+.tiny-mission.is-done button { background: var(--card); }
+
+/* Compact is the default. Comfortable spacing is a device preference. */
+:root[data-density="compact"] .house-main { padding-top: 23px; padding-bottom: 24px; }
+:root[data-density="compact"] .house-header { margin-bottom: 18px; gap: 14px; }
+:root[data-density="compact"] .house-header h1 { font-size: 32px; }
+:root[data-density="compact"] .house-nav { margin-top: 30px; gap: 5px; }
+:root[data-density="compact"] .house-nav button { padding-block: 11px; }
+:root[data-density="compact"] .app-link { min-height: 45px; padding-block: 5px; }
+:root[data-density="compact"] .app-link-icon { width: 32px; height: 32px; }
+:root[data-density="compact"] .home-insights { margin: 18px 0; gap: 16px; }
+:root[data-density="compact"] .home-weather-card, :root[data-density="compact"] .week-brief-card { padding: 18px 20px; border-radius: 17px; }
+:root[data-density="compact"] .insight-card-header { margin-bottom: 10px; }
+:root[data-density="compact"] .insight-card-header h2 { font-size: 25px; margin-top: 3px; }
+:root[data-density="compact"] .weather-now { gap: 16px; margin: 0 0 12px; }
+:root[data-density="compact"] .weather-main-icon { width: 64px; height: 64px; }
+:root[data-density="compact"] .weather-temperatures strong { font-size: 40px; }
+:root[data-density="compact"] .weather-facts { margin-bottom: 12px; }
+:root[data-density="compact"] .weather-outlook { padding-top: 9px; }
+:root[data-density="compact"] .weather-card-footer { padding-top: 12px; }
+:root[data-density="compact"] .brief-stats { padding: 2px 0 10px; }
+:root[data-density="compact"] .brief-stats strong { font-size: 30px; }
+:root[data-density="compact"] .brief-footnote { margin: 7px 0; }
+:root[data-density="compact"] .brief-insight { padding: 9px 11px; margin-top: 6px; }
+:root[data-density="compact"] .brief-evening-note { margin-top: 8px; }
+:root[data-density="compact"] .week-glance { margin-top: 18px; }
+:root[data-density="compact"] .section-heading { margin-bottom: 12px; }
+:root[data-density="compact"] .section-heading h2 { font-size: 24px; }
+:root[data-density="compact"] .week-day { padding-block: 9px; gap: 1px; }
+:root[data-density="compact"] .week-day-number { font-size: 27px; line-height: 1.2; }
+:root[data-density="compact"] .home-stats { margin: 17px 0; gap: 12px; }
+:root[data-density="compact"] .home-stats > button { padding: 13px 16px; border-radius: 14px; }
+:root[data-density="compact"] .home-stats strong { font-size: 24px; }
+:root[data-density="compact"] .home-stats small { margin-top: 2px; }
+:root[data-density="compact"] .stat-icon { width: 36px; height: 38px; font-size: 22px; }
+:root[data-density="compact"] .home-columns { gap: 16px; }
+:root[data-density="compact"] .home-card { padding: 19px 21px; }
+:root[data-density="compact"] .agenda-row { padding: 10px 0; gap: 11px; grid-template-columns: 45px 1fr auto; }
+:root[data-density="compact"] .agenda-date strong { font-size: 23px; }
+:root[data-density="compact"] .item-row { padding-block: 11px; }
+:root[data-density="compact"] .card-footer-link { padding-top: 14px; }
+:root[data-density="compact"] .home-footnote { padding: 15px 2px; }
+:root[data-density="compact"] .view-intro { margin-bottom: 18px; }
+:root[data-density="compact"] .list-toolbar { margin: 16px 0; }
+:root[data-density="compact"] .tasks-progress { margin: 15px 0; }
+:root[data-density="compact"] .list-group { padding: 17px 22px; margin-bottom: 14px; }
+:root[data-density="compact"] .calendar-toolbar { padding-top: 19px; padding-bottom: 15px; }
+:root[data-density="compact"] .calendar-control-row { padding-bottom: 16px; }
+:root[data-density="compact"] .day-agenda-card { padding: 18px; }
+:root[data-density="compact"] .day-event { padding-block: 12px; }
+:root[data-density="compact"] .next-event-card { padding: 21px; min-height: 190px; }
+
+@media (max-width: 1100px) {
+  .compact-welcome { flex-wrap: wrap; }
+  .quick-plans > .eyebrow, .quick-plans > small { display: none; }
+  .quick-plans > div { margin: 0; }
+  .daily-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .daily-card { padding: 13px; }
+  .daily-card blockquote { font-size: 19px; }
+  :root[data-density="compact"] .house-header h1 { font-size: 28px; }
+}
+@media (max-width: 650px) {
+  .house-sidebar, .display-mode .house-sidebar { background: var(--card); }
+  :root[data-density="compact"] .house-main { padding: 18px 14px 20px; }
+  :root[data-density="compact"] .house-nav { margin: 0; gap: 0; }
+  :root[data-density="compact"] .house-nav button { padding: 6px 3px; }
+  :root[data-density="compact"] .house-header { gap: 12px 8px; margin-bottom: 16px; }
+  .welcome-card.compact-welcome, .display-mode .welcome-card.compact-welcome { padding: 17px 18px; gap: 13px; }
+  .welcome-card.compact-welcome h2, .display-mode .welcome-card.compact-welcome h2 { font-size: 29px; }
+  .quick-plans { width: 100%; }
+  .quick-plans > div { gap: 5px; }
+  .quick-plans button { flex: 1; padding: 7px 5px; font-size: 10px; min-height: 40px; white-space: nowrap; }
+  .daily-moments { margin: 15px 0; }.daily-grid { gap: 8px; }
+  .daily-label { font-size: 9px; gap: 5px; }
+  .daily-heading .eyebrow { font-size: 7px; letter-spacing: 1px; }
+  .daily-card p, .daily-card summary { font-size: 11px; }
+  .daily-card blockquote { font-size: 17px; }
+  .word-heading h3 { font-size: 21px; }
+  .word-example summary { min-height: 28px; display: flex; align-items: center; font-size: 10px; }
+  :root[data-density="compact"] .home-weather-card, :root[data-density="compact"] .week-brief-card { padding: 17px 18px; }
+  :root[data-density="compact"] .home-insights { margin: 16px 0; gap: 12px; }
+  :root[data-density="compact"] .home-stats { gap: 8px; margin: 14px 0; }
+  :root[data-density="compact"] .home-stats > button { padding: 11px 10px; }
+  :root[data-density="compact"] .home-stats small { font-size: 9px; }
+  :root[data-density="compact"] .home-card { padding: 17px; }
+  :root[data-density="compact"] .section-heading h2 { font-size: 23px; }
+  :root[data-density="compact"] .week-day-number { font-size: 24px; }
+  .task-focus-bar { gap: 10px; }.task-focus-options { width: 100%; }
+  .task-focus-options button { flex: 1; padding: 7px 10px; min-height: 40px; font-size: 11px; }
+  .task-search { max-width: none; }.task-search input { min-height: 42px; font-size: 14px; }
+  .palette-options { gap: 6px; }.palette-options button { padding: 8px 11px; }
+  .tiny-mission { padding: 13px; gap: 10px; flex-wrap: wrap; }
+  .tiny-mission > img { width: 34px; height: 34px; }
+  .tiny-mission > div { flex-basis: calc(100% - 50px); }
+  .tiny-mission button { margin-left: 44px; }
+  .tiny-mission p { font-size: 12px; }
+  .fc-daygrid-event .event-checklist-progress { font-size: 7px; gap: 2px; }
+  .fc-daygrid-event .event-checklist-track { display: none; }
+}
+@media (min-width: 651px) {
+  :root[data-density="compact"] .display-mode .house-clock { font-size: 25px; }
+  :root[data-density="compact"] .display-mode .house-header h1 { font-size: 36px; }
+  :root[data-density="compact"] .display-mode .weather-temperatures strong { font-size: 48px; }
+  .display-mode .daily-card p, .display-mode .daily-card summary { font-size: 14px; }
+  .display-mode .daily-card blockquote { font-size: 23px; }
+  .display-mode .event-checklist-progress { font-size: 11px; }
+}
