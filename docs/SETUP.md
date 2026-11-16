@@ -56,6 +56,18 @@ firebase deploy --only hosting --project huberts-house
 
 The build copies only frontend files into `dist/`. It excludes server code, tests, dependencies and secrets. GitHub Pages can also serve the source root as before.
 
+### Automatic deploys from GitHub
+
+`.github/workflows/deploy.yml` deploys Hosting, Functions and Firestore rules to `huberts-house` on every push to `main`, after `npm run check`, `npm test` and `npm run build` pass. It can also be started from **Actions → Deploy to Firebase → Run workflow** (on `main`).
+
+It signs in with Workload Identity Federation, so no Google key is stored in GitHub. Only this repository's `main` branch can use the `github-deployer` service account. One-time setup, in Google Cloud Shell as the project owner, from a clone of this repository:
+
+```sh
+bash scripts/setup-github-deploy.sh
+```
+
+The script is safe to re-run. To turn automatic deploys off, disable the workflow in the Actions tab, or delete the `github` workload identity pool in Google Cloud (IAM → Workload Identity Federation).
+
 ## 4. Connect Apple Calendar in the app
 
 1. Sign in to Hubert’s House with a household account.
