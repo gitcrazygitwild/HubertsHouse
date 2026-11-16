@@ -88,12 +88,8 @@ export function writeEvent(payload, existing, uid, now = new Date()) {
     }
   }
   event.uid = event.uid || uid; event.summary = payload.title.trim(); event.description = payload.notes;
-  if (payload.owner !== undefined) {
-    if (!['hanry','karena','both','custom'].includes(payload.owner) || (payload.withFrankie && !['hanry','karena','both'].includes(payload.owner))) throw new CalendarError('invalid-argument','Frankie must be with hanry, Karena, or both.');
-    component.updatePropertyWithValue('x-huberts-owner', payload.owner);
-    component.updatePropertyWithValue('x-huberts-owner-name', String(payload.ownerCustom || '').slice(0,100));
-    component.updatePropertyWithValue('x-huberts-frankie', payload.withFrankie ? 'TRUE' : 'FALSE');
-  }
+  // Assignments now live in Hubert's backend. Keep any legacy extension fields
+  // already present, but never add or change them in Apple Calendar.
   component.removeAllProperties('duration');
   event.startDate = start; event.endDate = end;
   component.updatePropertyWithValue('dtstamp', utc(now)); component.updatePropertyWithValue('last-modified',utc(now));
@@ -104,4 +100,9 @@ export function writeEvent(payload, existing, uid, now = new Date()) {
 export function canDelete(data) {
   const components = calendarDocument(data).getAllSubcomponents('vevent');
   if (components.length !== 1 || components.some(c => c.hasProperty('rrule') || c.hasProperty('rdate') || hasScheduling(c))) throw new CalendarError('failed-precondition','Delete recurring events and invitations in Apple Calendar.');
+}
+export function eventUID(data) {
+  const uid=calendarDocument(data).getFirstSubcomponent('vevent')?.getFirstPropertyValue('uid');
+  if (typeof uid !== 'string' || !uid || uid.length>2048) throw new CalendarError('failed-precondition','This Apple event has no usable identifier.');
+  return uid;
 }

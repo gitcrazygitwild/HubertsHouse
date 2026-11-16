@@ -3,12 +3,14 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import { CalDAV, CalendarError, resourceToken, appleURL } from './caldav.js';
-import { readEvents, writeEvent, canDelete } from './ical.js';
+import { readEvents, writeEvent, canDelete, eventUID } from './ical.js';
+import { createAssignmentStore, validateAssignment } from './calendar-assignments.js';
 import { encryptCredential, decryptCredential } from './crypto.js';
 import { HuckleberryError } from './huckleberry-provider.js';
 import { createHuckleberryHandler } from './huckleberry-service.js';
 initializeApp();
 const db = getFirestore();
+const assignments = createAssignmentStore(db);
 const encryptionKey = defineSecret('CALENDAR_ENCRYPTION_KEY');
 const options = { region:'us-central1', secrets:[encryptionKey], timeoutSeconds:120, memory:'256MiB', cpu:'gcf_gen1', concurrency:1, minInstances:0, maxInstances:1, cors:true };
 const publicCalendars = calendars => calendars.map(({url,...calendar}) => calendar);
@@ -69,9 +71,19 @@ export const calendarEvents = endpoint(async (uid,input) => {
     return objects.flatMap(object => readEvents(object,calendar,start,end));
   }));
   const events = grouped.flat(); if (events.length > 5000) throw new CalendarError('resource-exhausted','Too many events in this range. Select fewer calendars.');
-  return {events,checkedAt:new Date().toISOString()};
+  return {events:await assignments.apply(events),checkedAt:new Date().toISOString()};
+});
+export const calendarAssign = endpoint(async (uid,input) => {
+  const assignment=validateAssignment(input.assignment);
+  const {data,client}=await connection(uid),calendar=calendarFor(data,input.calendarId);
+  // Even a read-only Apple resource can have a household-only assignment.
+  const current=await client.read(calendar,input.token),identity=eventUID(current.data);
+  if (input.uid!==identity) throw new CalendarError('aborted','This Apple event changed. Refresh before assigning it.');
+  return {saved:true,assignment:await assignments.save(calendar.id,identity,assignment,input.assignmentVersion)};
 });
 export const calendarSave = endpoint(async (uid,input) => {
+  const assignment=input.event?.owner === undefined ? null : validateAssignment(input.event);
+  if(assignment && (!Number.isSafeInteger(input.assignmentVersion ?? 0) || (input.assignmentVersion ?? 0)<0)) throw new CalendarError('invalid-argument','Refresh the household assignment before saving.');
   const {data,client} = await connection(uid); const calendar = calendarFor(data,input.calendarId);
   if (!calendar.writable) throw new CalendarError('permission-denied','This calendar is read-only.');
   let token = input.token, existing;
@@ -84,11 +96,17 @@ export const calendarSave = endpoint(async (uid,input) => {
   }
   const body = writeEvent(input.event,existing?.data,`${input.requestId}@huberts.house`);
   await client.put(calendar,token,body,input.etag,!existing);
+  if (assignment) {
+    try { await assignments.save(calendar.id,eventUID(body),assignment,input.assignmentVersion ?? 0); }
+    catch { return {saved:true,token,assignmentSaved:false,warning:'The event was saved to Apple Calendar, but its household assignment could not be saved. Refresh and reopen it to assign the owner.'}; }
+  }
   return {saved:true,token};
 });
 export const calendarDelete = endpoint(async (uid,input) => {
   const {data,client} = await connection(uid); const calendar = calendarFor(data,input.calendarId);
   const current = await client.read(calendar,input.token);
   if (!input.etag || current.etag !== input.etag) throw new CalendarError('aborted','This event changed in Apple Calendar. Refresh before deleting it.');
-  canDelete(current.data); await client.remove(calendar,input.token,input.etag); return {deleted:true};
+  canDelete(current.data); await client.remove(calendar,input.token,input.etag);
+  try { await assignments.remove(calendar.id,eventUID(current.data)); } catch { /* Deletion at Apple already succeeded. */ }
+  return {deleted:true};
 });

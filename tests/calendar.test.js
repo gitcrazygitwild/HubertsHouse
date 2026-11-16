@@ -16,13 +16,12 @@ test('editing an imported event preserves UID, location, alarms and unknown Appl
   assert.equal(e.getFirstPropertyValue('location'),'Favorite cafe'); assert.equal(e.getFirstPropertyValue('description'),input.notes);
   assert.equal(e.getFirstPropertyValue('x-apple-travel-advisory-behavior'),'AUTOMATIC'); assert.equal(e.getAllSubcomponents('valarm').length,1);
 });
-test('adult and Frankie metadata round-trip through iCloud while existing Apple fields survive', () => {
-  const saved = writeEvent({...input,owner:'karena',withFrankie:true},event,'unused');
-  const [record] = readEvents({data:saved,token,etag:'v1'},calendar,'2026-11-01','2026-12-01');
-  assert.equal(record.owner,'karena'); assert.equal(record.withFrankie,true); assert.match(saved,/LOCATION:Favorite cafe/);
-  assert.throws(() => writeEvent({...input,owner:'custom',withFrankie:true},event,'unused'),/Frankie must be with/);
-  const edited = writeEvent({...input,title:'A different time'},saved,'unused');
-  assert.equal(readEvents({data:edited,token},calendar,'2026-11-01','2026-12-01')[0].withFrankie,true);
+test('legacy Apple assignments are read, while new owner changes leave Apple properties alone', () => {
+  const legacy=event.replace('SUMMARY:Old title','X-HUBERTS-OWNER:karena\r\nX-HUBERTS-FRANKIE:TRUE\r\nSUMMARY:Old title');
+  const saved=writeEvent({...input,owner:'hanry',ownerCustom:'',withFrankie:false},legacy,'unused');
+  const [record]=readEvents({data:saved,token,etag:'v1'},calendar,'2026-11-01','2026-12-01');
+  assert.equal(record.owner,'karena');assert.equal(record.withFrankie,true);assert.match(saved,/LOCATION:Favorite cafe/);
+  assert.doesNotMatch(writeEvent({...input,owner:'hanry',withFrankie:true},null,'new'),/X-HUBERTS/);
 });
 test('all-day dates stay calendar dates and use an exclusive iCloud end', () => {
   const data = writeEvent({...input,allDay:true,startDate:'2026-11-15',endDate:'2026-11-17'},null,'all-day');

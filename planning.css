@@ -1,0 +1,39 @@
+.calendar-assistance { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding:0 22px 13px; color:var(--muted); font-size:10px; }
+.calendar-assistance label { display:flex; align-items:center; gap:7px; white-space:nowrap; cursor:pointer; }.calendar-assistance input { accent-color:var(--accent); }
+.people-filters { flex-wrap:wrap; }.person-chip[data-owner="frankie"] { color:#a3547a; }.person-chip[data-owner="frankie"].active { background:#f6e3ed; border-color:#dca5c0; color:#8f3f65; }
+.home-week-day { cursor:crosshair; }.home-day-plans { user-select:none; }.home-week-day.is-range-selected { background:color-mix(in srgb,var(--accent) 16%,var(--card)); box-shadow:inset 0 0 0 2px var(--accent); }
+.home-week-grid.is-selecting,.home-week-grid.is-selecting * { cursor:crosshair !important; user-select:none; }
+.home-holiday { display:block; color:#8c6d36; font-size:10px; line-height:1.4; margin:0 1px 7px; font-weight:550; }
+.fc .fc-event.calendar-holiday:not(.fc-list-event) { background:#f4eddd !important; color:#896a30 !important; border-left:2px solid #ccb783 !important; padding:4px 6px !important; box-shadow:none !important; }
+.holiday-label { display:block; font-size:9px; line-height:1.4; overflow-wrap:anywhere; font-weight:550; }
+.fc .calendar-holiday .fc-event-main { color:inherit !important; }
+#modalBackdrop .modal { width:min(680px,calc(100vw - 32px)); }
+#modalBackdrop .modal-title { font-family:var(--font-display,Georgia,serif); font-size:25px; }
+#modalBackdrop .modal-header { padding:18px 22px; border-bottom:1px solid var(--border); }
+#eventForm { padding:18px 22px 22px; }
+#eventForm > .field:first-child { margin-top:0; }
+#eventForm .event-title-input { font-family:var(--font-display,Georgia,serif); font-size:23px; font-weight:400; padding:13px 14px; }
+.event-schedule { border:1px solid var(--border); border-radius:16px; padding:16px; background:var(--soft); margin:16px 0; }
+.event-schedule-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px; }
+.event-all-day { display:inline-flex; align-items:center; gap:7px; font-size:12px; font-weight:600; white-space:nowrap; cursor:pointer; }.event-all-day input { width:17px; height:17px; accent-color:var(--accent); }
+.event-date-columns { display:grid; grid-template-columns:1fr 1fr; gap:14px; }.event-date-columns > div { min-width:0; }
+#eventForm .event-date-columns input { width:100%; min-width:0; font-size:15px; padding:11px 10px; background:var(--card); border:1px solid var(--border); border-radius:10px; box-sizing:border-box; }
+#eventForm .event-date-columns .field { margin:8px 0 12px; gap:6px; }
+.event-schedule [hidden],#eventReadonly[hidden] { display:none !important; }
+.event-shortcuts { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }.event-shortcuts > div { display:flex; gap:5px; }
+.event-shortcuts button { border:1px solid var(--border); color:var(--text); border-radius:8px; background:var(--card); padding:7px 10px; font-size:11px; cursor:pointer; min-height:34px; }
+.event-shortcuts button[aria-pressed="true"] { color:var(--card); background:var(--accent); border-color:var(--accent); }
+.event-date-summary { border-top:1px solid var(--border); padding-top:13px; margin:13px 0 5px; font-size:12px; font-weight:600; line-height:1.6; }.event-schedule > small { font-size:10px; }
+#eventReadonly { font-size:12px; line-height:1.6; padding:12px 14px; border-radius:10px; border:1px solid var(--border); }
+#eventForm input:disabled,#eventForm textarea:disabled { opacity:.7; cursor:default; }
+#evtError:empty { display:none; }
+[data-theme="dark"] .person-chip[data-owner="frankie"] { color:#efb5d0; }[data-theme="dark"] .person-chip[data-owner="frankie"].active { background:#483142; border-color:#8a5a72; }
+[data-theme="dark"] .home-holiday { color:#dac18a; }[data-theme="dark"] .fc .fc-event.calendar-holiday:not(.fc-list-event) { background:#423d2d !important; color:#e5cd95 !important; border-color:#a18c58 !important; --event-ink:#e5cd95; }
+[data-theme="dark"] .event-shortcuts button[aria-pressed="true"] { color:#17241b; }
+@media(max-width:650px) {
+  .calendar-assistance { padding:0 12px 12px; font-size:9px; }.people-filters { gap:2px; }
+  #modalBackdrop .modal { width:calc(100vw - 20px); max-height:94dvh; }#modalBackdrop .modal-header { padding:13px 15px; }#eventForm { padding:12px 15px 18px; }
+  .event-schedule { padding:12px; }.event-date-columns { gap:9px; }#eventForm .event-date-columns input { font-size:13px; padding:10px 6px; }.event-schedule-heading .eyebrow { font-size:8px; letter-spacing:1px; }
+  .event-shortcuts button { padding:7px 8px; font-size:10px; }.event-date-summary { font-size:11px; }
+}
+@media(prefers-reduced-motion:reduce) { .home-week-day { scroll-behavior:auto; } }

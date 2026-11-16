@@ -18,6 +18,7 @@
   <link rel="stylesheet" href="./connected-home.css?v=20261115_v7" />
   <link rel="stylesheet" href="./family.css?v=20261115_v7" />
   <link rel="stylesheet" href="./baby.css?v=20261115_v7" />
+  <link rel="stylesheet" href="./planning.css?v=20261115_v7" />
 </head>
 <body>
 
@@ -101,7 +102,7 @@
           </div>
           <div class="home-calendar-key"><div aria-label="Calendar colors"><span><i class="person-dot hanry" aria-hidden="true"></i>hanry</span><span><i class="person-dot karena" aria-hidden="true"></i>Karena</span><span><i class="person-dot both" aria-hidden="true"></i>Together</span><span><i class="person-dot frankie" aria-hidden="true"></i>+ Frankie</span></div><span id="homeCalendarStatus" class="sync-pill" role="status">Connecting…</span></div>
           <div id="homeWeek" class="home-week-grid"></div>
-          <div class="home-calendar-footer"><span id="homeCalendarSummary" role="status"></span><span>Tap a plan for details · add a little room for something good.</span></div>
+          <div class="home-calendar-footer"><span id="homeCalendarSummary" role="status"></span><span>Click a day to add · drag across days for a longer plan · click a plan to edit.</span></div>
         </section>
         <section class="baby-card" aria-labelledby="babyTitle">
           <div class="baby-heading"><div><span class="eyebrow">LITTLE MOMENTS, BIG LOVE</span><h2 id="babyTitle">Little rhythms, together.</h2></div><div class="baby-heading-actions"><span class="status-badge" id="babyBadge">Connect Huckleberry</span><button type="button" class="text-link" id="babySettings">Baby settings →</button></div></div>
@@ -157,13 +158,15 @@
                   <button type="button" data-owner="hanry" class="person-chip" aria-pressed="false"><span class="person-dot hanry"></span>hanry</button>
                   <button type="button" data-owner="karena" class="person-chip" aria-pressed="false"><span class="person-dot karena"></span>Karena</button>
                   <button type="button" data-owner="both" class="person-chip" aria-pressed="false"><span class="person-dot both"></span>Together</button>
+                  <button type="button" data-owner="frankie" class="person-chip" aria-pressed="false" title="Frankie, always with hanry, Karena, or both"><span class="person-dot frankie"></span>+ Frankie</button>
                   <button type="button" data-owner="custom" class="person-chip" aria-pressed="false"><span class="person-dot custom"></span>Other</button>
                 </div>
-                <label class="sr-only">Filter by person<select id="ownerFilter"><option value="all">Everyone</option><option value="hanry">hanry</option><option value="karena">Karena</option><option value="both">Together</option><option value="custom">Other</option></select></label>
+                <label class="sr-only">Filter by person<select id="ownerFilter"><option value="all">Everyone</option><option value="hanry">hanry</option><option value="karena">Karena</option><option value="both">Together</option><option value="custom">Other</option><option value="frankie">With Frankie</option></select></label>
                 <div class="calendar-views" role="group" aria-label="Calendar view"><button type="button" data-calendar-view="dayGridMonth">Month</button><button type="button" data-calendar-view="timeGridWeek">Week</button><button type="button" data-calendar-view="timeGridDay">Day</button><button type="button" data-calendar-view="listCustom">Agenda</button></div>
               </div>
+              <div class="calendar-assistance"><span>Click a day to add · drag to select dates · click an event to edit</span><label><input id="calendarHolidays" type="checkbox" checked /> U.S. holidays</label></div>
               <div id="calendarGrid"></div>
-              <div class="calendar-caption"><span id="calendarRangeSummary" role="status"></span><span>Choose a day to see the details <span aria-hidden="true">→</span></span></div>
+              <div class="calendar-caption"><span id="calendarRangeSummary" role="status"></span><span>Drag across days to make a plan <span aria-hidden="true">→</span></span></div>
             </div>
             <div class="calendar-search-area">
     <div class="search-row-wrap search-wrap">
@@ -336,7 +339,7 @@
   <!-- =========================
        EDIT MODAL
   ========================== -->
-  <div id="modalBackdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+  <div id="modalBackdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <div class="modal">
       <div class="modal-header">
         <div id="modalTitle" class="modal-title">New event</div>
@@ -351,30 +354,21 @@
           <label class="field"><span>Calendar</span><select id="evtCalendar"><option value="household">Hubert’s House</option></select><small id="evtCalendarHint" class="muted"></small></label>
           <label class="field">
             <span>Title</span>
-            <input id="evtTitle" type="text" required placeholder="e.g., Dinner reservation" />
+            <input id="evtTitle" class="event-title-input" type="text" required maxlength="500" placeholder="What’s the plan?" />
           </label>
 
-          <div class="row">
-            <label class="field">
-              <span>Start</span>
-              <input id="evtStart" type="datetime-local" required />
-            </label>
-
-            <label class="field">
-              <span>End (last day for all-day events)</span>
-              <input id="evtEnd" type="datetime-local" />
-            </label>
-          </div>
-
+          <p id="eventReadonly" class="connection-note" hidden></p>
+          <section class="event-schedule" aria-label="Event date and time">
+            <div class="event-schedule-heading"><span class="eyebrow">MAKE A LITTLE TIME</span><label class="event-all-day"><input id="evtAllDay" type="checkbox" /> All day</label></div>
+            <input id="evtStart" type="datetime-local" hidden tabindex="-1" /><input id="evtEnd" type="datetime-local" hidden tabindex="-1" />
+            <div class="event-date-columns"><div><label class="field"><span>Start date</span><input id="evtStartDate" type="date" required /></label><label class="field event-time-field"><span>Start time</span><input id="evtStartTime" type="time" required /></label></div><div><label class="field"><span id="eventEndDateLabel">End date</span><input id="evtEndDate" type="date" required /></label><label class="field event-time-field"><span>End time</span><input id="evtEndTime" type="time" required /></label></div></div>
+            <div class="event-shortcuts"><div role="group" aria-label="Start date shortcuts"><button type="button" data-event-date="0">Today</button><button type="button" data-event-date="1">Tomorrow</button></div><div id="eventDurations" role="group" aria-label="Event duration"><button type="button" data-event-duration="30">30 min</button><button type="button" data-event-duration="60">1 hour</button><button type="button" data-event-duration="120">2 hours</button></div></div>
+            <p id="eventDateSummary" class="event-date-summary" aria-live="polite"></p><small id="eventTimezone" class="muted"></small>
+          </section>
           <div id="eventOverlap" class="event-overlap hidden" role="status" aria-live="polite"></div>
-          <label class="check">
-            <input id="evtAllDay" type="checkbox" />
-            <span>All day</span>
-          </label>
-
           <div class="row">
             <label class="field">
-              <span>Who</span>
+              <span>Who’s coming?</span>
               <select id="evtOwner">
                 <option value="hanry">hanry</option>
                 <option value="karena">Karena</option>
@@ -438,7 +432,8 @@
             <button id="saveBtn" type="submit" class="btn btn-primary">Save</button>
           </div>
 
-          <div class="tiny muted" style="margin-top:8px;">
+          <p id="evtError" class="form-error" role="alert"></p>
+          <div id="eventRepeatNote" class="tiny muted" style="margin-top:8px;">
             Note: repeating events update the whole series (no single-instance edits yet).
           </div>
         </form>

@@ -1,6 +1,8 @@
 import { overlappingEvents, preferredCalendar } from './event-planning.js';
 import { initCatCrew } from './cat-crew.js';
 import { initHuckleberry } from './baby.js';
+import { initEventDateEditor } from './event-editor.js';
+import { holidayEvents, holidaysEnabled } from './holidays.js';
 // app.js — Hubert’s House
 // Household dashboard, authenticated Firebase sync and iCloud calendar integration.
 // Upcoming + Outstanding checklist panels + checklist-focused modal
@@ -8,7 +10,7 @@ import { initHuckleberry } from './baby.js';
 
 import { config } from './config.js';
 import { initHousehold, updateHouseholdEvents, showNotice, showView } from './household.js';
-import { initCloudCalendar, setCloudRange, refreshCloud, saveCloudEvent, deleteCloudEvent } from './cloud-calendar.js';
+import { initCloudCalendar, setCloudRange, refreshCloud, saveCloudEvent, saveCloudAssignment, deleteCloudEvent } from './cloud-calendar.js';
 import { demoStore, demoEvents } from './demo.js';
 import { initDashboard } from './dashboard.js';
 import { initHomeCalendar } from './home-calendar.js';
@@ -521,9 +523,10 @@ function setCalendarStatus(message, state) {
     const element = document.getElementById(id); element.textContent = message; element.dataset.state = state;
   }
 }
-function addEventOnDay(day) {
-  const start = new Date(day); start.setHours(9, 0, 0, 0);
-  openEventModal({ mode: 'create', title: '', start, end: new Date(start.getTime() + 3600000), allDay: false, owner: 'both', type: 'general', repeat: 'none', notes: '', checklist: [] });
+function addEventOnDay(day, lastDay) {
+  const start = new Date(day); start.setHours(lastDay ? 0 : 9, 0, 0, 0);
+  const end = lastDay ? new Date(lastDay) : new Date(start.getTime() + 3600000);
+  openEventModal({ mode: 'create', title: '', start, end, allDay: !!lastDay, owner: 'both', type: 'general', repeat: 'none', notes: '', checklist: [] });
 }
 function startHousehold(store) {
   initHousehold({ store, onData: (events, items) => { renderWeekBrief(events, items); homeCalendar?.render(); },
@@ -589,7 +592,12 @@ async function removeEvent(id) {
 }
 
 // ---------- UI hooks ----------
+let eventDateEditor, cloudEventBaseline = '';
+function cloudDraftKey() { return JSON.stringify([evtTitle.value,evtStart.value,evtEnd.value,evtAllDay.checked,evtNotes.value]); }
 function initUIHooks() {
+  eventDateEditor = initEventDateEditor({onChange:updateEventOverlap});
+  const holidays = document.getElementById('calendarHolidays'); holidays.checked=holidaysEnabled();
+  holidays.addEventListener('change',()=>{try {localStorage.setItem('hh_holidays',holidays.checked?'1':'0');}catch{} renderCalendarFromCache();homeCalendar?.render();});
   document.querySelectorAll('[data-event-template]').forEach(button => button.addEventListener('click', () => {
     if (isUnlocked()) openEventModal(eventTemplate(button.dataset.eventTemplate));
   }));
@@ -664,18 +672,6 @@ function initUIHooks() {
     if (e.target === backdrop) closeModal();
   });
 
-  evtAllDay?.addEventListener("change", () => {
-    preserveDatesOnAllDayToggle(!!evtAllDay.checked);
-  });
-
-  evtStart?.addEventListener("change", () => {
-    clampEndToStart({ alsoFillIfBlank: true });
-  });
-
-  evtEnd?.addEventListener("change", () => {
-    clampEndToStart({ alsoFillIfBlank: false });
-  });
-
   evtOwner?.addEventListener("change", () => {
     const v = evtOwner.value;
     ownerCustomWrap?.classList.toggle("hidden", v !== "custom");
@@ -685,6 +681,7 @@ function initUIHooks() {
   evtRepeat?.addEventListener("change", () => {
     const v = evtRepeat.value;
     repeatUntilWrap?.classList.toggle("hidden", v === "none");
+    updateDestinationUI();
   });
 
   evtType?.addEventListener("change", () => {
@@ -741,7 +738,7 @@ function initCalendarUI() {
       ? localStorage.getItem('hh_calendar_view') : window.innerWidth < 650 ? 'listCustom' : 'dayGridMonth',
     headerToolbar: false,
     eventContent: calendarEventContent,
-    eventClassNames: arg => [`owner-${normalizeOwner(arg.event.extendedProps?.owner)}`, ...(arg.event.extendedProps?.withFrankie ? ["with-frankie"] : [])],
+    eventClassNames: arg => arg.event.extendedProps?.holiday ? ['calendar-holiday'] : [`owner-${normalizeOwner(arg.event.extendedProps?.owner)}`, ...(arg.event.extendedProps?.withFrankie ? ["with-frankie"] : [])],
     dayHeaderFormat: { weekday: 'short' },
     dayHeaderContent: info => {
       // Month headers use abstract UTC weekdays. FullCalendar's formatted text
@@ -762,9 +759,9 @@ function initCalendarUI() {
       const number = info.el.querySelector('.fc-daygrid-day-number');
       if (!number) return;
       number.setAttribute('role', 'button'); number.setAttribute('tabindex', '0');
-      number.setAttribute('aria-label', `Show plans for ${info.date.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}`);
+      number.setAttribute('aria-label', `Add a plan on ${info.date.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}`);
       number.addEventListener('keydown', event => {
-        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); calendarExperience?.selectDay(info.date); }
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); calendarExperience?.selectDay(info.date); addEventOnDay(info.date); }
       });
     },
 
@@ -785,6 +782,9 @@ function initCalendarUI() {
     },
 
     selectable: true,
+    selectMinDistance: 6,
+    selectMirror: true,
+    selectOverlap: true,
     editable: true,
     nowIndicator: true,
     height: "auto",
@@ -796,78 +796,23 @@ function initCalendarUI() {
       if (!demo) setCloudRange(info.start.toISOString(),info.end.toISOString());
     },
 
-    dateClick: (info) => {
-      if (calendar?.view?.type === "dayGridMonth") {
-        calendarExperience?.selectDay(info.date);
-      } else {
-        const start = new Date(info.date);
-        const end = new Date(start.getTime() + 60 * 60 * 1000);
-        openEventModal({
-          mode: "create",
-          title: "",
-          start,
-          end,
-          allDay: false,
-          owner: "both",
-          ownerCustom: "",
-          type: "general",
-          repeat: "none",
-          repeatUntil: "",
-          notes: "",
-          checklist: []
-        });
-      }
+    dateClick: info => {
+      calendarExperience?.selectDay(info.date);
+      if (info.allDay) addEventOnDay(info.date);
+      else openEventModal({mode:'create',title:'',start:info.date,end:new Date(+info.date+3600000),allDay:false,owner:'both',type:'general',repeat:'none',notes:'',checklist:[]});
     },
-
-    select: (info) => {
-      if (info.view.type === 'dayGridMonth' && dateKey(new Date(info.end.getTime() - 1)) === dateKey(info.start)) {
-        calendarExperience?.selectDay(info.start); calendar.unselect(); return;
-      }
-      const start = info.start;
-      const end = info.end ? new Date(info.end) : new Date(start.getTime() + 60 * 60 * 1000);
-      if (info.allDay) end.setDate(end.getDate() - 1);
-      openEventModal({
-        mode: "create",
-        title: "",
-        start,
-        end,
-        allDay: info.allDay,
-        owner: "both",
-        ownerCustom: "",
-        type: "general",
-        repeat: "none",
-        repeatUntil: "",
-        notes: "",
-        checklist: []
-      });
+    select: info => {
+      const end=new Date(info.end); if (info.allDay) end.setDate(end.getDate()-1);
+      openEventModal({mode:'create',title:'',start:info.start,end,allDay:info.allDay,owner:'both',type:'general',repeat:'none',notes:'',checklist:[]});
+      calendar.unselect();
     },
-
-    eventClick: (info) => {
-      const ev = info.event;
-      const p = ev.extendedProps || {};
-      const sourceId = p.sourceId || ev.id;
-
-      const docData = rawDocs.find(d => d.id === sourceId);
-      if (!docData) return;
-
-      const occStart = ev.start ? new Date(ev.start) : (docData.start ? new Date(docData.start) : null);
-
-      openDetailsModal({
-        id: sourceId,
-        occurrenceStart: occStart,
-        title: docData.title || "",
-        start: occStart || (docData.start ? new Date(docData.start) : null),
-        end: docData.end ? new Date(docData.end) : (ev.end ? new Date(ev.end) : null),
-        allDay: !!docData.allDay,
-        owner: normalizeOwner(docData.owner),
-        ownerCustom: docData.ownerCustom || "",
-        type: docData.type || "general",
-        notes: docData.notes || "",
-        checklist: Array.isArray(docData.checklist) ? docData.checklist : []
-      });
+    eventClick: info => {
+      if (info.event.extendedProps?.holiday) { showNotice(`${info.event.title} · ${info.event.extendedProps.federal ? 'U.S. federal holiday' : 'Calendar observance'}`); return; }
+      openFromPanel(info.event.extendedProps?.sourceId || info.event.id,info.event.start?.toISOString(),false);
     },
 
     eventDidMount: (arg) => {
+      if (arg.event.extendedProps?.holiday) {arg.el.title=`${arg.event.title} · ${arg.event.extendedProps.federal?'U.S. federal holiday':'Observance'}`; return;}
       const show = shouldShowEvent(arg.event);
       if (!show) arg.el.style.display = "none";
 
@@ -950,7 +895,7 @@ function attachSwipe(el) {
 
   el.addEventListener("touchend", (e) => {
     const dt = Date.now() - st;
-    if (dt > 650) return;
+    if (dt >= 350) return;
 
     const touch = e.changedTouches?.[0];
     if (!touch) return;
@@ -975,6 +920,7 @@ function renderCalendarFromCache() {
   calendar.batchRendering(() => {
     calendar.removeAllEventSources();
     calendar.addEventSource(getVisibleEvents());
+    calendar.addEventSource({id:'us-holidays',events:(info,success)=>success(holidayEvents(info.start,info.end))});
   });
   calendarExperience?.render();
 }
@@ -1113,7 +1059,9 @@ function shouldShowEvent(fcEvent) {
   const owner = normalizeOwner(p.owner);
 
   if (ownerFilterValue && ownerFilterValue !== "all") {
-    if (ownerFilterValue === "hanry") {
+    if (ownerFilterValue === "frankie") {
+      if (!p.withFrankie) return false;
+    } else if (ownerFilterValue === "hanry") {
       if (!(owner === "hanry" || owner === "both")) return false;
     } else if (ownerFilterValue === "karena") {
       if (!(owner === "karena" || owner === "both")) return false;
@@ -1139,6 +1087,7 @@ function shouldShowEvent(fcEvent) {
 
 function matchOwnerFilter(e) {
   if (!ownerFilterValue || ownerFilterValue === "all") return true;
+  if (ownerFilterValue === "frankie") return !!e.extendedProps?.withFrankie;
   const o = normalizeOwner(e.extendedProps?.owner);
 
   if (ownerFilterValue === "hanry") return (o === "hanry" || o === "both");
@@ -1306,30 +1255,12 @@ function renderOutstanding() {
 }
 
 function openFromPanel(sourceId, occurrenceStartISO, checklistView) {
-  const docData = rawDocs.find(d => d.id === sourceId);
-  if (!docData) return;
-
-  const occStart = occurrenceStartISO
-    ? new Date(occurrenceStartISO)
-    : (docData.start ? new Date(docData.start) : null);
-
-  if (checklistView) {
-    openTaskModal(docData, occStart);
-  } else {
-    openDetailsModal({
-      id: sourceId,
-      occurrenceStart: occStart,
-      title: docData.title || "",
-      start: occStart || (docData.start ? new Date(docData.start) : null),
-      end: docData.end ? new Date(docData.end) : null,
-      allDay: !!docData.allDay,
-      owner: normalizeOwner(docData.owner),
-      ownerCustom: docData.ownerCustom || "",
-      type: docData.type || "general",
-      notes: docData.notes || "",
-      checklist: Array.isArray(docData.checklist) ? docData.checklist : []
-    });
-  }
+  const docData = rawDocs.find(d => d.id === sourceId); if (!docData) return;
+  const occStart = occurrenceStartISO ? new Date(occurrenceStartISO) : new Date(docData.start);
+  if (checklistView) { openTaskModal(docData,occStart); return; }
+  // Household repeats edit the series anchor; Apple recurring instances only
+  // allow household assignments, leaving their dates untouched at Apple.
+  openEventModal({...docData,mode:'edit',id:sourceId,occurrenceStart:occStart,start:new Date(docData.start),end:docData.end ? new Date(docData.end) : null,owner:normalizeOwner(docData.owner)});
 }
 
 // ---------- Event modal ----------
@@ -1339,8 +1270,13 @@ function openEventModal(payload) {
   editingDocId = isEdit ? payload.id : null;
   editingOccurrenceStart = payload.occurrenceStart || null;
   eventRequestId = crypto.randomUUID();
+  document.getElementById('evtError').textContent='';
   const original = rawDocs.find(d => d.id === editingDocId);
   const destination = document.getElementById('evtCalendar');
+  destination.querySelectorAll('[data-view-only]').forEach(option=>option.remove());
+  if(original?.icloud && ![...destination.options].some(option=>option.value===original.calendarId)) {
+    const option=new Option(`${original.calendarName} · iCloud (read-only)`,original.calendarId);option.dataset.viewOnly='true';destination.add(option);
+  }
   destination.value = isEdit ? (original?.icloud ? original.calendarId : 'household') : defaultCalendar();
   destination.disabled = isEdit;
   updateDestinationUI();
@@ -1366,17 +1302,17 @@ function openEventModal(payload) {
   if (evtRepeatUntil) evtRepeatUntil.value = payload.repeatUntil || "";
 
   setDateTimeInputs(!!payload.allDay, payload.start, payload.end);
-  clampEndToStart({ alsoFillIfBlank: true });
 
   renderChecklistUI(checklistEl, payload.checklist || []);
   if (evtNotes) evtNotes.value = payload.notes || "";
   updateDestinationUI();
+  cloudEventBaseline=cloudDraftKey();
 
   backdrop?.classList.remove("hidden");
   updateEventOverlap();
 
   scrollToTopSafely(editScroll);
-  setTimeout(() => evtTitle?.focus(), 0);
+  setTimeout(() => (evtTitle?.disabled ? evtOwner : evtTitle)?.focus(), 0);
 }
 
 function closeModal() {
@@ -1385,65 +1321,8 @@ function closeModal() {
   backdrop?.classList.add("hidden");
 }
 
-function setEndMinFromStart() {
-  if (!evtStart || !evtEnd) return;
-  evtEnd.min = evtStart.value || "";
-}
-
-function addHours(date, hours) {
-  const d = new Date(date);
-  d.setHours(d.getHours() + hours);
-  return d;
-}
-
-function clampEndToStart({ alsoFillIfBlank = true } = {}) {
-  if (!evtStart || !evtEnd) return;
-
-  const allDay = (evtStart.type === "date");
-  const sVal = evtStart.value;
-  if (!sVal) return;
-
-  setEndMinFromStart();
-
-  const eVal = evtEnd.value;
-  const sDate = fromInputValue(sVal, allDay);
-  const defaultEndDate = allDay ? sDate : addHours(sDate, 1);
-  const defaultEndVal = toInputValue(defaultEndDate, allDay);
-
-  if (!eVal) {
-    if (alsoFillIfBlank) evtEnd.value = defaultEndVal;
-    return;
-  }
-
-  const eDate = fromInputValue(eVal, allDay);
-  if (eDate.getTime() < sDate.getTime()) {
-    evtEnd.value = defaultEndVal;
-  }
-}
-
-function setDateTimeInputs(isAllDay, startDate, endDate) {
-  if (!evtStart || !evtEnd) return;
-
-  evtStart.type = isAllDay ? "date" : "datetime-local";
-  evtEnd.type = isAllDay ? "date" : "datetime-local";
-
-  evtStart.value = toInputValue(startDate, isAllDay);
-  evtEnd.value = endDate ? toInputValue(endDate, isAllDay) : "";
-}
-
-function preserveDatesOnAllDayToggle(isAllDayNow) {
-  if (!evtStart || !evtEnd) return;
-
-  const prevStartVal = evtStart.value;
-  const prevEndVal = evtEnd.value;
-
-  const wasAllDay = evtStart.type === "date";
-  const startDate = prevStartVal ? fromInputValue(prevStartVal, wasAllDay) : new Date();
-  const endDate = prevEndVal ? fromInputValue(prevEndVal, wasAllDay) : null;
-
-  setDateTimeInputs(isAllDayNow, startDate, endDate);
-  clampEndToStart({ alsoFillIfBlank: true });
-}
+function addHours(date,hours) { return new Date(+new Date(date)+hours*3600000); }
+function setDateTimeInputs(isAllDay,startDate,endDate) { eventDateEditor.set(isAllDay,startDate,endDate); }
 
 detailsEditBtn?.addEventListener("click", () => {
   if (!detailsDocId) return;
@@ -1507,7 +1386,14 @@ for (const type of ['input', 'change']) document.getElementById('eventForm').add
 
 function updateDestinationUI() {
   const cloud = document.getElementById('evtCalendar').value !== 'household';
-  document.getElementById('evtCalendarHint').textContent = cloud ? 'Saves directly to iCloud. Create repeats and invitations in Apple Calendar.' : 'Shared with everyone in Hubert’s House.';
+  const original=rawDocs.find(record=>record.id===editingDocId),readOnly=!!original?.readOnlyReason;
+  document.getElementById('evtCalendarHint').textContent = cloud ? 'Event details save to Apple Calendar. Who’s coming is saved in Hubert’s House.' : 'Shared with everyone in Hubert’s House.';
+  document.getElementById('eventReadonly').textContent=readOnly ? `${original.readOnlyReason} You can still change who’s coming below.` : '';
+  document.getElementById('eventReadonly').hidden=!readOnly;
+  for (const id of ['evtTitle','evtStartDate','evtEndDate','evtStartTime','evtEndTime','evtAllDay','evtNotes']) document.getElementById(id).disabled=readOnly;
+  document.querySelectorAll('[data-event-date],[data-event-duration]').forEach(button=>{button.disabled=readOnly;});
+  deleteBtn.classList.toggle('hidden',!editingDocId || readOnly);
+  document.getElementById('eventRepeatNote').hidden=cloud || evtRepeat.value==='none';
   evtRepeat.closest('.row').classList.toggle('hidden',cloud);
   checklistEl.closest('.field').classList.toggle('hidden',cloud);
   evtOwner.closest('.row').classList.remove('hidden');
@@ -1522,8 +1408,13 @@ evtOwner.addEventListener('change',updateDestinationUI);
 async function handleSave() {
   if (savingEvent) return;
   savingEvent = true; saveBtn.disabled = true; saveBtnTop.disabled = true;
+  document.getElementById('evtError').textContent='';
   try { await saveEventValues(); }
-  catch (e) { showNotice(e.message || 'Could not save this event. Try again.'); }
+  catch (e) {
+    const error=document.getElementById('evtError');
+    error.textContent=e.message || 'Could not save this event. Try again.';
+    error.scrollIntoView?.({block:'nearest'});
+  }
   finally { savingEvent = false; saveBtn.disabled = false; saveBtnTop.disabled = false; }
 }
 async function saveEventValues() {
@@ -1534,6 +1425,11 @@ async function saveEventValues() {
 
   const owner = normalizeOwner(evtOwner?.value || "both");
   const ownerCustom = owner === "custom" ? (evtOwnerCustom?.value || "").trim() : "";
+  const destination=document.getElementById('evtCalendar').value,original=rawDocs.find(d=>d.id===editingDocId);
+  const assignment={owner,ownerCustom,withFrankie:document.getElementById('evtWithFrankie').checked && ['hanry','karena','both'].includes(owner)};
+  if(original?.icloud && cloudEventBaseline===cloudDraftKey()) {
+    await saveCloudAssignment(assignment,original);closeModal();showNotice('Who’s coming is saved in Hubert’s House.');await refreshCloud();return;
+  }
 
   const type = evtType?.value || "general";
   const notes = (evtNotes?.value || "").trim();
@@ -1547,9 +1443,8 @@ async function saveEventValues() {
 
   if (allDay && end && end.getTime() === start.getTime()) end = null;
 
-  if (end && end.getTime() < start.getTime()) {
-    alert("End must be after start.");
-    return;
+  if (end && (end < start || (!allDay && +end === +start))) {
+    throw new Error("End must be after start. Choose the next end date for an overnight plan.");
   }
 
   const checklist = readChecklistUI(checklistEl);
@@ -1570,12 +1465,10 @@ async function saveEventValues() {
     updatedAt: serverTimestamp()
   };
 
-  const destination = document.getElementById('evtCalendar').value;
   if (destination !== 'household') {
-    const original = rawDocs.find(d => d.id === editingDocId);
-    await saveCloudEvent({title,notes,allDay,owner,ownerCustom,withFrankie:payload.withFrankie,start:start.toISOString(),end:(end || addHours(start,1)).toISOString(),
+    const result=await saveCloudEvent({title,notes,allDay,...assignment,start:start.toISOString(),end:(end || addHours(start,1)).toISOString(),
       startLocal:evtStart.value,endLocal:evtEnd.value || toInputValue(addHours(start,1),false),startDate:evtStart.value.slice(0,10),endDate:evtEnd.value.slice(0,10) || evtStart.value.slice(0,10),repeat:'none'},original,destination,eventRequestId);
-    closeModal(); showNotice('Saved to iCloud.'); await refreshCloud();
+    closeModal(); showNotice(result.warning || 'Saved. Apple event details and household assignments are up to date.'); await refreshCloud();
   } else {
     await saveLocalEvent(editingDocId,payload); closeModal(); showNotice(demo ? 'Saved in this sample preview.' : 'Event saved for the household.');
   }

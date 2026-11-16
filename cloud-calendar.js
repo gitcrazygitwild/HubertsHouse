@@ -99,7 +99,11 @@ function render() {
 export async function saveCloudEvent(event,original,calendarId,requestId) {
   if (!connection.connected) throw new Error('Connect iCloud in Settings first.');
   if (original?.readOnlyReason) throw new Error(original.readOnlyReason);
-  return call('calendarSave',{calendarId,token:original?.token || null,etag:original?.etag || null,requestId,event});
+  return call('calendarSave',{calendarId,token:original?.token || null,etag:original?.etag || null,requestId,event,assignmentVersion:original?.assignmentVersion || 0});
+}
+export async function saveCloudAssignment(assignment,original) {
+  if (!connection.connected) throw new Error('Connect iCloud in Settings first.');
+  return call('calendarAssign',{calendarId:original.calendarId,token:original.token,uid:original.uid,assignmentVersion:original.assignmentVersion || 0,assignment});
 }
 export async function deleteCloudEvent(original) {
   if (original.readOnlyReason) throw new Error(original.readOnlyReason);

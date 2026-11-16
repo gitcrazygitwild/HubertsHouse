@@ -6,7 +6,9 @@ A household dashboard for hanry, Karena, Frankie, Hubert, Mack, and Mia, designe
 - App links: Miateorology with a daily forecast icon and Flapurr with a flying-cat icon, available on phones and shared displays.
 - Weather: Richmond high/low, rain chance, wind, and a three-day outlook from Miateorology's published forecast feed; Fahrenheit/Celsius is a device preference.
 - Weekly brief: seven-day plan counts, dated to-dos (including overdue items), the busiest day, open evenings, and overlapping timed events for the same household members.
-- Calendar: the existing month/week/day/agenda views, household events, event checklists, search, and owner filters.
+- Calendar: month/week/day/agenda views, household events, event checklists, search, and owner filters including Frankie. Click an empty day to create a plan, drag across days for an inclusive all-day span, or click an event to edit it directly.
+- Event editor: separate date and time fields, Today/Tomorrow shortcuts, duration presets, and a readable range summary. Moving the start preserves the duration; all-day spans clearly include their last day.
+- Holidays: U.S. federal holidays, their observed dates, and familiar dates such as Christmas Eve, Easter, and Halloween. A device-level toggle controls both calendars; holiday labels never count as household plans or conflicts.
 - Chores and checklists: assignments, due dates, named lists, recurring chores, completion and undo.
 - Groceries: a shared list with quantities, aisle grouping, check-off, and clearing bought items.
 - Monitor mode: the complete app in fullscreen, with sidebar navigation, editing, baby tracking, and every home-page extra. Keeps supported screens awake; Exit monitor or Escape leaves fullscreen.
@@ -15,13 +17,13 @@ A household dashboard for hanry, Karena, Frankie, Hubert, Mack, and Mia, designe
 - Task focus: All, Today, Overdue, and Anytime filters, plus search by task title or checklist name. These combine with the existing person and completion filters.
 - Daily moments: an original encouragement quote, fun fact, word with a usage example, and a tap-to-reveal joke beside the welcome message. Hubert’s tiny mission adds an optional small daily challenge.
 - iCloud: choose calendars, display Apple events, and create/edit/delete ordinary events with ETag conflict protection. Choose a default calendar per account and device; nonblocking overlap warnings check the loaded events for the same people before saving.
-- Frankie: an optional pink striped accent on events and chores, always alongside hanry, Karena, or both. Apple events preserve this assignment in private iCalendar extension properties.
+- Frankie: an optional pink striped accent on events and chores, always alongside hanry, Karena, or both. Apple event owners and Frankie assignments are stored privately in Hubert’s House, including for read-only or repeating Apple events.
 - Baby tracking: an unofficial Huckleberry connection for sleep timers, finished sleeps, bottles, and diapers. Compare the stored Huckleberry SweetSpot with Hubert’s independent Purrfect Window estimate.
 - Resident supervisors: personalized tabby portraits for Hubert (darker brown, yellow eyes), Mack (brown, green eyes), and Mia (light tabby/Siamese mix, blue eyes). Tap a cat for a little note.
 
 ## Current activation status
 
-The frontend is deployed at **https://huberts-house.web.app**, with Firebase Authentication and household membership rules enabled. `calendarServiceEnabled` is `true`; the seven private calendar functions and the `huckleberry` callable are deployed in `us-central1`. `huckleberryServiceEnabled` is `true`; connect under **Settings → Huckleberry**. Connect an Apple account in **Settings → Apple Calendar** using an app-specific password, select calendars, then choose the default for new events. No existing household records are migrated or changed by the build.
+The frontend is deployed at **https://huberts-house.web.app**, with Firebase Authentication and household membership rules enabled. `calendarServiceEnabled` is `true`; the eight private calendar functions and the `huckleberry` callable are deployed in `us-central1`. `huckleberryServiceEnabled` is `true`; connect under **Settings → Huckleberry**. Connect an Apple account in **Settings → Apple Calendar** using an app-specific password, select calendars, then choose the default for new events. No existing household records are migrated or changed by the build.
 
 **[Setup and connection instructions](docs/SETUP.md)** cover new deployments and the account-specific Apple and Huckleberry connections. Firebase Authentication and explicit household membership protect the app.
 
@@ -57,11 +59,13 @@ Apple is the source of truth for connected events. Reads query the selected cale
 
 All-day date boundaries, Apple timezone definitions, recurrence exceptions, alarms, locations, and unknown properties are preserved. Recurring events and invitations are shown but are edited in Apple Calendar in this release; the UI and server enforce that limit. Household events retain their existing repeating-series editor and event checklists. iCloud event checklists are not supported. A selected calendar belongs to the signed-in member’s connection; other household members connect their own account or the same shared iCloud calendar.
 
+Owners and Frankie assignments live in the server-only `privateCalendarAssignments` collection, keyed by the connected calendar and Apple event UID. Changing only these fields verifies access to the Apple event and writes only to Hubert’s House, so even read-only events can be assigned. Assignments apply to the entire Apple series and survive event date/resource changes. Version checks prevent silently replacing another session’s assignment. Existing Apple extension properties remain a fallback until an assignment is saved here; they are preserved but no longer written. If Apple saves an event but the assignment write fails, the app reports that partial success and asks you to refresh and reopen it rather than submit another Apple event.
+
 Apple app-specific passwords are sent over HTTPS to the private backend, encrypted using AES-256-GCM with a Secret Manager key and a per-user authenticated context, and stored in a server-only collection. No credentials go in the frontend bundle, Git, localStorage, or Firestore documents readable by clients.
 
 ## Verification
 
-`npm test` exercises recurrence and date behavior, conflict preconditions, preservation of Apple event properties, credential isolation, URL restrictions, and DOM interactions using the real FullCalendar bundle with in-memory sample data. Tests also exercise encrypted Huckleberry session isolation, child access, idempotent writes, changed timers, backdated summaries, stored SweetSpot freshness, the history model, and all three home calendar ranges. Mocked provider tests do not establish live Apple or Huckleberry account connectivity. See the acceptance checklist in the setup guide for the final live round trip.
+`npm test` exercises recurrence and date behavior, conflict preconditions, preservation of Apple event properties, credential isolation, URL restrictions, and DOM interactions using the real FullCalendar bundle with in-memory sample data. Tests also exercise private Apple assignments and partial saves, holiday/observed dates, duration-preserving date editing, encrypted Huckleberry session isolation, child access, idempotent writes, changed timers, backdated summaries, stored SweetSpot freshness, the history model, and all three home calendar ranges. Mocked provider tests do not establish live Apple or Huckleberry account connectivity. See the acceptance checklist in the setup guide for the final live round trip.
 
 ## Usage controls
 

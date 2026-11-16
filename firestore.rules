@@ -34,6 +34,7 @@ service cloud.firestore {
     }
     // Calendar passwords are encrypted by the server and never readable by a client.
     match /privateCalendarConnections/{uid} { allow read, write: if false; }
+    match /privateCalendarAssignments/{id} { allow read, write: if false; }
     match /privateHuckleberryConnections/{uid} { allow read, write: if false; }
     match /privateBabySnapshots/{uid} { allow read, write: if false; }
     match /{document=**} { allow read, write: if false; }

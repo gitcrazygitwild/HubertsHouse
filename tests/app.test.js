@@ -20,6 +20,8 @@ async function fixture(options = {}) {
   await module('calendar-model.js',['localDate','startOfDay','nextDay','eventEnd','eventsOnDay','checklistProgress']);
   await module('dom.js',['renderHTML']);
   await module('daily-content.js',['dailyContent']);
+  await module('holidays.js',['usHolidays','holidaysInRange','holidaysEnabled','holidayEvents']);
+  await module('event-editor.js',['initEventDateEditor','eventRangeSummary']);
   await module('event-planning.js',['overlappingEvents','preferredCalendar']);
   await module('cat-crew.js',['initCatCrew']);
   await module('dashboard.js',['initDashboard']);
@@ -30,7 +32,7 @@ async function fixture(options = {}) {
     w.demoStore = () => ({ ...originalStore(), update: async () => { throw new Error('The connection interrupted this save.'); } });
   }
   await module('household.js',['initHousehold','updateHouseholdEvents','showNotice','showView'],'const esc=escapeHTML;');
-  await module('cloud-calendar.js',['initCloudCalendar','setCloudRange','refreshCloud','saveCloudEvent','deleteCloudEvent'],'const esc=escapeHTML;');
+  await module('cloud-calendar.js',['initCloudCalendar','setCloudRange','refreshCloud','saveCloudEvent','saveCloudAssignment','deleteCloudEvent'],'const esc=escapeHTML;');
   await module('baby-model.js',['purrfectWindow','huckleberryPrediction']);
   await module('baby.js',['initHuckleberry'],'const esc=escapeHTML;');
   await module('calendar-view.js',['initCalendarExperience','calendarEventContent'],'const esc=escapeHTML;');
@@ -38,7 +40,7 @@ async function fixture(options = {}) {
   await module('weather-shared.js',['richmondDay','forecastCondition','weatherIcon']);
   await module('weather.js',['initWeather'],'const esc=escapeHTML;');
   await module('week-brief.js',['renderWeekBrief'],'const esc=escapeHTML;');
-  w.eval(clean(await read('app.js')) + ';window.__testApp={getDocs:()=>rawDocs,persistMovedEvent,redraw:()=>updateHouseholdEvents(expandedEvents)};'); await settle();
+  w.eval(clean(await read('app.js')) + ';window.__testApp={getDocs:()=>rawDocs,setCloudDocs:(records)=>{cloudDocs=records;rebuildEvents();},persistMovedEvent,redraw:()=>updateHouseholdEvents(expandedEvents)};'); await settle();
   return {dom,w,doc:w.document,errors};
 }
 test('home views, theme and monitor navigation work together without hiding the daily extras', async t => {
@@ -62,8 +64,8 @@ test('Frankie stays paired with an adult and is preserved when opening an event 
   doc.getElementById('saveBtnTop').click(); await settle();
   const record = w.__testApp.getDocs().find(d => d.title === 'Frankie comes along'); assert.equal(record.withFrankie,true); assert.equal(record.owner,'hanry');
   const card=doc.querySelector(`#homeWeek [data-home-event="${record.id}"]`); assert.ok(card.classList.contains('with-frankie')); card.click();
-  assert.match(doc.getElementById('detailsOwnerPill').textContent,/hanry \+ Frankie/);
-  doc.getElementById('detailsEditBtn').click(); assert.equal(doc.getElementById('evtWithFrankie').checked,true);
+  assert.equal(doc.getElementById('modalBackdrop').classList.contains('hidden'),false);
+  assert.equal(doc.getElementById('evtOwner').value,'hanry'); assert.equal(doc.getElementById('evtWithFrankie').checked,true);
   doc.getElementById('evtOwner').value='custom'; doc.getElementById('evtOwner').dispatchEvent(new w.Event('change'));
   assert.equal(doc.getElementById('evtWithFrankie').disabled,true); assert.equal(doc.getElementById('evtWithFrankie').checked,false);
   assert.deepEqual(errors,[]);
@@ -78,6 +80,19 @@ test('sample baby logs support bottles, diapers and sleep without calling a conn
   doc.getElementById('babySleep').click(); await settle(); assert.match(doc.getElementById('babySleep').textContent,/Finish sleep/); assert.match(doc.getElementById('babyPredictions').textContent,/Sleeping now/);
   doc.getElementById('babySleep').click(); await settle(); assert.match(doc.getElementById('babySleep').textContent,/Start sleep/);
   assert.deepEqual(errors,[]);
+});
+test('clicking a read-only iCloud event opens editable household assignments while protecting Apple fields', async t => {
+  const {dom,w,doc,errors}=await fixture();t.after(()=>dom.window.close());
+  const start=new Date();start.setHours(9,0,0,0);const end=new Date(+start+3600000),saved=[];
+  w.__testApp.setCloudDocs([{id:'cloud-event',uid:'apple-uid',token:'resource',calendarId:'shared',calendarName:'Shared calendar',title:'Shared appointment',start:start.toISOString(),end:end.toISOString(),cloudEnd:end.toISOString(),allDay:false,owner:'both',ownerCustom:'',withFrankie:false,assignmentVersion:2,icloud:true,readOnlyReason:'This Apple calendar is read-only.'}]);
+  w.saveCloudAssignment=async(assignment,original)=>{saved.push({assignment,original});return {saved:true};};
+  w.saveCloudEvent=async()=>{throw new Error('Owner changes must not write to Apple.');};
+  doc.querySelector('#homeWeek [data-home-event="cloud-event"]').click();
+  assert.equal(doc.getElementById('modalBackdrop').classList.contains('hidden'),false);assert.equal(doc.getElementById('evtCalendar').value,'shared');
+  assert.equal(doc.getElementById('evtTitle').disabled,true);assert.equal(doc.getElementById('evtStartDate').disabled,true);assert.equal(doc.getElementById('evtOwner').disabled,false);
+  doc.getElementById('evtOwner').value='karena';doc.getElementById('evtWithFrankie').checked=true;doc.getElementById('saveBtnTop').click();await settle();
+  assert.equal(saved.length,1);assert.equal(saved[0].assignment.owner,'karena');assert.equal(saved[0].assignment.withFrankie,true);assert.equal(saved[0].original.assignmentVersion,2);
+  assert.equal(doc.getElementById('modalBackdrop').classList.contains('hidden'),true);assert.deepEqual(errors,[]);
 });
 test('sample preview keeps data isolated and supports navigation, grocery editing and recurring chore undo', async t => {
   const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
@@ -142,15 +157,16 @@ test('calendar person filters include shared plans, day selection opens the agen
   assert.ok(doc.querySelector('.fc-event.owner-both'));
   assert.equal(doc.querySelector('.fc-event.owner-hanry'),null);
   doc.querySelector('[data-owner="all"]').click();
-  const chosen = doc.querySelector('#homeWeek [data-week-day]');
-  const selectedDate = chosen.dataset.weekDay;
+  const chosen = doc.querySelector('#homeWeek [data-home-date]');
+  const selectedDate = chosen.dataset.homeDate;
   const dayButton = doc.querySelector(`.fc-daygrid-day[data-date="${selectedDate}"] .fc-daygrid-day-number`);
   dayButton.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Enter',bubbles:true})); await settle();
   assert.equal(dayButton.getAttribute('aria-pressed'),'true');
+  assert.equal(doc.getElementById('modalBackdrop').classList.contains('hidden'),false); doc.getElementById('modalClose').click();
   assert.ok(doc.querySelector('#selectedDayEvents [data-calendar-event]'));
   doc.querySelector('#selectedDayEvents [data-calendar-event]').click();
-  assert.ok(!doc.getElementById('detailsBackdrop').classList.contains('hidden'));
-  doc.getElementById('detailsClose').click();
+  assert.ok(!doc.getElementById('modalBackdrop').classList.contains('hidden'));
+  doc.getElementById('modalClose').click();
   doc.getElementById('addToDay').click();
   assert.equal(doc.getElementById('evtStart').value.slice(0,10),selectedDate);
   doc.getElementById('evtTitle').value='Plan from the day agenda';
@@ -225,9 +241,9 @@ test('Today contains the live week calendar and adding there updates both calend
   assert.equal(doc.querySelectorAll('#homeWeek .home-week-day').length,7);
   assert.ok(doc.querySelector('#homeWeek [data-home-event="sample7"]'));
   doc.querySelector('#homeWeek [data-home-event="sample1"]').click();
-  assert.ok(!doc.getElementById('detailsBackdrop').classList.contains('hidden'));
+  assert.ok(!doc.getElementById('modalBackdrop').classList.contains('hidden'));
   assert.equal(w.location.hash,'#today');
-  doc.getElementById('detailsClose').click();
+  doc.getElementById('modalClose').click();
   const chosen = [...doc.querySelectorAll('[data-home-add]')].at(-1);
   chosen.click();
   assert.equal(doc.getElementById('evtStart').value.slice(0,10),chosen.dataset.homeAdd);

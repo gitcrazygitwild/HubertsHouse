@@ -1,6 +1,7 @@
 import { dateKey, escapeHTML as esc } from './household-model.js';
 import { localDate, startOfDay, nextDay, eventEnd, eventsOnDay, checklistProgress } from './calendar-model.js';
 import { renderHTML } from './dom.js';
+import { holidaysInRange, holidaysEnabled } from './holidays.js';
 
 const owners = { hanry: 'hanry', karena: 'Karena', both: 'Together', custom: 'Other' };
 const time = date => date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -54,13 +55,15 @@ function eventCard(event, day, now) {
 export function initHomeCalendar({ getEvents, openEvent, addEvent, onRangeChange = () => {}, now = () => new Date() }) {
   const $ = id => document.getElementById(id);
   const text = (id, value) => { if ($(id).textContent !== value) $(id).textContent = value; };
-  let anchor = startOfDay(now()), followingToday = true, lastRange = '', view = 'week';
+  let anchor = startOfDay(now()), followingToday = true, lastRange = '', view = 'week', selection=null, suppressClickUntil=0;
   try { const saved = localStorage.getItem('hh_home_calendar_view'); if (['day','week','month'].includes(saved)) view = saved; } catch {}
   const getRange = () => { const { start, end } = homeCalendarRange([], anchor, view); return { start, end }; };
   function render() {
+    if (selection) return;
     const current = now();
     if (followingToday) anchor = startOfDay(current);
     const week = homeCalendarRange(getEvents(), anchor, view), today = dateKey(current);
+    const holidays=holidaysEnabled() ? holidaysInRange(week.start,week.end) : [];
     const last = week.days.at(-1).date;
     const format = new Intl.DateTimeFormat([], { month: 'short', day: 'numeric', ...(anchor.getFullYear() !== current.getFullYear() || last.getFullYear() !== current.getFullYear() ? { year: 'numeric' } : {}) });
     text('homeCalendarTitle', view === 'month' ? 'YOUR MONTH, TOGETHER' : view === 'day' ? 'YOUR DAY, TOGETHER' : 'YOUR WEEK, TOGETHER');
@@ -77,8 +80,8 @@ export function initHomeCalendar({ getEvents, openEvent, addEvent, onRangeChange
       const longDate = date.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
       const shown = view === 'month' ? events.slice(0, 3) : events;
       return `<section class="home-week-day${isToday ? ' is-today' : ''}${view === 'month' && date.getMonth() !== anchor.getMonth() ? ' outside-month' : ''}" data-home-date="${key}" aria-label="${esc(longDate)}">
-        <button type="button" class="home-day-heading" data-week-day="${key}" aria-label="Open ${esc(longDate)} in the calendar"${isToday ? ' aria-current="date"' : ''}><span>${esc(name)}${isToday ? '<small>Today</small>' : ''}</span><strong>${date.getDate()}</strong></button>
-        <div class="home-day-plans">${events.length ? shown.map(event => eventCard(event, date, current)).join('') : view === 'month' ? '' : '<p class="home-day-empty">A little breathing room.</p>'}${events.length > shown.length ? `<button type="button" class="home-more" data-week-day="${key}">+ ${events.length - shown.length} more</button>` : ''}</div>
+        <button type="button" class="home-day-heading" data-home-add="${key}" aria-label="Add a plan on ${esc(longDate)}"${isToday ? ' aria-current="date"' : ''}><span>${esc(name)}${isToday ? '<small>Today</small>' : ''}</span><strong>${date.getDate()}</strong></button>
+        <div class="home-day-plans">${holidays.filter(holiday=>holiday.date===key).map(holiday=>`<span class="home-holiday" title="${esc(holiday.name)} · ${holiday.federal?'U.S. federal holiday':'Observance'}">✦ ${esc(holiday.name)}</span>`).join('')}${events.length ? shown.map(event => eventCard(event, date, current)).join('') : view === 'month' ? '' : '<p class="home-day-empty">A little breathing room.</p>'}${events.length > shown.length ? `<button type="button" class="home-more" data-week-day="${key}">+ ${events.length - shown.length} more</button>` : ''}</div>
         <button type="button" class="home-day-add" data-home-add="${key}" aria-label="Add a plan on ${esc(longDate)}"><span aria-hidden="true">＋</span> Add a plan</button>
       </section>`;
     }).join(''));
@@ -100,11 +103,40 @@ export function initHomeCalendar({ getEvents, openEvent, addEvent, onRangeChange
   }));
   $('homeCalendarToday').addEventListener('click', () => { followingToday = true; render(); });
   $('homeWeek').addEventListener('click', event => {
+    if (Date.now()<suppressClickUntil) {event.preventDefault();event.stopPropagation();return;}
     const card = event.target.closest('[data-home-event]');
-    if (card) openEvent(card.dataset.homeEvent, card.dataset.occurrence);
+    if (card) {openEvent(card.dataset.homeEvent, card.dataset.occurrence);return;}
     const add = event.target.closest('[data-home-add]');
-    if (add) addEvent(localDate(add.dataset.homeAdd));
+    if (add) {addEvent(localDate(add.dataset.homeAdd));return;}
+    if (event.target.closest('button,a,input')) return;
+    const day=event.target.closest('[data-home-date]'); if(day) addEvent(localDate(day.dataset.homeDate));
   });
+  const grid=$('homeWeek');
+  const clearSelection=()=>{selection=null;grid.classList.remove('is-selecting');grid.querySelectorAll('.is-range-selected').forEach(day=>day.classList.remove('is-range-selected'));};
+  grid.addEventListener('pointerdown',event=>{
+    suppressClickUntil=0;
+    if (event.pointerType==='touch' || event.button!==0 || event.target.closest('[data-home-event],.home-more,.home-day-add')) return;
+    const cell=event.target.closest('[data-home-date]'); if(!cell)return;
+    selection={first:cell.dataset.homeDate,last:cell.dataset.homeDate,id:event.pointerId,moved:false};
+  });
+  grid.addEventListener('pointermove',event=>{
+    if (!selection || selection.id!==event.pointerId) return;
+    const cell=document.elementFromPoint?.(event.clientX,event.clientY)?.closest('[data-home-date]');
+    if(!cell || !grid.contains(cell))return;
+    selection.last=cell.dataset.homeDate; selection.moved=selection.moved || selection.last!==selection.first;
+    if(!selection.moved)return;
+    if(!selection.captured){grid.setPointerCapture?.(event.pointerId);selection.captured=true;}
+    event.preventDefault(); grid.classList.add('is-selecting');
+    const [first,last]=[selection.first,selection.last].sort();
+    grid.querySelectorAll('[data-home-date]').forEach(day=>day.classList.toggle('is-range-selected',day.dataset.homeDate>=first && day.dataset.homeDate<=last));
+  });
+  document.addEventListener('pointerup',event=>{
+    if(!selection || selection.id!==event.pointerId)return;
+    const current=selection; clearSelection();
+    if(current.moved){suppressClickUntil=Date.now()+500;const [first,last]=[current.first,current.last].sort();addEvent(localDate(first),localDate(last));}
+  });
+  grid.addEventListener('pointercancel',clearSelection);
+  document.addEventListener('keydown',event=>{if(event.key==='Escape')clearSelection();});
   render();
   return { render, getRange };
 }

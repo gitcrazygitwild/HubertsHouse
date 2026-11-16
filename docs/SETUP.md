@@ -8,7 +8,7 @@ The repository is configured for the existing Firebase project **huberts-house**
 2. Create one user for hanry and one for Karena, with their own email addresses and passwords. Set passwords outside chat and source control.
 3. Add `gitcrazygitwild.github.io` (and any other frontend hostname you use) to Authentication → Settings → Authorized domains.
 4. In Firestore Console, create a document for each account at `households/home/members/USER_UID`, where `USER_UID` is the exact UID shown in Authentication. Give it the boolean field `active: true`. Membership can only be managed through trusted admin access; visitors cannot enroll themselves.
-5. Deploy `firestore.rules` below before enabling the iCloud UI. They restrict the existing events and new household lists to those members and deny all direct client access to `privateCalendarConnections`.
+5. Deploy `firestore.rules` below before enabling the iCloud UI. They restrict the existing events and new household lists to those members and deny all direct client access to the private connection, assignment, and baby snapshot collections.
 
 These rules are for this household app. If this Firebase project also hosts other applications with additional collections, incorporate their existing rules before deployment.
 
@@ -35,6 +35,8 @@ firebase deploy --only functions:household-calendar --project huberts-house
 Keep the generated secret intact for existing connections. Rotating it requires reconnecting the Apple and Huckleberry accounts (or a separate credential migration). The Functions service account needs its normal Firestore access and permission to read this secret; Firebase’s deployment prompts establish the secret binding.
 
 The deployed runtime must be able to reach `https://caldav.icloud.com` and Apple's `https://pNN-caldav.icloud.com` calendar shards. The application refuses credentials on other hosts and checks redirect destinations before following them.
+
+The calendar service includes `calendarAssign` for household-only event owners and Frankie accents. It requires the same membership and Apple access checks as reading an event, then writes to `privateCalendarAssignments` without modifying Apple. Existing household data needs no migration. Keep this collection when redeploying or reconnecting accounts; assignments use the connected calendar ID and Apple UID, with version checks for concurrent edits.
 
 ## 3. Activate and publish the frontend
 
@@ -74,11 +76,13 @@ Use a disposable test calendar and event for the initial checks:
 - Create an event in Apple Calendar; refresh the dashboard and see it appear.
 - Add an event in Hubert’s House using that iCloud calendar; see it appear in Apple Calendar.
 - Edit title, notes, date/time, and an all-day span in Hubert’s House; verify the Apple result.
+- Change only the owner or Frankie assignment, refresh, and confirm it persists. Repeat on a read-only or recurring Apple event; its Apple details must remain unchanged. An assignment on a recurring event applies to the whole series.
+- Open the same event in two sessions, change its assignment in one, and try a different assignment from the stale editor. Confirm the newer assignment survives and the stale session is asked to refresh.
 - Open an event editor, edit that event in Apple Calendar, then save the older dashboard editor. Confirm the conflict message and verify the newer Apple version survives.
 - Delete the disposable event from either app and confirm it disappears on refresh in the other.
 - Verify a repeating event across a daylight-saving transition, including an excluded/moved occurrence. Confirm the app routes recurrence and invitation edits to Apple Calendar.
 - Open phone and display sessions, add a grocery item, complete a recurring chore, and confirm the other session updates. Verify that completing the same item from stale sessions reports a conflict.
-- Check signed-out reads are denied, a non-member Firebase account is denied, and members cannot directly read `privateCalendarConnections`.
+- Check signed-out reads are denied, a non-member Firebase account is denied, and members cannot directly read `privateCalendarConnections` or `privateCalendarAssignments`.
 
 The deployed functions are ACTIVE with zero minimum instances and a maximum of one instance per function. Build-image cleanup is set to one day. The private Apple connection and the live Apple round trip still require the account owner to connect in the app. Automated tests use simulated provider responses and never contact or modify real calendars. The deployment environment allows Google APIs but blocks direct calls to the public `cloudfunctions.net` URLs, so the live callable response must also be confirmed from the app. These usage controls are not a spending cap.
 
@@ -109,4 +113,8 @@ This adds no separately billed API or AI model. An existing eligible Huckleberry
 - Toggle dark mode, reload, and check the event editor, baby forms, and sidebar.
 - Enter monitor mode and use every sidebar destination. Return Home and confirm the quote, fact, word, joke, weather, missions, and cat crew remain available.
 - Save an event with hanry, Karena, or both plus Frankie. Confirm the adult color and pink stripe in both calendars and after reopening the editor. Other/custom assignments disable Frankie.
-- For iCloud events, verify the owner/Frankie assignment survives a save/refresh; Apple itself may not display Hubert’s custom accent.
+- For iCloud events, verify the owner/Frankie assignment survives a save/refresh. These fields are stored in Hubert’s House and do not add an owner or stripe in Apple Calendar.
+- Click an empty day in both calendars to create an event; drag across days in either direction and verify the last selected day is included. On the full calendar, long-press then drag for touch selection; Home retains normal touch scrolling and its add buttons.
+- Click an event and confirm the editor opens directly. Change its start date and verify duration is preserved; test a timed overnight plan, an all-day multi-day span, and the Today/Tomorrow and duration shortcuts.
+- Confirm Frankie appears in the calendar legend and filters to events with Frankie alongside an adult.
+- Toggle **U.S. holidays** in Calendar and confirm both calendars update. Check Christmas Eve, Thanksgiving, and an observed holiday; household counts and overlap warnings must remain unaffected.
