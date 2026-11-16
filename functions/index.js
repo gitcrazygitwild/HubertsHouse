@@ -217,3 +217,32 @@ export const morningNewsletter = onSchedule({ schedule:'30 6 * * *', timeZone:HO
     } catch (error) { if (error?.code !== 6) warn('Newsletter not sent to one member', { reason:error?.code || 'send-failed' }); } // 6 = already sent today
   }
 });
+
+// ---------- "Hey Siri, ping Hubert" ----------
+// A public HTTPS address for the Apple Shortcut. Every request must carry a
+// personal key (only its SHA-256 is stored, in server-only `siriKeys`); logs are
+// read back for confirmation and saved through the guarded Huckleberry path.
+import { onRequest } from 'firebase-functions/v2/https';
+import { createSiriHandler, newSiriKey, hashSiriKey, SIRI_TZ } from './siri.js';
+const siriHandler = createSiriHandler({ db, huckleberry:(uid, input) => huckleberryHandler(uid, input), members:activeMembers });
+export const siri = onRequest({ region:'us-central1', secrets:[encryptionKey], timeoutSeconds:60, memory:'256MiB', cpu:'gcf_gen1', concurrency:1, minInstances:0, maxInstances:1, cors:false }, async (request, response) => {
+  process.env.TZ = SIRI_TZ; // "5:15" means Richmond time
+  await siriHandler(request, response);
+});
+const siriURL = () => `https://us-central1-${process.env.GCLOUD_PROJECT || 'huberts-house'}.cloudfunctions.net/siri`;
+export const siriSetup = endpoint(async (uid, input) => {
+  const mine = await db.collection('siriKeys').where('uid', '==', uid).get();
+  if (input.action === 'status') {
+    const key = mine.docs[0]?.data();
+    return { hasKey:!!key, createdAt:key?.createdAt || null, lastUsedAt:key?.lastUsedAt || null, url:siriURL() };
+  }
+  if (input.action === 'create' || input.action === 'revoke') {
+    // One key per person: making a new key or revoking removes the old one.
+    const batch = db.batch(); mine.docs.forEach(doc => batch.delete(doc.ref));
+    let key = null;
+    if (input.action === 'create') { key = newSiriKey(); batch.set(db.doc(`siriKeys/${hashSiriKey(key)}`), { uid, createdAt:new Date().toISOString(), lastUsedAt:null }); }
+    await batch.commit();
+    return { hasKey:!!key, key, url:siriURL() };
+  }
+  throw new NewsletterError('invalid-argument', 'Choose a Siri action.');
+});

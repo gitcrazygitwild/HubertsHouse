@@ -53,6 +53,7 @@ async function fixture(options = {}) {
   await module('sky.js',['skyState','skyArt']);
   await module('upgrades.js',['initUpgrades'],'const esc=escapeHTML;');
   await module('newsletter-settings.js',['initNewsletterSettings'],'const esc=escapeHTML;');
+  await module('siri-settings.js',['initSiriSettings','shortcutSteps'],'const esc=escapeHTML;');
   w.eval(clean(await read('app.js')) + ';window.__testApp={getDocs:()=>rawDocs,setCloudDocs:(records)=>{cloudDocs=records;rebuildEvents();},persistMovedEvent,redraw:()=>updateHouseholdEvents(expandedEvents)};'); await settle();
   return {dom,w,doc:w.document,errors};
 }
@@ -385,5 +386,14 @@ test('quick add logs for Frankie: bottle defaults to the last one, text fills th
   doc.getElementById('babyLogClose').click();
   // Calendar plans that mention Frankie are still plans.
   type('Frankie swim class Tue 3pm'); assert.match(doc.getElementById('quickAddPreview').textContent, /Swim class · Tue.*\+ Frankie/);
+  assert.deepEqual(errors, []);
+});
+
+test('Settings explains the "Ping Hubert" shortcut, and the preview creates no keys', async t => {
+  const {dom,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  const panel = doc.getElementById('siriPanel');
+  assert.match(panel.textContent, /doesn’t create keys/);
+  assert.match(panel.textContent, /Ping Hubert/); assert.match(panel.textContent, /Get Contents of URL/); assert.match(panel.textContent, /Bearer/);
+  assert.equal(doc.getElementById('siriCreate'), null);
   assert.deepEqual(errors, []);
 });

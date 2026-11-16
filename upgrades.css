@@ -91,3 +91,13 @@
 .award strong { display:block; font-family:Georgia,serif; font-weight:400; font-size:20px; line-height:1.25; }
 .award div > span { font-size:10.5px; color:var(--muted); }
 .smart-add input,.smart-add input:focus { border:0; outline:none; box-shadow:none; background:transparent; padding-left:0; }
+
+/* Settings → "Hey Siri, ping Hubert" */
+.siri-copy-row { display:flex; gap:8px; }
+.siri-copy-row input { flex:1; min-width:0; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; }
+.siri-fresh { padding:12px 14px; border-radius:14px; background:color-mix(in srgb,#f6d58a 25%,var(--card)); border:1px solid color-mix(in srgb,#d9a441 45%,transparent); margin:8px 0; }
+.siri-how { margin-top:12px; font-size:13px; }
+.siri-how summary { cursor:pointer; font-weight:600; color:var(--accent); }
+.siri-steps { padding-left:20px; line-height:1.6; }
+.siri-steps li { margin:6px 0; }
+.siri-steps ul { padding-left:18px; margin:4px 0; }

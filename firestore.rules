@@ -50,6 +50,8 @@ service cloud.firestore {
         && request.resource.data.sweetspot.loggedAt > resource.data.sweetspot.loggedAt;
       allow delete: if false;
     }
+    // Siri Shortcut keys (stored as SHA-256 hashes) are server-only.
+    match /siriKeys/{hash} { allow read, write: if false; }
     // Newsletter preferences, the encrypted sending account and the send log are server-only.
     match /newsletterPrefs/{uid} { allow read, write: if false; }
     match /privateNewsletterSender/{doc} { allow read, write: if false; }
