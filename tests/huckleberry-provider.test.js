@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { authenticateHuckleberry, huckleberryClient, huckleberrySnapshot, normalizeSleepHistory, validateBabyWrite, writeHuckleberry } from '../functions/huckleberry-provider.js';
+// The exact gRPC copy Firestore uses, resolved from Firestore's own dependency tree.
+const functionsRequire = createRequire(new URL('../functions/package.json', import.meta.url));
+const grpc = createRequire(functionsRequire.resolve('google-gax'))('@grpc/grpc-js');
 const now = Date.parse('2026-11-15T15:00:00Z'), start = new Date(now - 3600000).toISOString();
 // Queue writes until the transaction callback succeeds, matching atomic commits.
 function memory(initial) {
@@ -22,8 +26,13 @@ test('provider auth uses only the Huckleberry session and sanitizes authenticati
     return {ok:true,json:async () => ({idToken:'example-token',refreshToken:'example-refresh',localId:'example-user',expiresIn:'3600'})};
   });
   assert.equal(session.password,undefined);
-  const client = huckleberryClient(session); const headers = await client._settings.auth.getRequestHeaders('https://firestore.googleapis.com');
-  assert.equal(headers.get('authorization'),'Bearer example-token'); assert.equal(client.projectId,'simpleintervals'); await client.terminate();
+  const client = huckleberryClient(session);
+  // Check the token the way Firestore's gRPC transport actually reads it. A
+  // mismatched google-auth-library returns a Headers object whose keys gRPC
+  // cannot enumerate, so the request went out unauthenticated.
+  const authClient = await client._settings.auth.getClient();
+  const metadata = await grpc.credentials.createFromGoogleCredential(authClient).generateMetadata({service_url:'https://firestore.googleapis.com'});
+  assert.deepEqual(metadata.get('authorization'),['Bearer example-token']); assert.equal(client.projectId,'simpleintervals'); await client.terminate();
   await assert.rejects(authenticateHuckleberry('test@example.com','secret',async () => ({ok:false,status:400,json:async () => ({secret:'do not expose'})})),error => error.code === 'unavailable' && !error.message.includes('secret'));
 });
 test('authentication distinguishes credential rejection, throttling and API restrictions without exposing provider payloads',async()=>{
