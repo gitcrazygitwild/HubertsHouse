@@ -1,3 +1,7 @@
+/* The hidden attribute always wins. Several components set display:flex, which
+   would otherwise override it (the chart tooltip stayed on screen site-wide). */
+[hidden] { display:none !important; }
+
 /* Frankie's page, Mia's forecast card and the nap scoreboard. Chart colors are
    validated for color-vision deficiency in both themes (night/nap/bottle). */
 :root { --chart-night:#3b4fb0; --chart-nap:#9a7fe0; --chart-bottle:#c0588a; --frankie-ink:#98657a; }
