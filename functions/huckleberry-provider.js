@@ -81,7 +81,9 @@ export function huckleberryClient(session) {
   if (!session.idToken || !session.userId) fail('unauthenticated','Reconnect your Huckleberry account.');
   const token = new OAuth2Client(); token.setCredentials({access_token:session.idToken,expiry_date:session.expiresAt});
   // Always use the customer's Huckleberry token. Never use this function's
-  // Google service account for the third-party project.
+  // Google service account for the third-party project. Keep google-auth-library
+  // on the v9 version used by this Firestore/gax stack: gRPC expects a plain
+  // header object and silently omits the Headers container returned by v10.
   return new Firestore({projectId:PROJECT,auth:new GoogleAuth({authClient:token}),ignoreUndefinedProperties:true});
 }
 export async function huckleberryChildren(client, userId) {
