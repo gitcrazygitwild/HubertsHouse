@@ -41,13 +41,13 @@ async function fixture(options = {}) {
   await module('baby-sample.js',['sampleHistory','samplePredictions']);
   await module('awards.js',['frankieAwards']);
   await module('frankie.js',['renderFrankie','initFrankie'],'const esc=escapeHTML;');
-  await module('baby.js',['initHuckleberry'],'const esc=escapeHTML;');
+  await module('baby.js',['initHuckleberry','logBabyFromText'],'const esc=escapeHTML;');
   await module('calendar-view.js',['initCalendarExperience','calendarEventContent'],'const esc=escapeHTML;');
   await module('home-calendar.js',['initHomeCalendar','homeCalendarWeek'],'const esc=escapeHTML;');
   await module('weather-shared.js',['richmondDay','forecastCondition','weatherIcon']);
   await module('weather.js',['initWeather'],'const esc=escapeHTML;');
   await module('week-brief.js',['renderWeekBrief'],'const esc=escapeHTML;');
-  await module('quick-add.js',['parseQuickAdd','describeDraft']);
+  await module('quick-add.js',['parseQuickAdd','describeDraft','parseBabyLog','describeBabyLog']);
   await module('smart-home.js',['isOutdoor','weatherFlags','nextUp','untilText']);
   await module('free-nights.js',['freeEvenings','dateNightDraft']);
   await module('sky.js',['skyState','skyArt']);
@@ -342,5 +342,48 @@ test('quick add, the command palette, Now & Next, the Frankie page and the after
   assert.equal(doc.getElementById('afterDarkJoke').open, false); assert.ok(doc.getElementById('afterDarkSetup').textContent.length > 8);
   doc.getElementById('afterDarkSetting').checked = false; doc.getElementById('afterDarkSetting').dispatchEvent(new w.Event('change'));
   assert.equal(doc.getElementById('afterDarkJoke').hidden, true); assert.equal(w.localStorage.getItem('hh_after_dark'), '0');
+  assert.deepEqual(errors, []);
+});
+
+test('quick add logs for Frankie: bottle defaults to the last one, text fills the window, diapers and naps too', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  const input = doc.getElementById('quickAddInput'), form = doc.getElementById('quickAddForm');
+  const type = text => { input.value = text; input.dispatchEvent(new w.Event('input')); };
+  // A plain bottle opens with the last bottle's amount and milk.
+  doc.querySelector('#view-today [data-baby-log="bottle"]').click();
+  const sameAs = doc.getElementById('babyLogSame');
+  assert.equal(sameAs.hidden, false); assert.match(sameAs.textContent, /^Same as last · /);
+  assert.equal(doc.getElementById('babyLogAmount').value, sameAs.dataset.amount);
+  doc.getElementById('babyLogClose').click();
+  // Typed amount and time win.
+  type('frankie bottle 10:30am 4.5oz breast milk');
+  assert.match(doc.getElementById('quickAddPreview').textContent, /Bottle for Frankie · 10:30 AM · 4\.5 oz Breast Milk/);
+  form.dispatchEvent(new w.Event('submit', { cancelable:true }));
+  assert.equal(doc.getElementById('babyLogDialog').open, true); assert.equal(doc.getElementById('babyLogTitle').textContent, 'Bottle');
+  assert.equal(doc.getElementById('babyLogAmount').value, '4.5'); assert.equal(doc.getElementById('babyLogMilk').value, 'Breast Milk');
+  assert.match(doc.getElementById('babyLogStart').value, /T10:30$/);
+  assert.equal(doc.querySelector('[data-pills="babyLogMilk"] [data-value="Breast Milk"]').getAttribute('aria-pressed'), 'true');
+  // Stepper and chips edit the real inputs.
+  doc.querySelector('[data-step="1"]').click(); assert.equal(doc.getElementById('babyLogAmount').value, '5');
+  doc.querySelector('#babyLogAmountChips [data-amount="3"]').click(); assert.equal(doc.getElementById('babyLogAmount').value, '3');
+  doc.getElementById('babyLogForm').dispatchEvent(new w.Event('submit', { cancelable:true })); await settle();
+  assert.equal(doc.getElementById('babyLogDialog').open, false); assert.equal(input.value, '');
+  // A bottle logged now becomes the default for the next one (a backdated one doesn't).
+  doc.querySelector('#view-today [data-baby-log="bottle"]').click();
+  doc.querySelector('#babyLogAmountChips [data-amount="3"]').click(); doc.querySelector('[data-pills="babyLogMilk"] [data-value="Breast Milk"]').click();
+  doc.querySelector('[data-time-chips="babyLogStart"] [data-ago="0"]').click();
+  doc.getElementById('babyLogForm').dispatchEvent(new w.Event('submit', { cancelable:true })); await settle();
+  doc.querySelector('#view-today [data-baby-log="bottle"]').click();
+  assert.equal(doc.getElementById('babyLogAmount').value, '3'); assert.equal(doc.getElementById('babyLogMilk').value, 'Breast Milk');
+  doc.getElementById('babyLogClose').click();
+  // Diaper via pills; a nap range opens a finished sleep.
+  type('frankie diaper poop'); form.dispatchEvent(new w.Event('submit', { cancelable:true }));
+  assert.equal(doc.getElementById('babyLogDiaper').value, 'poo'); assert.equal(doc.querySelector('[data-pills="babyLogDiaper"] [data-value="poo"]').getAttribute('aria-pressed'), 'true');
+  doc.getElementById('babyLogClose').click();
+  type('frankie nap 30 min'); form.dispatchEvent(new w.Event('submit', { cancelable:true }));
+  assert.equal(doc.getElementById('babyLogTitle').textContent, 'Finished sleep'); assert.match(doc.getElementById('babyLogDuration').textContent, /30m of sleep/);
+  doc.getElementById('babyLogClose').click();
+  // Calendar plans that mention Frankie are still plans.
+  type('Frankie swim class Tue 3pm'); assert.match(doc.getElementById('quickAddPreview').textContent, /Swim class · Tue.*\+ Frankie/);
   assert.deepEqual(errors, []);
 });

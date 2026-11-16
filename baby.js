@@ -115,15 +115,80 @@ function demoWrite(entry) {
 async function write(entry, childId) {
   if (demo) demoWrite(entry); else await call('write',{entry,childId});
 }
-function openLog(kind) {
-  if (busy || !snapshot) return;
+// Start or finish the sleep timer, optionally at an earlier time ("fell asleep 3:40").
+async function toggleSleep(at = null, want = null) {
+  if (busy || !snapshot) return false;
+  const kind = snapshot.timer.active ? 'sleep-stop' : 'sleep-start';
+  if (want && want !== kind) { showNotice(want === 'sleep-stop' ? 'Frankie isn’t on a sleep timer right now.' : 'A sleep timer is already running. Finish it first.'); return false; }
+  busy = true; error = ''; home();
+  const start = (at ? new Date(Math.min(+new Date(at), Date.now())) : new Date()).toISOString();
+  if (at || !pendingTimer || pendingTimer.kind !== kind || pendingTimer.timerId !== (snapshot.timer.uuid || null)) pendingTimer = {kind,start,requestId:crypto.randomUUID(),timerId:snapshot.timer.uuid || null,expectedStart:snapshot.timer.start || null};
+  try { await write(pendingTimer,connection.selected); pendingTimer = null; showNotice(demo ? 'Sample sleep updated.' : kind === 'sleep-start' ? 'Sleep started in Huckleberry.' : 'Sleep saved in Huckleberry.'); await refresh(true); return true; }
+  catch (e) { error = message(e); return false; } finally { busy = false; home(); }
+}
+// Quick add / ⌘K: a parsed Frankie log opens the prefilled window (timers act directly).
+export function logBabyFromText(log) {
+  if (!snapshot) { showView('settings'); showNotice('Connect Huckleberry in Settings to log for Frankie.'); return false; }
+  if (log.kind === 'sleep-start' || log.kind === 'sleep-stop') return toggleSleep(log.kind === 'sleep-start' || +log.start < Date.now() - 60000 ? log.start : null, log.kind);
+  return openLog(log.kind, log);
+}
+const LOG_LOOK = { bottle:['🍼','Bottle','Save bottle'], diaper:['♡','Diaper change','Save diaper'], 'sleep-log':['☾','Finished sleep','Save sleep'] };
+const AMOUNTS = { oz:[2, 3, 4, 5, 6], ml:[60, 90, 120, 150, 180] };
+const fmtAmount = (amount, units) => `${Number(amount)} ${units}`;
+// The most recent bottle, from history or Huckleberry's own "last bottle".
+function lastBottle() {
+  const fromHistory = snapshot?.bottles?.at(-1), fromPrefs = snapshot?.lastBottle;
+  const pick = !fromPrefs?.time || (fromHistory && Date.parse(fromHistory.start) >= Date.parse(fromPrefs.time)) ? fromHistory && { amount:fromHistory.amount, units:fromHistory.units, type:fromHistory.type } : { amount:fromPrefs.amount, units:fromPrefs.units, type:fromPrefs.type };
+  return pick?.amount ? pick : null;
+}
+function relativeTime(value) {
+  const date = new Date(value); if (isNaN(date)) return '';
+  const minutes = Math.round((Date.now() - date) / 60000), clock = date.toLocaleTimeString([], { hour:'numeric', minute:'2-digit' });
+  const day = new Date(); day.setHours(0, 0, 0, 0);
+  const label = date >= day ? 'Today' : date >= new Date(+day - 86400000) ? 'Yesterday' : date.toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' });
+  return minutes <= 1 && minutes >= -1 ? `Now · ${clock}` : `${label} · ${clock}${minutes > 1 && minutes < 600 ? ` · ${minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`} ago` : ''}`;
+}
+// Readouts, chip and pill states follow the form's real inputs.
+function syncLogForm() {
+  const kind = $('babyLogKind').value, start = $('babyLogStart').value, end = $('babyLogEnd').value;
+  $('babyLogStartText').textContent = relativeTime(start);
+  if (kind === 'sleep-log') {
+    const minutes = Math.round((new Date(end) - new Date(start)) / 60000);
+    $('babyLogDuration').textContent = Number.isFinite(minutes) && minutes > 0 ? `${minutes >= 60 ? `${Math.floor(minutes / 60)}h ` : ''}${minutes % 60}m of sleep` : 'Wake-up must be after sleep started';
+  }
+  for (const group of document.querySelectorAll('[data-time-chips]')) {
+    const input = $(group.dataset.timeChips), minutes = Math.round((Date.now() - new Date(input.value)) / 60000);
+    group.querySelectorAll('[data-ago]').forEach(chip => chip.setAttribute('aria-pressed', String(Math.abs(minutes - Number(chip.dataset.ago)) <= 1)));
+  }
+  for (const group of document.querySelectorAll('[data-pills]')) {
+    const value = $(group.dataset.pills).value;
+    group.querySelectorAll('[data-value]').forEach(pill => pill.setAttribute('aria-pressed', String(pill.dataset.value === value)));
+  }
+  const units = $('babyLogUnits').value, amount = Number($('babyLogAmount').value);
+  if ($('babyLogAmountChips').dataset.units !== units) {
+    $('babyLogAmountChips').dataset.units = units;
+    $('babyLogAmountChips').innerHTML = AMOUNTS[units].map(value => `<button type="button" data-amount="${value}">${value} ${units}</button>`).join('');
+  }
+  $('babyLogAmountChips').querySelectorAll('[data-amount]').forEach(chip => chip.setAttribute('aria-pressed', String(Number(chip.dataset.amount) === amount)));
+}
+// prefill: {start, end, amount, units, bottleType, mode} from quick add.
+function openLog(kind, prefill = {}) {
+  if (busy || !snapshot) return false;
   formChild = connection.selected; formId = crypto.randomUUID();
-  $('babyLogForm').reset(); $('babyLogKind').value = kind; $('babyLogError').textContent = '';
-  $('babyLogTitle').textContent = kind === 'bottle' ? 'A little bottle break.' : kind === 'diaper' ? 'Fresh start.' : 'Log a finished sleep.';
-  $('babyLogStart').value = inputTime(Date.now() - (kind === 'sleep-log' ? 3600000 : 0)); $('babyLogEnd').value = inputTime(Date.now());
-  $('babyLogZone').textContent = `Enter times in this device’s time zone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}.`;
+  $('babyLogForm').reset(); $('babyLogKind').value = kind; $('babyLogError').textContent = ''; $('babyLogNotesWrap').open = false;
+  const [icon, title, save] = LOG_LOOK[kind]; $('babyLogIcon').textContent = icon; $('babyLogTitle').textContent = title; $('babyLogSave').textContent = save;
+  $('babyLogStartLabel').textContent = kind === 'sleep-log' ? 'Fell asleep' : kind === 'diaper' ? 'Changed' : 'When';
+  $('babyLogStart').value = inputTime(prefill.start || Date.now() - (kind === 'sleep-log' ? 3600000 : 0)); $('babyLogEnd').value = inputTime(prefill.end || Date.now());
+  // New bottles start from the last bottle logged (amount, units, milk).
+  const last = lastBottle(), same = $('babyLogSame');
+  $('babyLogAmount').value = String(prefill.amount ?? last?.amount ?? 4); $('babyLogUnits').value = prefill.units || last?.units || 'oz';
+  $('babyLogMilk').value = prefill.bottleType || last?.type || 'Formula';
+  same.hidden = !last; if (last) { same.textContent = `Same as last · ${fmtAmount(last.amount, last.units)} ${last.type || ''}`.trim(); same.dataset.amount = last.amount; same.dataset.units = last.units; same.dataset.type = last.type || 'Formula'; }
+  if (prefill.mode) $('babyLogDiaper').value = prefill.mode;
+  $('babyLogZone').textContent = `Times are in this device’s time zone (${Intl.DateTimeFormat().resolvedOptions().timeZone.replaceAll('_', ' ')}).`;
   document.querySelectorAll('[data-log-fields]').forEach(group => { const active = group.dataset.logFields === kind; group.hidden = !active; group.querySelectorAll('input,select').forEach(input => { input.disabled = !active; }); });
-  $('babyLogDialog').showModal();
+  syncLogForm(); $('babyLogDialog').showModal();
+  return true;
 }
 function sampleSnapshot() {
   const now = Date.now(), {sleeps, bottles} = sampleHistory(now), last = bottles.at(-1), wake = Date.parse(sleeps.at(-1).end);
@@ -144,16 +209,21 @@ export async function initHuckleberry(app, options = {}) {
   $('babySettings').addEventListener('click', () => { showView('settings'); $('huckleberrySettings').scrollIntoView?.({behavior:'smooth',block:'start'}); });
   $('babyRefresh').addEventListener('click', async () => { if (busy) return; busy = true; home(); try { await refresh(true); } finally { busy = false; home(); } });
   document.querySelectorAll('[data-baby-log]').forEach(button => button.addEventListener('click', () => openLog(button.dataset.babyLog)));
-  $('babySleep').addEventListener('click', async () => {
-    if (busy || !snapshot) return; busy = true; error = ''; home();
-    const kind = snapshot.timer.active ? 'sleep-stop' : 'sleep-start';
-    if (!pendingTimer || pendingTimer.kind !== kind || pendingTimer.timerId !== (snapshot.timer.uuid || null)) pendingTimer = {kind,start:new Date().toISOString(),requestId:crypto.randomUUID(),timerId:snapshot.timer.uuid || null,expectedStart:snapshot.timer.start || null};
-    try { await write(pendingTimer,connection.selected); pendingTimer = null; showNotice(demo ? 'Sample sleep updated.' : kind === 'sleep-start' ? 'Sleep started in Huckleberry.' : 'Sleep saved in Huckleberry.'); await refresh(true); }
-    catch (e) { error = message(e); } finally { busy = false; home(); }
-  });
+  $('babySleep').addEventListener('click', () => toggleSleep());
   $('babyLogCancel').addEventListener('click', () => { if (!busy) $('babyLogDialog').close(); });
   $('babyLogDialog').addEventListener('cancel', e => { if (busy) e.preventDefault(); });
-  $('babyLogForm').addEventListener('input', () => { formId = crypto.randomUUID(); });
+  $('babyLogForm').addEventListener('input', () => { formId = crypto.randomUUID(); syncLogForm(); });
+  $('babyLogClose').addEventListener('click', () => { if (!busy) $('babyLogDialog').close(); });
+  // Chips, stepper and pills set the real inputs, then count as an edit.
+  const changed = () => { formId = crypto.randomUUID(); syncLogForm(); };
+  $('babyLogForm').addEventListener('click', e => {
+    const chip = e.target.closest('[data-ago]'), step = e.target.closest('[data-step]'), amount = e.target.closest('[data-amount]'), pill = e.target.closest('[data-pills] [data-value]'), same = e.target.closest('#babyLogSame');
+    if (chip) { const input = $(chip.closest('[data-time-chips]').dataset.timeChips); input.value = inputTime(Date.now() - Number(chip.dataset.ago) * 60000); changed(); }
+    else if (step) { const ml = $('babyLogUnits').value === 'ml', input = $('babyLogAmount'), next = Math.max(ml ? 5 : 0.5, Number(input.value || 0) + Number(step.dataset.step) * (ml ? 10 : 0.5)); input.value = String(Math.round(next * 10) / 10); changed(); }
+    else if (amount) { $('babyLogAmount').value = amount.dataset.amount; changed(); }
+    else if (pill) { $(pill.closest('[data-pills]').dataset.pills).value = pill.dataset.value; changed(); }
+    else if (same) { $('babyLogAmount').value = same.dataset.amount; $('babyLogUnits').value = same.dataset.units; $('babyLogMilk').value = same.dataset.type; changed(); }
+  });
   $('babyLogForm').addEventListener('submit', async e => {
     e.preventDefault(); if (busy) return;
     const kind = $('babyLogKind').value, start = new Date($('babyLogStart').value), end = new Date($('babyLogEnd').value);

@@ -84,3 +84,73 @@ export function describeDraft(draft, locale) {
   const who = { both:'Together', hanry:'hanry', karena:'Karena' }[draft.owner];
   return `${draft.title} · ${date} · ${time} · ${who}${draft.withFrankie ? ' + Frankie' : ''}`;
 }
+
+// ---------- Frankie logs in plain words ----------
+// "frankie bottle 10:30am 4oz", "frankie diaper wet", "frankie nap 1-2:15pm",
+// "frankie fell asleep 9:40", "frankie woke up". Only text that names Frankie
+// (or "baby") AND a log word is treated as a log, so "Frankie swim class Tue
+// 3pm" stays a calendar event.
+const WHO = /\b(frankie|frankies|frankie's|baby)\b|🍼/i;
+const LOG_WORDS = { bottle:/\b(bottles?|fed|feeds?|feeding|ounces?|oz|ml)\b|\d\s?(oz|ml)\b|🍼/i, diaper:/\b(diapers?|nappy|changed?|poo+p?y?|pee|wet|dirty|dry|blowout)\b/i, sleep:/\b(nap|napped|naps|slept|sleep|sleeping|asleep|woke|wakes?|awake|down for)\b/i };
+const MILK = [[/\bformula\b/i, 'Formula'], [/\b(breast ?milk|breast|bm|pumped|expressed)\b/i, 'Breast Milk'], [/\bcow'?s?( milk)?\b/i, 'Cow Milk'], [/\bsoy\b/i, 'Soy Milk']];
+// Logs are about the past: pick the most recent matching moment at or before
+// now (+5 min of slack). Without am/pm, both 3:15am and 3:15pm are candidates.
+function clockToDate(hour, minute, meridiem, now) {
+  let h = Number(hour) % 24; const m = Number(minute || 0);
+  if (meridiem) { const pm = /^p/i.test(meridiem); h = h % 12 + (pm ? 12 : 0); }
+  const hours = !meridiem && h >= 1 && h < 12 ? [h, h + 12] : [h];
+  const limit = +now + 5 * 60000, candidates = [];
+  for (const dayOffset of [0, -1]) for (const value of hours) { const date = new Date(now); date.setDate(date.getDate() + dayOffset); date.setHours(value, m, 0, 0); if (+date <= limit) candidates.push(date); }
+  return candidates.sort((x, y) => y - x)[0];
+}
+export function parseBabyLog(text, now = new Date()) {
+  const raw = String(text || '');
+  if (!WHO.test(raw)) return null;
+  const kind = LOG_WORDS.diaper.test(raw) && !LOG_WORDS.bottle.test(raw) ? 'diaper' : LOG_WORDS.bottle.test(raw) ? 'bottle' : LOG_WORDS.diaper.test(raw) ? 'diaper' : LOG_WORDS.sleep.test(raw) ? 'sleep' : null;
+  if (!kind) return null;
+  let rest = ` ${raw} `;
+  const take = pattern => { const match = rest.match(pattern); if (match) rest = `${rest.slice(0, match.index)} ${rest.slice(match.index + match[0].length)}`; return match; };
+  const result = { kind, start:new Date(now), recognized:[] };
+  // Amount first, so "4oz" is never read as a time.
+  const amount = take(/(\d+(?:\.\d+)?)\s?(oz|ounces?|ml)\b/i);
+  if (amount) { result.amount = Number(amount[1]); result.units = /^ml$/i.test(amount[2]) ? 'ml' : 'oz'; }
+  const duration = take(/\bfor (\d+(?:\.\d+)?|an?|half an) ?(hours?|hrs?|h|minutes?|mins?|m)\b/i) || (kind === 'sleep' ? take(/\b(\d+(?:\.\d+)?) ?(hours?|hrs?|h|minutes?|mins?|m)\b(?! ago)/i) : null);
+  const minutes = duration ? (/^h/i.test(duration[2]) ? (/^an?$/i.test(duration[1]) ? 1 : /half/i.test(duration[1]) ? .5 : Number(duration[1])) * 60 : Number(duration[1])) : null;
+  let start = null, end = null, match;
+  if ((match = take(/\b(?:from )?(\d{1,2})(?::(\d{2}))? ?(am|pm|a|p)? ?(?:-|–|to|until|til) ?(\d{1,2})(?::(\d{2}))? ?(am|pm|a|p)?\b/i))) {
+    end = clockToDate(match[4], match[5], match[6], now);
+    start = clockToDate(match[1], match[2], match[3] || (!match[3] && match[6] && Number(match[1]) <= Number(match[4]) ? match[6] : null), now);
+    if (start >= end) start.setDate(start.getDate() - 1);
+  } else if ((match = take(/\b(\d+|an?|half an) ?(hours?|hrs?|h|minutes?|mins?|m) ago\b/i))) {
+    const amountAgo = /^an?$/i.test(match[1]) ? 1 : /half/i.test(match[1]) ? .5 : Number(match[1]);
+    start = new Date(+now - amountAgo * (/^h/i.test(match[2]) ? 3600000 : 60000));
+  } else if ((match = take(/\b(?:at |@ ?)?(\d{1,2})(?::(\d{2}))? ?(am|pm|a\.m\.|p\.m\.|a|p)\b/i)) || (match = take(/\b(?:at |@ ?)(\d{1,2})(?::(\d{2}))?\b/i)) || (match = take(/\b(\d{1,2}):(\d{2})\b/))) {
+    start = clockToDate(match[1], match[2], match[3]?.replaceAll('.', ''), now);
+  } else if (take(/\bjust now\b|\bnow\b/i)) start = new Date(now);
+  if (start) result.start = start;
+  if (kind === 'bottle') {
+    const milk = MILK.find(([pattern]) => pattern.test(raw)); if (milk) result.bottleType = milk[1];
+    if (!amount && (match = rest.match(/\bbottle (?:of )?(\d+(?:\.\d+)?)\b/i)) && Number(match[1]) <= 12) { result.amount = Number(match[1]); result.units = 'oz'; }
+  }
+  if (kind === 'diaper') {
+    const dirty = /\b(poo+p?y?|dirty|blowout|bm)\b/i.test(raw), wet = /\b(pee|wet)\b/i.test(raw);
+    result.mode = /\bboth\b/i.test(raw) || (dirty && wet) ? 'both' : dirty ? 'poo' : /\bdry\b/i.test(raw) ? 'dry' : wet ? 'pee' : null;
+  }
+  if (kind === 'sleep') {
+    if (end) { result.kind = 'sleep-log'; result.end = end; }
+    else if (minutes) { result.kind = 'sleep-log'; if (start) result.end = new Date(+result.start + minutes * 60000); else { result.end = new Date(now); result.start = new Date(+now - minutes * 60000); } }
+    else if (/\b(woke|wakes?|awake|up from)\b/i.test(raw)) result.kind = 'sleep-stop';
+    else if (/\b(asleep|down for|went down|sleeping|nap(?:ping)? now|fell)\b/i.test(raw) || !start) result.kind = 'sleep-start';
+    else result.kind = 'sleep-start';
+  }
+  return result;
+}
+export function describeBabyLog(log, locale) {
+  if (!log) return '';
+  const at = date => date.toLocaleTimeString(locale, { hour:'numeric', minute:'2-digit' });
+  const label = { bottle:'🍼 Bottle', diaper:'♡ Diaper', 'sleep-log':'☾ Finished sleep', 'sleep-start':'☾ Fell asleep', 'sleep-stop':'☀ Woke up' }[log.kind];
+  const detail = log.kind === 'bottle' ? (log.amount ? `${log.amount} ${log.units}${log.bottleType ? ` ${log.bottleType}` : ''}` : `same as last bottle${log.bottleType ? ` · ${log.bottleType}` : ''}`)
+    : log.kind === 'diaper' ? ({ pee:'Wet', poo:'Dirty', both:'Wet + dirty', dry:'Dry' }[log.mode] || 'choose wet or dirty')
+    : log.kind === 'sleep-log' ? `${at(log.start)} – ${at(log.end)} · ${Math.round((log.end - log.start) / 60000)} min` : '';
+  return `${label} for Frankie · ${log.kind === 'sleep-log' ? '' : `${at(log.start)}${detail ? ' · ' : ''}`}${detail}`.replace(/ · $/, '');
+}
