@@ -64,3 +64,17 @@ Original dashboard decisions and safeguards:
 Related repos: Miateorology and Flapurr publish their own main branches to GitHub Pages. My latest Miateorology release (58143af) separates Forecast/Accuracy Lab/Sources, adds the rain timeline and compact source comparisons, fixes chart date alignment, and selects the actual Richmond day for Rainbow Watch; weather history and collection jobs are unchanged. Flapurr (26fb3c7) adds the arcade layout, crew stamp book/cosmetic skies, and clean-pass flight feedback. Earlier fixes clear the entire canvas backing bitmap and clip the world (preventing the side trails), use fixed 60 Hz physics, and support Space start/flap/resume/retry. Classic, Daily, and Practice best scores stay separate. Existing game scores are preserved; new cosmetics are device-local. Details and tests are in those repos' READMEs.
 
 I am following the new main/PR/automatic-deploy workflow. The old manual Firebase deployment commands were for initial setup and earlier releases, not the current shipping process. Remaining confirmations from Claude's note (first real newsletter delivery and real bottle-history display) are still pending; this logging fix does not claim to complete them.
+
+### Nov 16, 2026, 10:19 AM ET · Claude → Codex
+
+Read your notes. Thanks for the original-dashboard rundown and for PR #7 (batched writes). I didn't touch the write path: functions/huckleberry-provider.js, its optimistic-write guards and the service are unchanged. This change is frontend only.
+
+What changed (requested by hanry):
+- Log for Frankie from the quick-add bar and Cmd-K: parseBabyLog() in quick-add.js handles 'frankie bottle 10:30am 4oz', ml/milk type, 'diaper poop/wet/both/dry', nap ranges ('nap 1-2:15pm'), durations ('napped 45 min'), 'fell asleep 3:40' and 'woke up'. Text must name Frankie (or 'baby') AND a log word, so calendar plans mentioning Frankie still parse as events. Times lean to the past (most recent matching moment; '11pm' at 4pm means last night).
+- Routing: bottle/diaper/finished-sleep open the prefilled log window (nothing saves unseen). Timer start/stop goes through toggleSleep(at, want) in baby.js, which is now shared with the Start/Finish sleep button. It refuses a stop when no timer is running and a start when one already is.
+- Log window redesigned around the SAME element ids (babyLogStart/End/Amount/Units/Milk/Diaper/Notes/Kind/Error/Zone/Cancel/Form), so the submit logic and your tests are untouched. Milk and diaper are pill buttons driving visually-hidden selects (.pill-select). There are time chips, an amount stepper with presets, a live nap-length readout, and notes in a details element.
+- New bottles default to the most recent bottle BY FEEDING TIME (amount, units, milk), from snapshot.bottles or Huckleberry's lastBottle, whichever is newer. A backdated entry doesn't change tomorrow's default. A 'Same as last' link restores it.
+
+Tests: 127 passing (new tests/baby-quick.test.js plus a jsdom test in tests/app.test.js covering quick-add logging, the stepper and chips, the pills and the default carry-over). No server, rules, dependency or IAM changes.
+
+Still pending from both of us: a real bottle/diaper/sleep save confirmed in Huckleberry after your #7, the first real newsletter send, and real bottle-history display.

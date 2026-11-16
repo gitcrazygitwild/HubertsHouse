@@ -21,3 +21,44 @@
 @media(max-width:650px) { .baby-card { padding:15px; }.baby-predictions { grid-template-columns:1fr; }.baby-stats { grid-template-columns:1fr; gap:12px; }.baby-stats > div { border-right:0; border-bottom:1px solid var(--border); padding-bottom:10px; }.baby-heading h2 { font-size:23px; }.baby-actions .btn { flex:1 1 40%; }.baby-actions #babyRefresh { margin-left:0; }.nap-card h3 { font-size:23px; } }
 
 #babyError:empty,#babySettingsError:empty,#babyLogError:empty { display:none; }
+
+/* Log window: a calm sheet with big, tappable choices. */
+.log-sheet { width:min(460px,calc(100vw - 24px)); padding:0; border-radius:22px; }
+.log-sheet form { padding:20px 22px 18px; }
+.log-head { display:flex; align-items:center; gap:12px; margin-bottom:6px; }
+.log-head .eyebrow { color:var(--frankie-ink,#98657a); }
+.log-head h2 { margin:2px 0 0; font-size:24px; }
+.log-icon { display:grid; place-items:center; width:46px; height:46px; border-radius:14px; font-size:24px; background:linear-gradient(135deg,#f7e6ee,#efe9f8); flex-shrink:0; }
+[data-theme="dark"] .log-icon { background:linear-gradient(135deg,#3b2c35,#332f42); }
+.log-close { margin-left:auto; border:0; background:var(--soft); color:var(--muted); width:34px; height:34px; border-radius:50%; cursor:pointer; font-size:14px; }
+.log-block { padding:14px 0; border-bottom:1px solid var(--border2); }
+.log-block[hidden] { display:none; }
+.log-label { display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:8px; font-size:12px; font-weight:650; }
+.log-readout { font-weight:500; color:var(--muted); font-size:11.5px; text-align:right; }
+.log-chips { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
+.log-chips button,.log-pills button { border:1px solid var(--border); background:var(--card); color:var(--text); border-radius:20px; padding:6px 12px; font:inherit; font-size:12px; cursor:pointer; min-height:34px; }
+.log-chips button[aria-pressed="true"],.log-pills button[aria-pressed="true"] { background:var(--accent); border-color:var(--accent); color:var(--card); font-weight:600; }
+.log-sheet input[type="datetime-local"] { width:100%; box-sizing:border-box; font-size:13px; color:var(--muted); }
+.amount-stepper { display:grid; grid-template-columns:44px 1fr 72px 44px; gap:8px; align-items:center; margin-bottom:8px; }
+.amount-stepper button { height:44px; border-radius:12px; border:1px solid var(--border); background:var(--soft); color:var(--text); font-size:22px; cursor:pointer; }
+.amount-stepper input { height:44px; text-align:center; font-size:22px; font-family:Georgia,serif; box-sizing:border-box; width:100%; }
+.amount-stepper select { height:44px; box-sizing:border-box; width:100%; }
+.log-pills { display:flex; flex-wrap:wrap; gap:6px; }
+.log-pills.big { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+.log-pills.big button { display:flex; flex-direction:column; align-items:center; gap:4px; padding:12px 6px; border-radius:14px; font-size:12.5px; min-height:72px; }
+.log-pills.big b { font-size:22px; font-weight:400; }
+.pill-select { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
+#babyLogSame { font-size:11.5px; }
+.log-notes { padding:12px 0 2px; font-size:12px; }
+.log-notes summary { cursor:pointer; color:var(--accent); width:fit-content; list-style:none; font-weight:600; }
+.log-notes summary::-webkit-details-marker { display:none; }
+.log-notes textarea { width:100%; box-sizing:border-box; margin-top:8px; min-height:64px; }
+.log-actions { display:grid; grid-template-columns:1fr 2fr; gap:10px; margin-top:12px; }
+.log-actions .btn { min-height:46px; font-size:14px; }
+@media (max-width:520px) { .log-sheet { margin:auto 0 0; width:100vw; max-width:100vw; border-radius:22px 22px 0 0; } .log-pills.big { grid-template-columns:repeat(2,1fr); } }
+.log-sheet input:not([type="checkbox"]),.log-sheet select,.log-sheet textarea { background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:12px; padding:9px 12px; font:inherit; box-shadow:none; }
+.log-sheet input:focus-visible,.log-sheet select:focus-visible,.log-sheet textarea:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+.log-sheet input[type="datetime-local"] { color:var(--muted); padding:8px 12px; }
+.amount-stepper input { color:var(--text); padding:0 8px; }
+.log-close:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.log-close:focus:not(:focus-visible) { outline:none; box-shadow:none; }

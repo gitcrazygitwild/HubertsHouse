@@ -1,6 +1,6 @@
 import { overlappingEvents, preferredCalendar } from './event-planning.js';
 import { initCatCrew } from './cat-crew.js';
-import { initHuckleberry } from './baby.js';
+import { initHuckleberry, logBabyFromText } from './baby.js';
 import { sweetspotPatch } from './prediction-log.js';
 import { initUpgrades } from './upgrades.js';
 import { initNewsletterSettings } from './newsletter-settings.js';
@@ -555,7 +555,7 @@ function startUpgrades() {
   const click = id => document.getElementById(id)?.click();
   const babyLog = kind => { const button = document.querySelector(`#view-today [data-baby-log="${kind}"]`); if (button && !button.disabled) button.click(); else { showView('settings'); showNotice('Connect Huckleberry to log from here.'); } };
   initUpgrades({
-    unlocked:isUnlocked, getEvents:() => expandedEvents, showView, notice:showNotice,
+    unlocked:isUnlocked, getEvents:() => expandedEvents, showView, notice:showNotice, logBaby:log => logBabyFromText(log),
     openEvent:(id, occurrence) => openFromPanel(id, occurrence, false),
     openDraft:payload => { if (isUnlocked()) openEventModal(payload); },
     addGrocery:title => { showView('groceries'); const input = document.getElementById('quickGrocery'); input.value = title; document.getElementById('quickGroceryForm').requestSubmit(); },

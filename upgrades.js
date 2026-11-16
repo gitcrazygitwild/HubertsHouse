@@ -2,7 +2,7 @@
 // the live Now & Next line and weather-aware plan flags.
 import { escapeHTML as esc, dateKey } from './household-model.js';
 import { renderHTML } from './dom.js';
-import { parseQuickAdd, describeDraft } from './quick-add.js';
+import { parseQuickAdd, describeDraft, parseBabyLog, describeBabyLog } from './quick-add.js';
 import { weatherFlags, nextUp, untilText } from './smart-home.js';
 import { freeEvenings, dateNightDraft } from './free-nights.js';
 import { skyState, skyArt } from './sky.js';
@@ -20,14 +20,17 @@ function draftPayload(draft) {
 }
 function initQuickAdd() {
   const form = $('quickAddForm'), input = $('quickAddInput'), preview = $('quickAddPreview');
+  // Frankie logs ("frankie bottle 10:30am 4oz") win over calendar plans.
   const update = () => {
-    const draft = parseQuickAdd(input.value);
-    preview.textContent = input.value.trim() ? draft ? `↵ ${describeDraft(draft)}` : 'Add a day or time — “Fri 7pm”, “tomorrow”, “Dec 5”, “next Tuesday at 3”…' : '';
-    preview.dataset.ready = String(!!draft);
+    const log = parseBabyLog(input.value), draft = log ? null : parseQuickAdd(input.value);
+    preview.textContent = !input.value.trim() ? '' : log ? `↵ ${describeBabyLog(log)}` : draft ? `↵ ${describeDraft(draft)}` : 'Add a day or time — “Fri 7pm”, “tomorrow”, “Dec 5” — or log for Frankie: “frankie bottle 10:30am 4oz”';
+    preview.dataset.ready = String(!!(log || draft));
   };
   input.addEventListener('input', update);
   form.addEventListener('submit', event => {
-    event.preventDefault(); const draft = parseQuickAdd(input.value);
+    event.preventDefault();
+    const log = parseBabyLog(input.value), draft = log ? null : parseQuickAdd(input.value);
+    if (log) { if (ctx.logBaby(log) !== false) { input.value = ''; update(); } return; }
     if (!draft) { update(); input.focus(); return; }
     ctx.openDraft(draftPayload(draft)); input.value = ''; update();
   });
@@ -44,7 +47,8 @@ function score(text, query) {
 }
 function paletteItems(query) {
   const q = query.trim(), items = [];
-  const draft = q ? parseQuickAdd(q) : null;
+  const log = q ? parseBabyLog(q) : null, draft = q && !log ? parseQuickAdd(q) : null;
+  if (log) items.push({ group:'Frankie', icon:'✨', label:describeBabyLog(log), run:() => ctx.logBaby(log), boost:200 });
   if (draft) items.push({ group:'Create', icon:'✨', label:`Add “${draft.title}”`, hint:describeDraft(draft).split(' · ').slice(1).join(' · '), run:() => ctx.openDraft(draftPayload(draft)), boost:200 });
   for (const action of ctx.actions()) items.push({ group:action.group || 'Actions', ...action });
   const now = new Date(), horizon = +now + 60 * 86400000;

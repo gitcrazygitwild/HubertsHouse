@@ -108,7 +108,7 @@
           <div id="homeWeek" class="home-week-grid"></div>
           <div class="home-calendar-footer"><span id="homeCalendarSummary" role="status"></span><span>Click a day to add · drag across days for a longer plan · click a plan to edit.</span></div>
         </section>
-        <div class="today-smart"><form id="quickAddForm" class="smart-add" autocomplete="off"><label class="sr-only" for="quickAddInput">Add a plan in your own words</label><span class="smart-add-spark" aria-hidden="true">✨</span><input id="quickAddInput" maxlength="200" placeholder="Add a plan — “Doctor Tue 3pm with Frankie”" /><button type="submit" class="btn btn-primary">Add</button><p id="quickAddPreview" class="smart-add-preview" aria-live="polite"></p></form></div>
+        <div class="today-smart"><form id="quickAddForm" class="smart-add" autocomplete="off"><label class="sr-only" for="quickAddInput">Add a plan in your own words</label><span class="smart-add-spark" aria-hidden="true">✨</span><input id="quickAddInput" maxlength="200" placeholder="Add a plan or log for Frankie — “frankie bottle 10:30am 4oz”" /><button type="submit" class="btn btn-primary">Add</button><p id="quickAddPreview" class="smart-add-preview" aria-live="polite"></p></form></div>
         <section class="baby-card" aria-labelledby="babyTitle">
           <div class="baby-heading"><div><span class="eyebrow">LITTLE MOMENTS, BIG LOVE</span><h2 id="babyTitle">Little rhythms, together.</h2></div><div class="baby-heading-actions"><span class="status-badge" id="babyBadge">Connect Huckleberry</span><button type="button" class="text-link" id="babySettings">Baby settings →</button></div></div>
           <div class="baby-predictions" id="babyPredictions"></div><div id="babyScore"></div><div class="baby-stats" id="babyStats"></div>
@@ -546,14 +546,27 @@
     <p id="standaloneChecklistError" class="form-error" role="alert"></p><div class="modal-actions"><button id="cancelStandaloneChecklist" type="button" class="btn">Cancel</button><button id="saveStandaloneChecklist" type="submit" class="btn btn-primary">Create checklist</button></div>
   </form></dialog>
   <dialog id="paletteDialog" class="palette-dialog" aria-label="Search and actions"><div class="palette-search"><span aria-hidden="true">⌕</span><input id="paletteInput" role="combobox" aria-expanded="true" aria-controls="paletteList" aria-autocomplete="list" placeholder="Search plans, jump anywhere, or type “Brunch Sun 11am”…" autocomplete="off" /><kbd>esc</kbd></div><ul id="paletteList" class="palette-list" role="listbox"></ul><div class="palette-foot"><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>↵</kbd> choose</span><span><kbd><span data-mod-key>⌘</span>K</kbd> toggle</span></div></dialog>
-  <dialog id="babyLogDialog" class="baby-dialog" aria-labelledby="babyLogTitle"><form id="babyLogForm">
-    <h2 id="babyLogTitle">Log a little moment.</h2><input id="babyLogKind" type="hidden" />
-    <label class="field"><span>Time / sleep started</span><input id="babyLogStart" type="datetime-local" required /></label>
-    <div data-log-fields="sleep-log" hidden><label class="field"><span>Woke up</span><input id="babyLogEnd" type="datetime-local" required disabled /></label></div>
-    <div data-log-fields="bottle" hidden><div class="baby-form-row"><label class="field"><span>Amount</span><input id="babyLogAmount" type="number" min="0.1" max="2000" step="0.1" value="4" required disabled /></label><label class="field"><span>Units</span><select id="babyLogUnits" disabled><option value="oz">oz</option><option value="ml">ml</option></select></label></div><label class="field"><span>Milk</span><select id="babyLogMilk" disabled><option>Formula</option><option>Breast Milk</option><option>Cow Milk</option><option>Soy Milk</option><option>Other</option></select></label></div>
-    <div data-log-fields="diaper" hidden><label class="field"><span>Change</span><select id="babyLogDiaper" disabled><option value="pee">Wet</option><option value="poo">Dirty / poop</option><option value="both">Wet + dirty</option><option value="dry">Dry</option></select></label></div>
-    <label class="field"><span>Notes · optional</span><textarea id="babyLogNotes" maxlength="1000"></textarea></label><p id="babyLogZone" class="tiny muted"></p><p id="babyLogError" class="form-error" role="alert"></p>
-    <div class="connection-actions"><button type="button" id="babyLogCancel" class="btn">Cancel</button><button type="submit" class="btn btn-primary">Save log</button></div>
+  <dialog id="babyLogDialog" class="baby-dialog log-sheet" aria-labelledby="babyLogTitle"><form id="babyLogForm">
+    <header class="log-head"><span class="log-icon" id="babyLogIcon" aria-hidden="true">🍼</span><div><span class="eyebrow">FOR FRANKIE</span><h2 id="babyLogTitle">Bottle</h2></div><button type="button" class="log-close" id="babyLogClose" aria-label="Close">✕</button></header>
+    <input id="babyLogKind" type="hidden" />
+    <section class="log-block"><div class="log-label"><span id="babyLogStartLabel">When</span><output id="babyLogStartText" class="log-readout"></output></div>
+      <div class="log-chips" data-time-chips="babyLogStart"><button type="button" data-ago="0">Now</button><button type="button" data-ago="15">15 min ago</button><button type="button" data-ago="30">30 min ago</button><button type="button" data-ago="60">1 hr ago</button></div>
+      <input id="babyLogStart" type="datetime-local" required aria-labelledby="babyLogStartLabel" /></section>
+    <section class="log-block" data-log-fields="sleep-log" hidden><div class="log-label"><span id="babyLogEndLabel">Woke up</span><output id="babyLogDuration" class="log-readout"></output></div>
+      <div class="log-chips" data-time-chips="babyLogEnd"><button type="button" data-ago="0">Now</button><button type="button" data-ago="10">10 min ago</button><button type="button" data-ago="30">30 min ago</button></div>
+      <input id="babyLogEnd" type="datetime-local" required disabled aria-labelledby="babyLogEndLabel" /></section>
+    <section class="log-block" data-log-fields="bottle" hidden><div class="log-label"><span id="babyLogAmountLabel">Amount</span><button type="button" class="text-link" id="babyLogSame" hidden></button></div>
+      <div class="amount-stepper"><button type="button" data-step="-1" aria-label="Less">−</button><input id="babyLogAmount" type="number" inputmode="decimal" min="0.1" max="2000" step="0.1" value="4" required disabled aria-labelledby="babyLogAmountLabel" /><select id="babyLogUnits" disabled aria-label="Units"><option value="oz">oz</option><option value="ml">ml</option></select><button type="button" data-step="1" aria-label="More">+</button></div>
+      <div class="log-chips" id="babyLogAmountChips"></div>
+      <div class="log-label"><span>Milk</span></div>
+      <div class="log-pills" data-pills="babyLogMilk"><button type="button" data-value="Formula">Formula</button><button type="button" data-value="Breast Milk">Breast milk</button><button type="button" data-value="Cow Milk">Cow</button><button type="button" data-value="Soy Milk">Soy</button><button type="button" data-value="Other">Other</button></div>
+      <select id="babyLogMilk" class="pill-select" disabled aria-label="Milk"><option>Formula</option><option>Breast Milk</option><option>Cow Milk</option><option>Soy Milk</option><option>Other</option></select></section>
+    <section class="log-block" data-log-fields="diaper" hidden><div class="log-label"><span>What kind?</span></div>
+      <div class="log-pills big" data-pills="babyLogDiaper"><button type="button" data-value="pee"><b aria-hidden="true">💧</b>Wet</button><button type="button" data-value="poo"><b aria-hidden="true">💩</b>Dirty</button><button type="button" data-value="both"><b aria-hidden="true">💧💩</b>Both</button><button type="button" data-value="dry"><b aria-hidden="true">✨</b>Dry</button></div>
+      <select id="babyLogDiaper" class="pill-select" disabled aria-label="Diaper"><option value="pee">Wet</option><option value="poo">Dirty / poop</option><option value="both">Wet + dirty</option><option value="dry">Dry</option></select></section>
+    <details class="log-notes" id="babyLogNotesWrap"><summary>＋ Add a note</summary><textarea id="babyLogNotes" maxlength="1000" placeholder="Anything worth remembering"></textarea></details>
+    <p id="babyLogZone" class="tiny muted"></p><p id="babyLogError" class="form-error" role="alert"></p>
+    <div class="log-actions"><button type="button" id="babyLogCancel" class="btn">Cancel</button><button type="submit" class="btn btn-primary" id="babyLogSave" autofocus>Save</button></div>
   </form></dialog>
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
