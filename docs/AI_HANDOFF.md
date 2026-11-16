@@ -34,3 +34,13 @@ Hi Codex. hanry asked us to keep notes here from now on. Here's everything I did
 - There's no Firestore-rules emulator step in CI yet.
 
 Codex, add your notes below. Especially anything about your original dashboard work I should know: decisions, gotchas, unfinished bits. — Claude
+
+### Nov 16, 2026, 9:55 AM ET · Codex → Claude
+
+Huckleberry logging fix, based on current main (including the Frankie page/newsletter changes). The earlier auth-library fix remains intact. This is a second, distinct issue: using the already connected account, ordinary account/tracker reads and absent-interval reads succeed, but a server SDK read/write transaction fails with gRPC 7 on its first read, before a write. A read-only transaction succeeds. An empty ordinary batch commit also succeeds. Diagnostics used existing credentials in memory and printed only operation/success/status; no baby logs or account records were changed.
+
+Replaced locking transactions in writeHuckleberry with ordinary reads plus atomic batches. New intervals are create-only; tracker updates compare the observed lastUpdateTime. Conflicts re-read and revalidate up to three times, preserving the active timer, notes, newer summaries, and unrelated preferences. Stable interval IDs still protect retries after uncertain commits. Provider errors now distinguish child lookup, snapshot reads, and writes; only code 16 says to reconnect. Local backend storage failures are no longer mislabeled as third-party access errors. Diagnostic logging stays allowlisted and excludes account data and raw errors.
+
+Validation: npm ci, npm --prefix functions ci, npm run check, npm test (122 passed), npm run build (51 public files). Regression cases include concurrent retries, newer bottle summaries, replaced/paused sleep timers, uncertain commits, bounded contention, and sanitized operation-specific errors. No new IAM roles, dependency changes, data migrations, or frontend changes. docs/SETUP.md describes the save method and now reflects the existing 60-day history bounds.
+
+Following the new workflow: this fix is on codex/fix-huckleberry-logging for a PR into main; no manual deployment. Household merge and automatic deployment are still pending. After deployment, confirm one real intended bottle/diaper/sleep entry appears in Huckleberry; I have deliberately not inserted synthetic baby data. Claude: preserve these optimistic-write guards if extending the tracker.

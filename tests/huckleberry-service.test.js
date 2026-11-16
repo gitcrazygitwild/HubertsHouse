@@ -12,7 +12,7 @@ function fixture() {
     huckleberryClient:session => { assert.equal(session.idToken,'secret-token'); return {terminate:async () => {}}; },huckleberryChildren:async () => children,
     huckleberrySnapshot:async (_client,childId,timezone) => { read++; return {childId,timezone,checkedAt:new Date().toISOString(),sleeps:[]}; },writeHuckleberry:async () => { written++; return {saved:true}; }};
   const handler = createHuckleberryHandler({db,key:() => key,api});
-  return {docs,key,handler,setChildren:value => {children=value;},counts:() => ({written,read,authenticated})};
+  return {docs,key,handler,api,db,setChildren:value => {children=value;},counts:() => ({written,read,authenticated})};
 }
 test('invalid time zones fail before login while valid zones do not change authentication',async()=>{
   const {handler,counts,docs}=fixture();
@@ -50,6 +50,38 @@ test('child changes clear snapshots and stale forms cannot write to a different 
 test('the deployed callable wrapper rejects unauthenticated requests before provider access', async () => {
   const { huckleberry } = await import('../functions/index.js');
   await assert.rejects(huckleberry.run({data:{action:'status'}}),e => e.code === 'unauthenticated');
+});
+
+test('save permission errors identify the rejected operation without blaming login or exposing provider data', async () => {
+  const {handler,api,docs} = fixture();
+  await handler('parent',{action:'connect',email:'test@example.com',password:'password',timezone:'America/New_York'});
+  await handler('parent',{action:'select',childId:'child-one',timezone:'America/New_York'});
+  api.writeHuckleberry = async () => { throw Object.assign(new Error('raw provider error secret-token private-child-id'),{code:7}); };
+  await assert.rejects(handler('parent',{action:'write',childId:'child-one',entry:{kind:'diaper',mode:'poo',start:new Date().toISOString(),requestId:randomUUID()}}),error => {
+    assert.equal(error.code,'permission-denied'); assert.match(error.message,/blocked this save/); assert.doesNotMatch(error.message,/Reconnect|shared|secret-token|private-child-id/);
+    assert.deepEqual(error.details,{service:'huckleberry',operation:'write',reason:'PROVIDER_PERMISSION_DENIED',grpcCode:7});
+    return true;
+  });
+  assert.deepEqual(docs.get('privateHuckleberryConnections/parent').receipts,[]);
+});
+
+test('expired provider sessions and denied profile reads have distinct safe diagnostics', async () => {
+  const {handler,api} = fixture();
+  await handler('parent',{action:'connect',email:'test@example.com',password:'password',timezone:'America/New_York'});
+  await handler('parent',{action:'select',childId:'child-one',timezone:'America/New_York'});
+  api.huckleberrySnapshot = async () => { throw Object.assign(new Error('private-token'),{code:16}); };
+  await assert.rejects(handler('parent',{action:'snapshot',force:true}),error => error.code==='unauthenticated' && error.details.operation==='snapshot' && error.details.grpcCode===16 && /Reconnect/.test(error.message) && !error.message.includes('private-token'));
+  api.huckleberryChildren = async () => { throw Object.assign(new Error('private-child'),{code:7}); };
+  await assert.rejects(handler('parent',{action:'snapshot',force:true}),error => error.code==='permission-denied' && error.details.operation==='children' && /child profiles/.test(error.message) && !error.message.includes('private-child'));
+});
+
+test('private backend storage failures are not mislabeled as a Huckleberry access rejection', async () => {
+  const {handler,db} = fixture();
+  await handler('parent',{action:'connect',email:'test@example.com',password:'password',timezone:'America/New_York'});
+  await handler('parent',{action:'select',childId:'child-one',timezone:'America/New_York'});
+  const doc=db.doc, denied=Object.assign(new Error('private storage failure'),{code:7});
+  db.doc=path=>({...doc(path),update:async()=>{throw denied;}});
+  await assert.rejects(handler('parent',{action:'snapshot',force:true}),error => error===denied && !error.details);
 });
 
 test('the callable returns only safe provider diagnostics for a rejected login',async t=>{
