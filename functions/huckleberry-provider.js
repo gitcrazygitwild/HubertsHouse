@@ -7,7 +7,7 @@ import { GoogleAuth, OAuth2Client } from 'google-auth-library';
 const API_KEY = 'AIzaSyApGVHktXeekGyAt-G6dIeWHUkq2oXqcjg';
 const PROJECT = 'simpleintervals';
 export class HuckleberryError extends Error {
-  constructor(code, message) { super(message); this.code = code; }
+  constructor(code, message, details) { super(message); this.code = code; if(details)this.details=details; }
 }
 const fail = (code, message) => { throw new HuckleberryError(code, message); };
 export const epochMs = value => {
@@ -20,14 +20,51 @@ export function validTimezone(value) {
   try { if (typeof value !== 'string' || value.length > 80) throw new Error(); new Intl.DateTimeFormat('en-US',{timeZone:value}).format(); return value; }
   catch { fail('invalid-argument','Choose a valid time zone.'); }
 }
+const AUTH_FAILURES = {
+  INVALID_LOGIN_CREDENTIALS:['unauthenticated','Huckleberry did not accept this email/password combination. Use the login for the Huckleberry app. If you normally use Apple or Google there, its password does not work in this form.'],
+  INVALID_PASSWORD:['unauthenticated','Huckleberry did not accept this email/password combination. Use the login for the Huckleberry app. If you normally use Apple or Google there, its password does not work in this form.'],
+  EMAIL_NOT_FOUND:['unauthenticated','Huckleberry did not accept this email/password combination. Use the login for the Huckleberry app. If you normally use Apple or Google there, its password does not work in this form.'],
+  USER_DISABLED:['failed-precondition','Huckleberry reports that this account is disabled. Check the account in Huckleberry or contact its support.'],
+  TOO_MANY_ATTEMPTS_TRY_LATER:['resource-exhausted','Huckleberry has temporarily blocked sign-in attempts. Stop retrying for now and try again later; changing the time zone will not help.'],
+  TOO_MANY_REQUESTS:['resource-exhausted','Huckleberry is limiting sign-in requests. Wait before trying again.'],
+  QUOTA_EXCEEDED:['resource-exhausted','Huckleberry’s sign-in service is at its request limit. Try again later.'],
+  OPERATION_NOT_ALLOWED:['failed-precondition','Huckleberry’s sign-in service is not allowing password login through this connection. This is a connection limitation, not a time-zone setting.'],
+  PASSWORD_LOGIN_DISABLED:['failed-precondition','Huckleberry’s sign-in service is not allowing password login through this connection. This is a connection limitation, not a time-zone setting.'],
+  API_KEY_INVALID:['failed-precondition','The Huckleberry connection’s API configuration was rejected. This needs an integration update; changing your password or time zone will not fix it.'],
+  API_KEY_SERVICE_BLOCKED:['failed-precondition','Huckleberry’s sign-in service blocked this connection’s API configuration. This needs an integration update.'],
+  API_KEY_HTTP_REFERRER_BLOCKED:['failed-precondition','Huckleberry’s sign-in service restricted this connection. This needs an integration update.'],
+  API_KEY_IP_ADDRESS_BLOCKED:['failed-precondition','Huckleberry’s sign-in service blocked this server. This needs an integration update.'],
+  API_KEY_ANDROID_APP_BLOCKED:['failed-precondition','Huckleberry’s sign-in service restricted this connection to its app. This needs an integration update.'],
+  API_KEY_IOS_APP_BLOCKED:['failed-precondition','Huckleberry’s sign-in service restricted this connection to its app. This needs an integration update.'],
+  CAPTCHA_CHECK_FAILED:['failed-precondition','Huckleberry requires an extra sign-in check that this connection cannot complete. Check sign-in in the Huckleberry app.'],
+  MISSING_RECAPTCHA_TOKEN:['failed-precondition','Huckleberry requires an extra sign-in check that this connection cannot complete. Check sign-in in the Huckleberry app.'],
+  INVALID_RECAPTCHA_TOKEN:['failed-precondition','Huckleberry requires an extra sign-in check that this connection cannot complete. Check sign-in in the Huckleberry app.'],
+  RECAPTCHA_NOT_ENABLED:['failed-precondition','Huckleberry’s sign-in verification configuration is unavailable. Try again later.'],
+  INVALID_EMAIL:['invalid-argument','Huckleberry did not recognize the email format. Check the email entered above.'],
+  MISSING_PASSWORD:['invalid-argument','Enter the password used to sign in to Huckleberry.'],
+  MISSING_EMAIL:['invalid-argument','Enter the email used to sign in to Huckleberry.']
+};
+async function authFailure(response) {
+  // Only allowlisted reason codes leave the provider boundary. Never forward
+  // raw error messages, request bodies, tokens, email addresses, or passwords.
+  let payload;try{payload=await response.json();}catch{}
+  const error=payload?.error, messageCode=typeof error?.message==='string' ? error.message.split(/[\s:]/,1)[0] : '';
+  const candidates=[messageCode,...(Array.isArray(error?.details) ? error.details.map(detail=>detail?.reason) : [])];
+  const reason=candidates.find(code=>Object.hasOwn(AUTH_FAILURES,code)) || (response.status===429?'TOO_MANY_REQUESTS':response.status>=500?'PROVIDER_UNAVAILABLE':response.status===403?'CONNECTION_REJECTED':'UNKNOWN');
+  const [code,message]=AUTH_FAILURES[reason] || ['unavailable',reason==='CONNECTION_REJECTED' ? 'Huckleberry rejected this connection before sign-in could complete. This may be a service restriction; the time zone is not involved.' : 'Huckleberry sign-in could not complete. The service did not provide a recognized reason. Try again later.'];
+  throw new HuckleberryError(code,message,{service:'huckleberry',reason,httpStatus:response.status});
+}
 export async function authenticateHuckleberry(email, password, fetcher = fetch) {
   if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254 || typeof password !== 'string' || !password || password.length > 500) fail('invalid-argument','Enter your Huckleberry account email and password.');
-  const response = await fetcher(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${API_KEY}`, {
-    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email,password,returnSecureToken:true}), signal:AbortSignal.timeout(15000)
-  });
-  if (!response.ok) fail(response.status === 429 ? 'resource-exhausted' : 'unauthenticated', response.status === 429 ? 'Too many sign-in attempts. Please wait and try again.' : 'Huckleberry sign-in failed. This connection supports Huckleberry email/password accounts.');
-  const result = await response.json();
-  if (!result.idToken || !result.refreshToken || !result.localId) fail('unavailable','Huckleberry did not return a usable session.');
+  let response;
+  try {
+    response = await fetcher(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${API_KEY}`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email,password,returnSecureToken:true}), signal:AbortSignal.timeout(15000)
+    });
+  } catch { fail('unavailable','The connection to Huckleberry timed out or could not be reached. Try again shortly.'); }
+  if (!response.ok) await authFailure(response);
+  let result;try{result=await response.json();}catch{fail('unavailable','Huckleberry returned an unreadable sign-in response. Try again shortly.');}
+  if (!result?.idToken || !result?.refreshToken || !result?.localId) fail('unavailable','Huckleberry did not return a usable session.');
   return {idToken:result.idToken,refreshToken:result.refreshToken,userId:result.localId,expiresAt:Date.now() + Number(result.expiresIn || 3600) * 1000};
 }
 export async function refreshHuckleberry(session, fetcher = fetch) {

@@ -18,13 +18,34 @@ function memory(initial) {
 }
 test('provider auth uses only the Huckleberry session and sanitizes authentication failures', async () => {
   const session = await authenticateHuckleberry('test@example.com','private-password',async (_url,options) => {
-    assert.equal(JSON.parse(options.body).returnSecureToken,true);
+    assert.deepEqual(JSON.parse(options.body),{email:'test@example.com',password:'private-password',returnSecureToken:true});
     return {ok:true,json:async () => ({idToken:'example-token',refreshToken:'example-refresh',localId:'example-user',expiresIn:'3600'})};
   });
   assert.equal(session.password,undefined);
   const client = huckleberryClient(session); const headers = await client._settings.auth.getRequestHeaders('https://firestore.googleapis.com');
   assert.equal(headers.get('authorization'),'Bearer example-token'); assert.equal(client.projectId,'simpleintervals'); await client.terminate();
-  await assert.rejects(authenticateHuckleberry('test@example.com','secret',async () => ({ok:false,status:400,json:async () => ({secret:'do not expose'})})),error => error.code === 'unauthenticated' && !error.message.includes('secret'));
+  await assert.rejects(authenticateHuckleberry('test@example.com','secret',async () => ({ok:false,status:400,json:async () => ({secret:'do not expose'})})),error => error.code === 'unavailable' && !error.message.includes('secret'));
+});
+test('authentication distinguishes credential rejection, throttling and API restrictions without exposing provider payloads',async()=>{
+  const cases=[
+    [400,{message:'INVALID_LOGIN_CREDENTIALS'},'unauthenticated','INVALID_LOGIN_CREDENTIALS'],
+    [400,{message:'TOO_MANY_ATTEMPTS_TRY_LATER : raw account details'},'resource-exhausted','TOO_MANY_ATTEMPTS_TRY_LATER'],
+    [429,{},'resource-exhausted','TOO_MANY_REQUESTS'],
+    [403,{message:'Requests from this server are blocked',details:[{reason:'API_KEY_IP_ADDRESS_BLOCKED',metadata:{private:'secret'}}]},'failed-precondition','API_KEY_IP_ADDRESS_BLOCKED'],
+    [400,{message:'MISSING_RECAPTCHA_TOKEN'},'failed-precondition','MISSING_RECAPTCHA_TOKEN'],
+    [400,{message:'OPERATION_NOT_ALLOWED'},'failed-precondition','OPERATION_NOT_ALLOWED'],
+    [503,{message:'secret-user@example.com secret-password'},'unavailable','PROVIDER_UNAVAILABLE'],
+    [400,{message:'unknown with secret-password'},'unavailable','UNKNOWN']
+  ];
+  for(const [status,body,code,reason] of cases)await assert.rejects(authenticateHuckleberry('test@example.com','secret-password',async()=>({ok:false,status,json:async()=>({error:body})})),error=>{
+    assert.equal(error.code,code);assert.deepEqual(error.details,{service:'huckleberry',reason,httpStatus:status});
+    assert.doesNotMatch(JSON.stringify(error)+error.message,/secret-password|secret-user|raw account details/);return true;
+  });
+});
+test('unreachable and malformed authentication responses never masquerade as a wrong password',async()=>{
+  for(const fetcher of [async()=>{throw new Error('network request with secret-password');},async()=>({ok:false,status:502,json:async()=>{throw new Error('not JSON');}}),async()=>({ok:true,json:async()=>null})]) {
+    await assert.rejects(authenticateHuckleberry('test@example.com','secret-password',fetcher),error=>error.code==='unavailable' && !error.message.includes('secret-password'));
+  }
 });
 test('sleep normalization handles archived batches, seconds/milliseconds, duplicates and invalid entries', () => {
   const entry = {start:(now - 3600000)/1000,duration:1800};

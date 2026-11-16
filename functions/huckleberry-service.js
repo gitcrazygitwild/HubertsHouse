@@ -14,12 +14,13 @@ export function createHuckleberryHandler({ db, key, api = provider, now = Date.n
     if (action === 'status') return publicState(connection);
     if (!connection && action !== 'connect') throw new provider.HuckleberryError('failed-precondition','Connect Huckleberry in Settings first.');
     const owner = `huckleberry:${uid}`;
+    const connectTimezone=action==='connect' ? api.validTimezone(input.timezone) : null;
     if (action === 'write') api.validateBabyWrite(input.entry, now());
     let session = action === 'connect' ? await api.authenticateHuckleberry(String(input.email || '').trim(),input.password) : await api.refreshHuckleberry(decryptCredential(connection.credential,key(),owner));
     const client = api.huckleberryClient(session);
     try {
       if (action === 'connect') {
-        const timezone = api.validTimezone(input.timezone), children = await api.huckleberryChildren(client,session.userId);
+        const timezone = connectTimezone, children = await api.huckleberryChildren(client,session.userId);
         if (!children.length) throw new provider.HuckleberryError('failed-precondition','Add a child in Huckleberry, then reconnect.');
         const selected = children.length === 1 ? children[0].id : null;
         const data = {credential:encryptCredential(session,key(),owner),children,selected,timezone,receipts:[]};

@@ -105,6 +105,8 @@ Visible Home/Settings sessions check at most every two minutes, with history ref
 
 **Hubert’s Purrfect Window:** a transparent personal-history daytime estimate, independent of Huckleberry's algorithm. It merges overlapping/duplicate sleeps, filters overnight and obvious missing-log gaps, then uses up to 20 recent daytime wake gaps from the last 14 days. It prefers gaps beginning within three local clock hours of the latest wake, falling back to other daytime gaps when needed. At least three gaps across two days are required. The center is the median and the range is the interquartile range extended to at least ±10 minutes. The UI shows sample counts, varied/early patterns, passed windows, missing history, and active sleep. No age-based prescription or population model is claimed; this is a convenience estimate, not medical advice.
 
+If sign-in fails, the time zone does not alter the email/password request. Use `America/New_York` for Eastern time; daylight saving is automatic. Invalid zone names are checked before attempting login. Authentication errors distinguish rejected credentials, temporary throttling (including HTTP 400 rate-limit responses), API restrictions, additional sign-in challenges, and service/network failures. Only allowlisted reason codes and HTTP status are returned as diagnostics and logged; passwords, emails, tokens, and raw provider error payloads are excluded. Check the new error after a single retry before changing account credentials.
+
 This adds no separately billed API or AI model. An existing eligible Huckleberry subscription is still needed for SweetSpot, and ordinary Firebase Blaze usage applies. Instance limits and caching reduce usage but do not impose a dollar cap.
 
 ## Family display acceptance checks

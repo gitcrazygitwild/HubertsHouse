@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
+import { warn } from 'firebase-functions/logger';
 import { CalDAV, CalendarError, resourceToken, appleURL } from './caldav.js';
 import { readEvents, writeEvent, canDelete, eventUID } from './ical.js';
 import { createAssignmentStore, validateAssignment, assignmentKey } from './calendar-assignments.js';
@@ -22,7 +23,8 @@ function endpoint(handler) {
     try { return await handler(request.auth.uid,request.data || {}); }
     catch (error) {
       if (error instanceof HttpsError) throw error;
-      if (error instanceof CalendarError || error instanceof HuckleberryError) throw new HttpsError(error.code,error.message);
+      if(error instanceof HuckleberryError && error.details?.service==='huckleberry') warn('Huckleberry authentication rejected',{reason:error.details.reason,httpStatus:error.details.httpStatus});
+      if (error instanceof CalendarError || error instanceof HuckleberryError) throw new HttpsError(error.code,error.message,error instanceof HuckleberryError ? error.details : undefined);
       // Never log request bodies, credentials, calendar data, or raw provider errors.
       throw new HttpsError('unavailable','The connected service is temporarily unavailable. Try again shortly.');
     }
