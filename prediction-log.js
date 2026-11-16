@@ -7,14 +7,19 @@
 //   per wake-up while the baby is awake (Huckleberry recalculates after a nap is
 //   entered) and is no longer updated once the next sleep starts.
 // - A nap is scored only when all three models have a guess for it.
+// - Fairness: every model is judged on ONE predicted time (SweetSpot's time,
+//   each window's center). A hit is falling asleep within ±15 min of it for
+//   all three, so a wide window earns no easier hits. Window widths are shown
+//   separately so a cautious, wide window is visible.
 import { purrfectWindow, miaForecast } from './baby-model.js';
 
 export const MODELS = [
-  { key:'sweetspot', name:'SweetSpot', owner:'Huckleberry', hitMinutes:15 },
+  { key:'sweetspot', name:'SweetSpot', owner:'Huckleberry' },
   { key:'purrfect', name:'Purrfect Window', owner:'Hubert' },
   { key:'mia', name:'Catnap Forecast', owner:'Mia' }
 ];
 const MINUTE = 60000, MAX_WAIT = 8 * 3600000;
+export const HIT_MINUTES = 15;
 const ms = value => Date.parse(value);
 export const predictionId = lastWake => `w${ms(lastWake)}`;
 
@@ -88,7 +93,8 @@ function computeScores(entries, sleeps, timer, timezone) {
     const row = { id:predictionId(lastWake), lastWake, actual:new Date(actual).toISOString(), models:{} };
     for (const model of MODELS) {
       const guess = guesses[model.key], error = (actual - ms(guess.target)) / MINUTE;
-      row.models[model.key] = { error:Math.round(error) || 0, hit:model.hitMinutes ? Math.abs(error) <= model.hitMinutes : actual >= ms(guess.start) && actual <= ms(guess.end) };
+      const width = guess.start && guess.end ? Math.round((ms(guess.end) - ms(guess.start)) / MINUTE) : null;
+      row.models[model.key] = { error:Math.round(error) || 0, hit:Math.abs(error) <= HIT_MINUTES, width, inWindow:width != null ? actual >= ms(guess.start) && actual <= ms(guess.end) : null };
     }
     const best = Math.min(...MODELS.map(model => Math.abs(row.models[model.key].error)));
     row.winners = MODELS.filter(model => Math.abs(row.models[model.key].error) === best).map(model => model.key);
@@ -101,7 +107,8 @@ function computeScores(entries, sleeps, timer, timezone) {
     return { ...model, n, mae:n ? Math.round(scored.reduce((sum, value) => sum + Math.abs(value.error), 0) / n) : null,
       bias:n ? Math.round(scored.reduce((sum, value) => sum + value.error, 0) / n) || 0 : null,
       hitRate:n ? Math.round(100 * scored.filter(value => value.hit).length / n) : null,
-      wins:results.filter(row => row.winners.length === 1 && row.winners[0] === model.key).length };
+      wins:results.filter(row => row.winners.length === 1 && row.winners[0] === model.key).length,
+      avgWidth:n && scored.every(value => value.width != null) ? Math.round(scored.reduce((sum, value) => sum + value.width, 0) / n) : null };
   });
   const leader = n >= 3 ? [...summary].sort((a, b) => a.mae - b.mae || b.hitRate - a.hitRate)[0].key : null;
   return { results, summary, leader, scoredNaps:n, skipped };

@@ -61,3 +61,17 @@ test('the actual nap is the first sleep after the wake-up, including a running t
   assert.equal(actualSleepStart(wake, [], { active:true, start:iso(today + 10 * H) }), today + 10 * H);
   assert.equal(actualSleepStart(wake, [{ start:iso(today + 19 * H) }]), null);
 });
+
+test('a wide window earns no easier hit: every model is judged on one time, ±15 minutes', () => {
+  const sleeps = history(8), wake = sleeps.at(-2).end, actual = actualSleepStart(wake, sleeps);
+  const entries = [{ id:predictionId(wake), lastWake:wake, sweetspot:{ target:iso(actual + 20 * M) } }];
+  const { results, summary } = scorePredictions(entries, sleeps, null, zone);
+  const row = results[0].models;
+  assert.equal(row.sweetspot.hit, false); assert.equal(row.sweetspot.width, null);
+  for (const key of ['purrfect', 'mia']) {
+    assert.equal(row[key].hit, Math.abs(row[key].error) <= 15, `${key} hit follows ±15 of its center`);
+    assert.ok(row[key].width > 0); assert.equal(typeof row[key].inWindow, 'boolean');
+  }
+  const by = Object.fromEntries(summary.map(s => [s.key, s]));
+  assert.equal(by.sweetspot.avgWidth, null); assert.ok(by.purrfect.avgWidth > 0); assert.ok(by.mia.avgWidth > 0);
+});

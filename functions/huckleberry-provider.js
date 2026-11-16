@@ -16,6 +16,25 @@ export const epochMs = value => {
 };
 const iso = value => { const ms = epochMs(value); return ms && ms > 0 && ms < 8640000000000000 ? new Date(ms).toISOString() : null; };
 const id = value => { if (typeof value !== 'string' || !/^[\w-]{1,150}$/.test(value)) fail('invalid-argument','Choose a valid child profile.'); return value; };
+// Huckleberry stores one SweetSpot per nap plan (keyed by naps per day). The
+// household chooses which plan to follow; "auto" follows the plan selected in
+// the Huckleberry app. Unset means 4 naps, as the household asked.
+export const DEFAULT_NAP_PLAN = '4';
+export function validNapPlan(value) {
+  if (value === undefined || value === null || value === '') return DEFAULT_NAP_PLAN;
+  const plan = String(value);
+  if (plan === 'auto' || /^[1-6]$/.test(plan)) return plan;
+  fail('invalid-argument','Choose a SweetSpot nap plan.');
+}
+export function chooseSweetspot(prediction = {}, napPlan = DEFAULT_NAP_PLAN) {
+  const times = prediction.sweetSpotTimes || {};
+  const options = Object.keys(times).filter(key => /^\d+$/.test(key) && iso(times[key])).sort((a,b) => Number(a) - Number(b)).map(key => ({naps:Number(key),time:iso(times[key])}));
+  const appPlan = prediction.selectedNapDay != null && Number.isFinite(Number(prediction.selectedNapDay)) ? String(Math.trunc(Number(prediction.selectedNapDay))) : '';
+  const plan = validNapPlan(napPlan), wanted = plan === 'auto' ? appPlan : plan;
+  // Fall back to the app's plan when the chosen plan has no prediction.
+  const chosen = options.some(option => String(option.naps) === wanted) ? wanted : appPlan;
+  return {time:iso(times[chosen]),selectedNapDay:chosen || null,appNapDay:appPlan || null,plan,usingFallback:!!wanted && chosen !== wanted,options};
+}
 export function validTimezone(value) {
   try { if (typeof value !== 'string' || value.length > 80) throw new Error(); new Intl.DateTimeFormat('en-US',{timeZone:value}).format(); return value; }
   catch { fail('invalid-argument','Choose a valid time zone.'); }
@@ -133,7 +152,7 @@ async function intervalHistory(client, path, from, now) {
   ]);
   return {docs:[...regular.docs,...batches.docs],complete:regular.size < HISTORY_LIMIT && batches.size < BATCH_LIMIT};
 }
-export async function huckleberrySnapshot(client, childId, timezone, cached, forceHistory = false, now = Date.now()) {
+export async function huckleberrySnapshot(client, childId, timezone, cached, forceHistory = false, now = Date.now(), napPlan = DEFAULT_NAP_PLAN) {
   const child = id(childId);
   const [profile, sleepDoc, feedDoc, diaperDoc] = await Promise.all(['childs','sleep','feed','diaper'].map(collection => client.doc(`${collection}/${child}`).get()));
   if (!profile.exists) fail('not-found','This Huckleberry child profile is no longer available.');
@@ -150,11 +169,11 @@ export async function huckleberrySnapshot(client, childId, timezone, cached, for
   if (lastSleep) sleeps = normalizeSleepHistory(sleeps.map(item => ({start:Date.parse(item.start)/1000,duration:(Date.parse(item.end)-Date.parse(item.start))/1000})).concat(lastSleep),from,now);
   const latestBottle = feed.prefs?.lastBottle;
   if (latestBottle) bottles = normalizeFeedHistory(bottles.map(item => ({mode:'bottle',start:Date.parse(item.start),amount:item.amount,units:item.units,bottleType:item.type})).concat({mode:'bottle',start:latestBottle.start,amount:latestBottle.bottleAmount,units:latestBottle.bottleUnits,bottleType:latestBottle.bottleType}),from,now);
-  const prediction = details.sweetspot || {}, selected = prediction.selectedNapDay != null && Number.isFinite(Number(prediction.selectedNapDay)) ? String(Math.trunc(Number(prediction.selectedNapDay))) : '';
+  const sweetspot = chooseSweetspot(details.sweetspot || {}, napPlan);
   const bottle = feed.prefs?.lastBottle, change = diaper.prefs?.lastDiaper;
   return {childId:child,name:String(details.childsName || 'Baby').slice(0,100),timezone,checkedAt:new Date(now).toISOString(),historyCheckedAt,historyComplete,feedsComplete,historyDays:HISTORY_DAYS,sleeps,bottles,
     timer:{active:sleep.timer?.active === true,paused:sleep.timer?.paused === true,start:iso(sleep.timer?.timerStartTime),end:iso(sleep.timer?.timerEndTime),uuid:String(sleep.timer?.uuid || '')},
-    sweetspot:{time:iso(prediction.sweetSpotTimes?.[selected]),selectedNapDay:selected || null},
+    sweetspot,
     lastBottle:bottle ? {time:iso(bottle.start),amount:Number.isFinite(bottle.bottleAmount) ? bottle.bottleAmount : null,units:bottle.bottleUnits === 'oz' ? 'oz' : 'ml',type:String(bottle.bottleType || 'Bottle').slice(0,60)} : null,
     lastDiaper:change ? {time:iso(change.start),mode:['pee','poo','both','dry'].includes(change.mode) ? change.mode : 'diaper'} : null};
 }

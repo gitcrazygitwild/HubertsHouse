@@ -204,3 +204,15 @@ test('persistent contention stops after three attempts without adding a partial 
   await assert.rejects(writeHuckleberry(client,'child',{kind:'sleep-log',start,end:new Date(now).toISOString(),requestId:randomUUID()},'America/New_York',now),error=>error.code==='aborted');
   assert.equal(client.commits,3); assert.equal(client.docs.size,1); assert.equal(client.docs.get('sleep/child').timer.active,false);
 });
+test('SweetSpot follows the household nap plan (4 naps by default), falling back to the app’s plan', async () => {
+  const { chooseSweetspot, validNapPlan } = await import('../functions/huckleberry-provider.js');
+  const prediction = { selectedNapDay:3, sweetSpotTimes:{ 3:now + 3 * 3600000, 4:now + 2 * 3600000, junk:'x' } };
+  const four = chooseSweetspot(prediction);
+  assert.equal(four.plan, '4'); assert.equal(four.selectedNapDay, '4'); assert.equal(four.appNapDay, '3'); assert.equal(four.time, new Date(now + 2 * 3600000).toISOString());
+  assert.deepEqual(four.options.map(o => o.naps), [3, 4]); assert.equal(four.usingFallback, false);
+  assert.equal(chooseSweetspot(prediction, '3').time, new Date(now + 3 * 3600000).toISOString());
+  assert.equal(chooseSweetspot(prediction, 'auto').selectedNapDay, '3');
+  const onlyThree = chooseSweetspot({ selectedNapDay:3, sweetSpotTimes:{ 3:now + 3600000 } });
+  assert.equal(onlyThree.selectedNapDay, '3'); assert.equal(onlyThree.usingFallback, true);
+  assert.equal(validNapPlan(undefined), '4'); assert.throws(() => validNapPlan('nine'));
+});

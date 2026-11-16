@@ -21,7 +21,7 @@ async function providerCall(operation, run) {
 // Only this callable can read these collections. Each household login owns its
 // connection; neither provider credentials nor raw child documents reach clients.
 export function createHuckleberryHandler({ db, key, api = provider, now = Date.now }) {
-  const publicState = data => data ? {connected:true,children:data.children,selected:data.selected,timezone:data.timezone} : {connected:false};
+  const publicState = data => data ? {connected:true,children:data.children,selected:data.selected,timezone:data.timezone,sweetspotNaps:provider.validNapPlan(data.sweetspotNaps)} : {connected:false};
   return async (uid, input) => {
     const ref = db.doc(`privateHuckleberryConnections/${uid}`), cacheRef = db.doc(`privateBabySnapshots/${uid}`);
     const action = input.action;
@@ -48,8 +48,8 @@ export function createHuckleberryHandler({ db, key, api = provider, now = Date.n
       if (action === 'select') {
         const children = await providerCall('children',() => api.huckleberryChildren(client,session.userId));
         if (!children.some(child => child.id === input.childId)) throw new provider.HuckleberryError('permission-denied','Choose a child in your connected Huckleberry account.');
-        const timezone = api.validTimezone(input.timezone), data = {...connection,children,selected:input.childId,timezone,receipts:[]};
-        const batch = db.batch(); batch.update(ref,{children,selected:input.childId,timezone,receipts:[]}); batch.delete(cacheRef); await batch.commit();
+        const timezone = api.validTimezone(input.timezone), sweetspotNaps = provider.validNapPlan(input.sweetspotNaps ?? connection.sweetspotNaps), data = {...connection,children,selected:input.childId,timezone,sweetspotNaps,receipts:[]};
+        const batch = db.batch(); batch.update(ref,{children,selected:input.childId,timezone,sweetspotNaps,receipts:[]}); batch.delete(cacheRef); await batch.commit();
         return publicState(data);
       }
       const child = connection.selected;
@@ -69,7 +69,7 @@ export function createHuckleberryHandler({ db, key, api = provider, now = Date.n
       }
       const cachedDoc = await cacheRef.get(), cached = cachedDoc.exists && cachedDoc.data().childId === child ? cachedDoc.data() : null;
       if (!input.force && cached && now() - Date.parse(cached.checkedAt) < 120000) return cached;
-      const snapshot = await providerCall('snapshot',() => api.huckleberrySnapshot(client,child,connection.timezone,cached,input.force === true,now()));
+      const snapshot = await providerCall('snapshot',() => api.huckleberrySnapshot(client,child,connection.timezone,cached,input.force === true,now(),connection.sweetspotNaps));
       await cacheRef.set(snapshot); return snapshot;
     } finally { await client.terminate().catch(() => {}); }
   };
