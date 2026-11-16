@@ -18,6 +18,7 @@ const inputTime = value => { const date = new Date(value); return new Date(+date
 const message = e => e.code === 'functions/not-found' ? 'The Huckleberry service is not available yet.' : e.message || 'Huckleberry could not be reached. Try again shortly.';
 async function call(action, data = {}) { return (await service({action,...data})).data; }
 function home() {
+  if ($('huckNapPlanHint')) $('huckNapPlanHint').textContent = napPlanHint();
   $('babyTitle').textContent = snapshot ? `${snapshot.name}’s little rhythm.` : 'Little rhythms, together.';
   $('babyBadge').textContent = demo ? 'Sample data' : error ? 'Needs attention' : connection.connected ? 'Connected' : 'Connect Huckleberry';
   $('babyError').textContent = error;
@@ -37,7 +38,7 @@ function home() {
   const score = scorePredictions(predictions, snapshot.sleeps, snapshot.timer, zone()), leader = score.summary.find(model => model.key === score.leader);
   const miaWhy = mia.available ? [`nap ${mia.napNumber} usually comes ${Math.floor(mia.baseMinutes / 60)}h ${mia.baseMinutes % 60}m after waking`, mia.trendMinutes ? `${mia.trendMinutes > 0 ? '+' : '−'}${Math.abs(mia.trendMinutes)}m for this week’s trend` : '', mia.napMinutes ? `${mia.napMinutes > 0 ? '+' : '−'}${Math.abs(mia.napMinutes)}m because the last nap was ${mia.previousNap}m (usually ${mia.typicalNap}m)` : ''].filter(Boolean).join(', ') : '';
   const outdated = Date.now() - Date.parse(snapshot.checkedAt) > 10 * 60000;
-  renderHTML($('babyPredictions'), `<article class="nap-card huck-nap"><div class="nap-label"><span>HUCKLEBERRY</span><span>${demo ? 'Sample prediction' : 'SweetSpot®'}</span></div><h3>${huck.available ? esc(time(huck.time)) : 'Waiting for a prediction'}</h3><span class="nap-state">${huck.sleeping ? 'Sleep in progress' : huck.expired ? 'Previous prediction · passed' : huck.staleRead ? 'Saved prediction · stale' : huck.available ? 'Stored in Huckleberry' : 'From your Huckleberry account'}</span><p>${esc(huck.available ? huck.note : huck.reason)} Your Huckleberry plan must include SweetSpot.</p></article>
+  renderHTML($('babyPredictions'), `<article class="nap-card huck-nap"><div class="nap-label"><span>HUCKLEBERRY</span><span>${demo ? 'Sample prediction' : `SweetSpot® · ${esc(napPlanLabel())}`}</span></div><h3>${huck.available ? esc(time(huck.time)) : 'Waiting for a prediction'}</h3><span class="nap-state">${huck.sleeping ? 'Sleep in progress' : huck.expired ? 'Previous prediction · passed' : huck.staleRead ? 'Saved prediction · stale' : huck.available ? 'Stored in Huckleberry' : 'From your Huckleberry account'}</span><p>${esc(huck.available ? huck.note : huck.reason)} Your Huckleberry plan must include SweetSpot.</p></article>
     <article class="nap-card purr-nap"><div class="nap-label"><span>HUBERT’S PURRFECT WINDOW</span><span aria-hidden="true">🐾</span></div><h3>${own.available ? `${esc(time(own.start))} – ${esc(time(own.end))}` : 'Learning your rhythm'}</h3><span class="nap-state">${outdated ? 'Saved history · refresh needed' : own.available ? `${esc(own.pattern)} · ${own.phase === 'passed' ? 'window passed' : own.phase === 'within' ? 'in the window' : 'next daytime window'}` : 'Your own sleep-history estimate'}</span><p>${own.available ? `Based on ${own.samples} logged wake windows across ${own.days} days${own.matchedTime ? ', around this time of day' : ''}. Center: ${esc(time(own.target))}.` : esc(own.reason)}</p></article>
     <article class="nap-card mia-nap"><div class="nap-label"><span>MIA’S CATNAP FORECAST</span><span aria-hidden="true">🌤</span></div><h3>${mia.available ? `${esc(time(mia.start))} – ${esc(time(mia.end))}` : 'Gathering clues'}</h3><span class="nap-state">${outdated ? 'Saved history · refresh needed' : mia.available ? `${esc(mia.confidence)} · nap ${mia.napNumber} of the day · ${mia.phase === 'passed' ? 'window passed' : mia.phase === 'within' ? 'in the window' : 'up next'}` : 'Nap-by-nap forecast'}</span><p>${mia.available ? `${esc(miaWhy.charAt(0).toUpperCase() + miaWhy.slice(1))}. Best guess: ${esc(time(mia.target))}.` : esc(mia.reason)}</p></article>`);
   renderHTML($('babyScore'), score.scoredNaps ? `<button type="button" class="baby-score" data-go="frankie"><span aria-hidden="true">🏆</span><span>${leader ? `<strong>${esc(leader.owner)}’s ${esc(leader.name)}</strong> is most accurate so far · ±${leader.mae} min across ${leader.n} naps` : `${score.scoredNaps} nap${score.scoredNaps === 1 ? '' : 's'} scored · a leader appears after three scored naps`}</span><span class="baby-score-link">Scoreboard →</span></button>` : '');
@@ -66,6 +67,21 @@ function logPredictions(huck) {
   lastLogged = signature;
   predictionStore.record(entry).catch(() => { lastLogged = ''; });
 }
+// Which of Huckleberry's per-plan SweetSpots to follow (default 4 naps).
+const PLAN_NAMES = { '4':'4 naps a day', '3':'3 naps a day', auto:'Match the Huckleberry app' };
+function napPlanLabel() {
+  const s = snapshot?.sweetspot;
+  if (!s?.selectedNapDay) return 'Huckleberry';
+  return `${s.selectedNapDay}-nap plan${s.usingFallback ? ' (app’s choice)' : ''}`;
+}
+function napPlanField() {
+  const plan = connection.sweetspotNaps || '4';
+  return `<label class="field"><span>SweetSpot nap plan</span><select id="huckNapPlan">${Object.entries(PLAN_NAMES).map(([value, label]) => `<option value="${value}" ${plan === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label><p class="tiny muted" id="huckNapPlanHint">${esc(napPlanHint())}</p>`;
+}
+function napPlanHint() {
+  const options = snapshot?.sweetspot?.options || [];
+  return `${options.length ? `Huckleberry’s current predictions: ${options.map(o => `${o.naps} naps · ${time(o.time)}`).join(', ')}.` : 'Huckleberry’s current predictions appear here after a refresh.'} Huckleberry keeps one SweetSpot per nap plan; this choice is used on Home, in the scoreboard and in the newsletter.`;
+}
 function settings() {
   const panel = $('babyConnection');
   if (demo || !config.huckleberryServiceEnabled) {
@@ -81,10 +97,10 @@ function settings() {
       catch (e) { error = message(e); } finally { data.password = ''; busy = false; form.querySelector('button').disabled = false; home(); }
     });
   } else {
-    panel.innerHTML = `<form id="huckProfileForm" class="connection-form"><label class="field"><span>Child profile</span><select id="huckChild" required><option value="">Choose a child</option>${connection.children.map(child => `<option value="${esc(child.id)}" ${connection.selected === child.id ? 'selected' : ''}>${esc(child.name)}</option>`).join('')}</select></label><label class="field"><span>Baby’s time zone</span><input id="huckZone" value="${esc(zone())}" required /></label><div class="connection-actions"><button class="btn btn-primary" type="submit">Save profile</button><button class="btn" id="huckDisconnect" type="button">Disconnect</button></div></form><p class="tiny">Connected for this household login. Each adult can connect their own Huckleberry login with access to the same child.</p>`;
+    panel.innerHTML = `<form id="huckProfileForm" class="connection-form"><label class="field"><span>Child profile</span><select id="huckChild" required><option value="">Choose a child</option>${connection.children.map(child => `<option value="${esc(child.id)}" ${connection.selected === child.id ? 'selected' : ''}>${esc(child.name)}</option>`).join('')}</select></label><label class="field"><span>Baby’s time zone</span><input id="huckZone" value="${esc(zone())}" required /></label>${napPlanField()}<div class="connection-actions"><button class="btn btn-primary" type="submit">Save profile</button><button class="btn" id="huckDisconnect" type="button">Disconnect</button></div></form><p class="tiny">Connected for this household login. Each adult can connect their own Huckleberry login with access to the same child.</p>`;
     $('huckProfileForm').addEventListener('submit', async e => {
       e.preventDefault(); if (busy) return; busy = true; error = ''; home(); const button = e.currentTarget.querySelector('button'); button.disabled = true;
-      try { await inFlight; connection = await call('select',{childId:$('huckChild').value,timezone:$('huckZone').value.trim()}); snapshot = null; pendingTimer = null; settings(); await refresh(true); showNotice('Baby profile saved.'); }
+      try { await inFlight; connection = await call('select',{childId:$('huckChild').value,timezone:$('huckZone').value.trim(),sweetspotNaps:$('huckNapPlan').value}); snapshot = null; pendingTimer = null; settings(); await refresh(true); showNotice('Baby profile saved.'); }
       catch (e) { error = message(e); } finally { busy = false; button.disabled = false; home(); }
     });
     $('huckDisconnect').addEventListener('click', async e => {

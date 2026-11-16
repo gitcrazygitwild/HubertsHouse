@@ -40,6 +40,10 @@ test('child changes clear snapshots and stale forms cannot write to a different 
   await handler('parent',{action:'select',childId:'child-one',timezone:'America/New_York'});
   await handler('parent',{action:'snapshot'}); await handler('parent',{action:'snapshot'}); assert.equal(counts().read,1);
   await handler('parent',{action:'select',childId:'child-two',timezone:'America/New_York'}); assert.equal(docs.has('privateBabySnapshots/parent'),false);
+  const chosen = await handler('parent',{action:'select',childId:'child-two',timezone:'America/New_York',sweetspotNaps:'3'});
+  assert.equal(chosen.sweetspotNaps,'3'); assert.equal(docs.get('privateHuckleberryConnections/parent').sweetspotNaps,'3');
+  assert.equal((await handler('parent',{action:'status'})).sweetspotNaps,'3');
+  await assert.rejects(handler('parent',{action:'select',childId:'child-two',timezone:'America/New_York',sweetspotNaps:'banana'}),e => e.code === 'invalid-argument');
   const entry = {kind:'diaper',mode:'poo',start:new Date().toISOString(),requestId:randomUUID()};
   await assert.rejects(handler('parent',{action:'write',childId:'child-one',entry}),e => e.code === 'aborted'); assert.equal(counts().written,0);
   await handler('parent',{action:'write',childId:'child-two',entry}); await handler('parent',{action:'write',childId:'child-two',entry}); assert.equal(counts().written,1);
