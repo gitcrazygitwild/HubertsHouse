@@ -17,16 +17,16 @@ async function fixture(handler) {
   w.eval(source+';window.initBaby=initHuckleberry;'); await w.initBaby({}); return {dom,w,doc:w.document,notices};
 }
 test('Huckleberry password clears immediately; session and baby logs never go to browser storage', async t => {
-  let finish, receivedPassword;
+  let finish, receivedPassword, connected=false;
   const {dom,w,doc}=await fixture(async data => {
-    if (data.action==='status') return {connected:false};
+    if (data.action==='status') return connected ? connection : {connected:false};
     if (data.action==='connect') { receivedPassword=data.password;return new Promise(resolve=>{finish=resolve;}); }
     if (data.action==='snapshot') return snapshot;
   });t.after(()=>dom.window.close());
   doc.getElementById('huckEmail').value='sample@example.com';doc.getElementById('huckPassword').value='private-password';
   doc.getElementById('huckConnectForm').dispatchEvent(new w.Event('submit',{cancelable:true}));
   assert.equal(doc.getElementById('huckPassword').value,'');assert.equal(receivedPassword,'private-password');assert.equal(w.localStorage.length,0);
-  finish(connection);await settle();assert.equal(doc.getElementById('huckPassword'),null);assert.equal(doc.getElementById('babyBadge').textContent,'Connected');assert.equal(w.localStorage.length,0);
+  connected=true;finish(connection);await settle();assert.equal(doc.getElementById('huckPassword'),null);assert.equal(doc.getElementById('babyBadge').textContent,'Connected');assert.equal(w.localStorage.length,0);
 });
 test('retrying an uncertain baby save reuses its request ID; refresh failure cannot cause a second save', async t => {
   const writes=[];let snapshots=0;
@@ -40,4 +40,53 @@ test('retrying an uncertain baby save reuses its request ID; refresh failure can
   submit();await settle();assert.equal(doc.getElementById('babyLogDialog').open,true);assert.match(doc.getElementById('babyLogError').textContent,/Save response/);
   submit();await settle();assert.equal(writes.length,2);assert.equal(writes[0].entry.requestId,writes[1].entry.requestId);assert.equal(writes[1].childId,'child');
   assert.equal(doc.getElementById('babyLogDialog').open,false);assert.ok(notices.includes('Saved in Huckleberry.'));assert.match(doc.getElementById('babyError').textContent,/Refresh interrupted/);
+});
+
+test('the shared profile is editable without another login and profile changes appear after refresh',async t=>{
+  let state={...connection,scope:'household',connectionVersion:'first',sweetspotNaps:'4'}, selected;
+  const {dom,w,doc,notices}=await fixture(async data=>{
+    if(data.action==='status')return state;
+    if(data.action==='snapshot')return {...snapshot,childId:state.selected,timezone:state.timezone,connection:state};
+    if(data.action==='select') { selected=data;state={...state,timezone:data.timezone,sweetspotNaps:data.sweetspotNaps,connectionVersion:'second'};return state; }
+  });t.after(()=>dom.window.close());
+  assert.equal(doc.getElementById('huckPassword'),null);
+  assert.match(doc.getElementById('babyConnection').textContent,/Shared with your household/);
+  doc.getElementById('huckNapPlan').value='3';doc.getElementById('huckZone').value='America/Chicago';
+  doc.getElementById('huckProfileForm').dispatchEvent(new w.Event('submit',{cancelable:true}));await settle();
+  assert.equal(selected.connectionVersion,'first');assert.equal(selected.sweetspotNaps,'3');assert.equal(selected.timezone,'America/Chicago');
+  assert.ok(notices.includes('Baby settings saved for the household.'));
+  state={...state,selected:'other',children:[...state.children,{id:'other',name:'Other child'}],sweetspotNaps:'auto',connectionVersion:'third'};
+  doc.getElementById('babyRefresh').click();await settle();
+  assert.equal(doc.getElementById('huckChild').value,'other');assert.equal(doc.getElementById('huckNapPlan').value,'auto');
+  state={connected:false,scope:'household',connectionVersion:'disconnected'};
+  doc.getElementById('babyRefresh').click();await settle();
+  assert.ok(doc.getElementById('huckConnectForm'));assert.equal(doc.getElementById('babySleep').disabled,true);
+  assert.equal(doc.querySelector('[data-baby-log="diaper"]').disabled,true);
+});
+test('an open log keeps its original connection version when the other adult changes the profile',async t=>{
+  let state={...connection,scope:'household',connectionVersion:'first'}, written;
+  const {dom,w,doc}=await fixture(async data=>{
+    if(data.action==='status')return state;
+    if(data.action==='snapshot')return {...snapshot,connection:state};
+    if(data.action==='write'){written=data;throw Object.assign(new Error('The household Huckleberry settings changed. Refresh and try again.'),{code:'functions/aborted'});}
+  });t.after(()=>dom.window.close());
+  doc.querySelector('[data-baby-log="diaper"]').click();
+  state={...state,connectionVersion:'changed'};doc.getElementById('babyRefresh').click();await settle();
+  doc.getElementById('babyLogForm').dispatchEvent(new w.Event('submit',{cancelable:true}));await settle();
+  assert.equal(written.connectionVersion,'first');assert.equal(doc.getElementById('babyLogDialog').open,true);
+  assert.match(doc.getElementById('babyLogError').textContent,/settings changed/);
+});
+test('disconnect explains the household impact and can be canceled',async t=>{
+  const calls=[];
+  const state={...connection,scope:'household',connectionVersion:'first'};
+  const {dom,w,doc}=await fixture(async data=>{
+    calls.push(data);
+    if(data.action==='status')return state;
+    if(data.action==='snapshot')return {...snapshot,connection:state};
+    if(data.action==='disconnect')return {connected:false,scope:'household',connectionVersion:'disconnected'};
+  });t.after(()=>dom.window.close());
+  let prompt;w.confirm=text=>{prompt=text;return false;};doc.getElementById('huckDisconnect').click();
+  assert.match(prompt,/everyone in the household/);assert.equal(calls.some(c=>c.action==='disconnect'),false);
+  w.confirm=()=>true;doc.getElementById('huckDisconnect').click();await settle();
+  assert.equal(calls.find(c=>c.action==='disconnect').connectionVersion,'first');assert.ok(doc.getElementById('huckConnectForm'));
 });

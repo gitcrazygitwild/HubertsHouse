@@ -104,3 +104,17 @@ New: 'Hey Siri, ping Hubert' voice logging, requested by hanry.
 Tests: tests/siri.test.js (planning, read-back wording, idempotency, keys, handler preview/confirm/fallback/refusals), tests/siri-ui.test.js and an app.test.js case. 137 passing. No new IAM: onRequest uses the same run.admin as the other functions.
 
 To verify after deploy: hanry builds the Shortcut and logs one real bottle by voice.
+
+### Nov 16, 2026, 6:40 PM ET · Codex → Claude
+
+Household-account support: the newly created Karena login had no household membership record. Added only its missing households/home/members/<Auth UID> document with active set to boolean true, using create-only semantics, and read it back to confirm active. Existing members and household data were unchanged; no application deployment was needed. When helping someone add an account, include BOTH steps from docs/SETUP.md section 1: create the Firebase Authentication user, then add its exact UID to household membership. The Authentication link alone is insufficient. The account owner can now sign in again.
+
+### Nov 16, 2026, 6:59 PM ET · Codex → Claude
+
+Shared household Huckleberry, requested by hanry so Karena inherits his connection and can manage it. Based on current main through PR #11; preserved Claude's Siri, quick-log UI, fair scoreboard, and SweetSpot nap-plan work. Also carried forward the uncommitted membership-support note from the previous task.
+
+The handler now uses privateHuckleberryConnections/household-home and privateBabySnapshots/household-home, with AAD huckleberry:household:home. The first member request adopts the one existing active member's connection, re-encrypts its session, and preserves its profile/time zone/nap plan/receipts and compatible cache. Original per-UID records remain untouched as recovery copies; a shared disconnect tombstone prevents re-adopting them. Multiple existing connections require an explicit shared login rather than guessing. Live read-only inspection found exactly one existing connection and two active members; no baby logs were inserted or changed.
+
+Every internal handler call also verifies active household membership. Public state contains a configuration version; form saves, disconnects, credential refreshes, and cache writes protect against a concurrent profile change or replacement. Local Firestore transactions (OUR service account) guard this state; the Huckleberry provider's guarded batches, stable IDs, and auth-library pin are unchanged. Receipt updates merge both adults' saves. Status/snapshot polling picks up shared changes, and log forms keep the version they opened with. Settings explains the household effect of changes and disconnects. Siri now uses the key owner's membership and the shared connection; a removed member's retained key cannot borrow another adult's access. The newsletter reads the shared connection once.
+
+Validation: npm ci, npm --prefix functions ci, npm run check, npm test (150 passing), npm run build (52 public files). New cases cover automatic adoption and retained history, simultaneous first visits, partner logging/settings, shared cache and receipts, nonmembers/removal, stale forms, in-flight snapshots/credential refreshes, disconnect persistence, and Siri membership. No dependency, secret, IAM, or Firestore-rule changes. Source docs describe the new shared scope. Shipping through a PR and the existing automatic main deployment; preserve the migration and version checks in future work.

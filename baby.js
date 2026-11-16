@@ -10,13 +10,18 @@ import { renderHTML } from './dom.js';
 
 const $ = id => document.getElementById(id);
 let service, demo = false, connection = {connected:false}, snapshot = null, error = '', busy = false, inFlight, lastAttempt = 0, pendingTimer;
-let formChild, formId, predictionStore = null, predictions = [], lastLogged = '';
+let formChild, formVersion, formId, predictionStore = null, predictions = [], lastLogged = '';
 const zone = () => connection.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York';
 const time = value => value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',timeZone:zone()}) : '—';
 const when = value => value ? new Date(value).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZone:zone()}) : 'No entry yet';
 const inputTime = value => { const date = new Date(value); return new Date(+date - date.getTimezoneOffset() * 60000).toISOString().slice(0,16); };
 const message = e => e.code === 'functions/not-found' ? 'The Huckleberry service is not available yet.' : e.message || 'Huckleberry could not be reached. Try again shortly.';
 async function call(action, data = {}) { return (await service({action,...data})).data; }
+function adoptConnection(next) {
+  if (JSON.stringify(next) === JSON.stringify(connection)) return;
+  connection = next; snapshot = null; pendingTimer = null;
+  settings();
+}
 function home() {
   if ($('huckNapPlanHint')) $('huckNapPlanHint').textContent = napPlanHint();
   $('babyTitle').textContent = snapshot ? `${snapshot.name}’s little rhythm.` : 'Little rhythms, together.';
@@ -26,7 +31,7 @@ function home() {
   $('babyChecked').textContent = snapshot ? `${demo ? 'Sample preview · ' : ''}Checked ${when(snapshot.checkedAt)} · ${zone().replaceAll('_',' ')}. Checks every two minutes while Home or Settings is visible.` : 'Sleep, bottles, and diaper changes in one place.';
   const enabled = !!snapshot && !!connection.selected;
   document.querySelectorAll('[data-baby-log],#babySleep').forEach(button => { button.disabled = busy || !enabled; });
-  $('babyRefresh').disabled = busy || !connection.selected;
+  $('babyRefresh').disabled = busy;
   $('babySleep').textContent = snapshot?.timer?.active ? '☀ Finish sleep' : '☾ Start sleep';
   if (!snapshot) {
     renderHTML($('babyPredictions'), `<div class="baby-intro"><span class="baby-orbit" aria-hidden="true">☾</span><div><h3>A softer landing for the next nap.</h3><p>${connection.connected ? 'Choose a child profile in Settings, then refresh here.' : 'Connect Huckleberry in Settings to log the little moments and compare three nap predictions.'}</p></div></div>`);
@@ -84,40 +89,53 @@ function napPlanHint() {
 }
 function settings() {
   const panel = $('babyConnection');
+  const settingsVersion = connection.connectionVersion;
   if (demo || !config.huckleberryServiceEnabled) {
     panel.innerHTML = `<p>${demo ? 'This preview uses sample baby logs. Try the controls on Home; nothing is sent to Huckleberry.' : 'The private Huckleberry service needs to be deployed before connecting an account.'}</p>`; home(); return;
   }
   if (!connection.connected) {
-    panel.innerHTML = `<form id="huckConnectForm" class="connection-form"><p class="tiny muted">Use your Huckleberry app login. This connection currently supports email/password sign-in. Apple and Google sign-in passwords do not work here.</p><label class="field"><span>Huckleberry email</span><input id="huckEmail" type="email" autocomplete="username" required /></label><label class="field"><span>Huckleberry password</span><input id="huckPassword" type="password" autocomplete="current-password" required /></label><label class="field"><span>Baby’s time zone</span><input id="huckZone" value="${esc(zone())}" required placeholder="America/New_York" aria-describedby="huckZoneHint" /></label><p id="huckZoneHint" class="tiny muted">Used for sleep times and daily patterns. It does not change your login. For Eastern time, use America/New_York; daylight saving is handled automatically.</p><button type="submit" class="btn btn-primary">Connect Huckleberry</button></form>`;
+    panel.innerHTML = `<form id="huckConnectForm" class="connection-form"><p class="tiny muted">Connect once for everyone in your household. Both adults can log entries and manage the shared connection. Use your Huckleberry email/password login; Apple and Google sign-in passwords do not work here.</p><label class="field"><span>Huckleberry email</span><input id="huckEmail" type="email" autocomplete="username" required /></label><label class="field"><span>Huckleberry password</span><input id="huckPassword" type="password" autocomplete="current-password" required /></label><label class="field"><span>Baby’s time zone</span><input id="huckZone" value="${esc(zone())}" required placeholder="America/New_York" aria-describedby="huckZoneHint" /></label><p id="huckZoneHint" class="tiny muted">Used for sleep times and daily patterns. It does not change your login. For Eastern time, use America/New_York; daylight saving is handled automatically.</p><button type="submit" class="btn btn-primary">Connect Huckleberry</button></form>`;
     $('huckConnectForm').addEventListener('submit', async e => {
       e.preventDefault(); if (busy) return; const form = e.currentTarget;
-      const data = {email:$('huckEmail').value,password:$('huckPassword').value,timezone:$('huckZone').value.trim()};
+      const data = {email:$('huckEmail').value,password:$('huckPassword').value,timezone:$('huckZone').value.trim(),connectionVersion:settingsVersion};
       $('huckPassword').value = ''; busy = true; form.querySelector('button').disabled = true; error = ''; home();
       try { connection = await call('connect',data); snapshot = null; pendingTimer = null; settings(); await refresh(true); showNotice(connection.selected ? 'Huckleberry connected.' : 'Connected. Choose a child profile.'); }
       catch (e) { error = message(e); } finally { data.password = ''; busy = false; form.querySelector('button').disabled = false; home(); }
     });
   } else {
-    panel.innerHTML = `<form id="huckProfileForm" class="connection-form"><label class="field"><span>Child profile</span><select id="huckChild" required><option value="">Choose a child</option>${connection.children.map(child => `<option value="${esc(child.id)}" ${connection.selected === child.id ? 'selected' : ''}>${esc(child.name)}</option>`).join('')}</select></label><label class="field"><span>Baby’s time zone</span><input id="huckZone" value="${esc(zone())}" required /></label>${napPlanField()}<div class="connection-actions"><button class="btn btn-primary" type="submit">Save profile</button><button class="btn" id="huckDisconnect" type="button">Disconnect</button></div></form><p class="tiny">Connected for this household login. Each adult can connect their own Huckleberry login with access to the same child.</p>`;
+    panel.innerHTML = `<p class="tiny"><strong>Shared with your household.</strong> Your household uses the same child profile, logs, and nap plan. Either of you can change these settings.</p><form id="huckProfileForm" class="connection-form"><label class="field"><span>Child profile</span><select id="huckChild" required><option value="">Choose a child</option>${connection.children.map(child => `<option value="${esc(child.id)}" ${connection.selected === child.id ? 'selected' : ''}>${esc(child.name)}</option>`).join('')}</select></label><label class="field"><span>Baby’s time zone</span><input id="huckZone" value="${esc(zone())}" required /></label>${napPlanField()}<div class="connection-actions"><button class="btn btn-primary" type="submit">Save for household</button><button class="btn" id="huckDisconnect" type="button">Disconnect household</button></div></form><p class="tiny muted">Changes apply to both of you, including Siri and the morning newsletter. Disconnecting here leaves your Huckleberry history intact.</p>`;
     $('huckProfileForm').addEventListener('submit', async e => {
       e.preventDefault(); if (busy) return; busy = true; error = ''; home(); const button = e.currentTarget.querySelector('button'); button.disabled = true;
-      try { await inFlight; connection = await call('select',{childId:$('huckChild').value,timezone:$('huckZone').value.trim(),sweetspotNaps:$('huckNapPlan').value}); snapshot = null; pendingTimer = null; settings(); await refresh(true); showNotice('Baby profile saved.'); }
+      const selection = {childId:$('huckChild').value,timezone:$('huckZone').value.trim(),sweetspotNaps:$('huckNapPlan').value,connectionVersion:settingsVersion};
+      try { await inFlight; connection = await call('select',selection); snapshot = null; pendingTimer = null; settings(); await refresh(true); showNotice('Baby settings saved for the household.'); }
       catch (e) { error = message(e); } finally { busy = false; button.disabled = false; home(); }
     });
     $('huckDisconnect').addEventListener('click', async e => {
-      if (busy || !confirm('Disconnect Huckleberry from this household login? Your Huckleberry logs stay in Huckleberry.')) return;
+      if (busy || !confirm('Disconnect Huckleberry for everyone in the household? Logging and predictions will pause for both of you until either person reconnects. Your Huckleberry history stays intact.')) return;
       busy = true; e.target.disabled = true; home();
-      try { await inFlight; await call('disconnect'); connection = {connected:false}; snapshot = null; pendingTimer = null; error = ''; settings(); showNotice('Huckleberry disconnected.'); }
+      try { await inFlight; connection = await call('disconnect',{connectionVersion:settingsVersion}); snapshot = null; pendingTimer = null; error = ''; settings(); showNotice('Household Huckleberry disconnected.'); }
       catch (e) { error = message(e); } finally { busy = false; e.target.disabled = false; home(); }
     });
   }
   home();
 }
 async function refresh(force = false) {
-  if (!connection.selected || demo) { home(); return; }
+  if (demo || !config.huckleberryServiceEnabled) { home(); return; }
   if (inFlight) { await inFlight; if (!force) return; }
   if (!force && Date.now() - lastAttempt < 120000) { home(); return; }
   lastAttempt = Date.now();
-  inFlight = (async () => { try { snapshot = await call('snapshot',{force}); error = ''; } catch (e) { error = message(e); } finally { home(); } })();
+  inFlight = (async () => {
+    try {
+      adoptConnection(await call('status'));
+      if (connection.selected) {
+        const next = await call('snapshot',{force});
+        if (next.connection) adoptConnection(next.connection);
+        snapshot = next;
+      }
+      error = '';
+    } catch (e) { error = message(e); }
+    finally { home(); }
+  })();
   try { await inFlight; } finally { inFlight = null; }
 }
 function demoWrite(entry) {
@@ -128,8 +146,8 @@ function demoWrite(entry) {
   if (entry.kind === 'diaper') snapshot.lastDiaper = {time:entry.start,mode:entry.mode};
   snapshot.checkedAt = new Date().toISOString();
 }
-async function write(entry, childId) {
-  if (demo) demoWrite(entry); else await call('write',{entry,childId});
+async function write(entry, childId, connectionVersion = connection.connectionVersion) {
+  if (demo) demoWrite(entry); else await call('write',{entry,childId,connectionVersion});
 }
 // Start or finish the sleep timer, optionally at an earlier time ("fell asleep 3:40").
 async function toggleSleep(at = null, want = null) {
@@ -190,7 +208,7 @@ function syncLogForm() {
 // prefill: {start, end, amount, units, bottleType, mode} from quick add.
 function openLog(kind, prefill = {}) {
   if (busy || !snapshot) return false;
-  formChild = connection.selected; formId = crypto.randomUUID();
+  formChild = connection.selected; formVersion = connection.connectionVersion; formId = crypto.randomUUID();
   $('babyLogForm').reset(); $('babyLogKind').value = kind; $('babyLogError').textContent = ''; $('babyLogNotesWrap').open = false;
   const [icon, title, save] = LOG_LOOK[kind]; $('babyLogIcon').textContent = icon; $('babyLogTitle').textContent = title; $('babyLogSave').textContent = save;
   $('babyLogStartLabel').textContent = kind === 'sleep-log' ? 'Fell asleep' : kind === 'diaper' ? 'Changed' : 'When';
@@ -250,13 +268,13 @@ export async function initHuckleberry(app, options = {}) {
     if (kind === 'diaper') entry.mode = $('babyLogDiaper').value;
     const controls = [...e.currentTarget.querySelectorAll('input,textarea,select,button')].filter(control => !control.disabled);
     busy = true; controls.forEach(control => { control.disabled = true; }); $('babyLogError').textContent = ''; home();
-    try { await write(entry,formChild); $('babyLogDialog').close(); showNotice(demo ? 'Sample log saved.' : 'Saved in Huckleberry.'); await refresh(true); }
+    try { await write(entry,formChild,formVersion); $('babyLogDialog').close(); showNotice(demo ? 'Sample log saved.' : 'Saved in Huckleberry.'); await refresh(true); }
     catch (e) { $('babyLogError').textContent = message(e); }
     finally { busy = false; controls.forEach(control => { control.disabled = false; }); home(); }
   });
   settings();
   if (!demo && config.huckleberryServiceEnabled) {
-    try { connection = await call('status'); settings(); await refresh(); } catch (e) { error = message(e); home(); }
+    await refresh();
   }
   const tick = () => { if (document.visibilityState !== 'visible' || busy) return; home(); if (['today','settings','frankie'].some(view => !$(`view-${view}`).classList.contains('hidden'))) refresh(); };
   setInterval(tick,60000); document.addEventListener('visibilitychange',tick);

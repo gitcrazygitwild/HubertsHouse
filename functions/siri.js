@@ -83,15 +83,15 @@ export function createSiriHandler({ db, huckleberry, members, now = () => new Da
       const keyHash = hashSiriKey(key), keyRef = db.doc(`siriKeys/${keyHash}`), record = await keyRef.get();
       if (!record.exists) return reply(401, { ok:false, speak:'That Siri key isn’t valid anymore. Make a new one in Hubert’s House settings.' });
       const owner = record.data().uid;
-      // Use the key owner's Huckleberry connection, or another household member's.
-      const uids = [owner, ...(await members()).filter(uid => uid !== owner)];
-      let snapshot = null, writer = null;
-      for (const uid of uids) { try { snapshot = await huckleberry(uid, { action:'snapshot' }); if (snapshot?.childId) { writer = uid; break; } } catch { /* try the next member */ } }
-      if (!writer) return reply(409, { ok:false, speak:'Hubert can’t reach Huckleberry right now. Check the connection in settings.' });
+      // The caller must still be a member, even when their Siri key exists.
+      if (!(await members()).includes(owner)) return reply(403, { ok:false, speak:'This Siri key no longer has household access.' });
+      let snapshot;
+      try { snapshot = await huckleberry(owner, { action:'snapshot' }); } catch { /* handled below */ }
+      if (!snapshot?.childId) return reply(409, { ok:false, speak:'Hubert can’t reach Huckleberry right now. Check the connection in settings.' });
       const plan = planSiriLog({ text:body.text, snapshot, now:now(), keyHash });
       await keyRef.update({ lastUsedAt:now().toISOString() }).catch(() => {});
       if (body.confirm !== true) return reply(200, { ok:true, needsConfirm:true, speak:plan.speak });
-      await huckleberry(writer, { action:'write', childId:snapshot.childId, entry:plan.entry });
+      await huckleberry(owner, { action:'write', childId:snapshot.childId, connectionVersion:snapshot.connection?.connectionVersion, entry:plan.entry });
       return reply(200, { ok:true, saved:true, speak:plan.done });
     } catch (error) {
       if (error instanceof SiriError) return reply(200, { ok:false, speak:error.message });
