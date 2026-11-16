@@ -70,6 +70,11 @@
 #standaloneChecklistDialog textarea { min-height:140px; }
 [data-theme="dark"] .fc { --fc-today-bg-color:#302f28; }
 [data-theme="dark"] .fc .fc-timegrid-col.fc-day-today { background:#302f28; }
+[data-theme="dark"] .fc .fc-col-header-cell { background:var(--card); }
+[data-theme="dark"] .app-link { background:var(--card); border-color:var(--border); }
+[data-theme="dark"] .app-link:hover { background:var(--soft); }
+[data-theme="dark"] .app-link-name { color:var(--text); }
+[data-theme="dark"] .app-link-name small { color:var(--muted); }
 [data-theme="dark"] .fc .fc-event.owner-both,[data-theme="dark"] .home-week-event.owner-both { background-color:#29473e !important; --event-bg:#29473e; --event-ink:#b6e2cd; color:#b6e2cd !important; }
 [data-theme="dark"] .fc .fc-day-sat:not(.fc-day-today),[data-theme="dark"] .fc .fc-day-sun:not(.fc-day-today) { background:var(--card); }
 @media(max-width:650px) {
