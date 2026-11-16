@@ -15,7 +15,7 @@ export function calendarEventContent({ event, view }) {
   const clock = event.allDay ? 'All day' : time(event.start);
   const progress = checklistProgress(p.checklist);
   const progressHTML = progress.total ? `<span class="event-checklist-progress ${progress.done === progress.total ? 'is-complete' : ''}" aria-label="${progress.done} of ${progress.total} checklist items complete"><span aria-hidden="true">✓</span> ${progress.done}/${progress.total}<span class="event-checklist-track" aria-hidden="true"><i style="width:${Math.round(progress.done / progress.total * 100)}%"></i></span></span>` : '';
-  wrapper.innerHTML = `<div class="smart-event-time">${esc(clock)}${p.isRepeatOccurrence ? '<span aria-label="Repeating">↻</span>' : ''}</div><span class="smart-event-title">${icon ? `<span class="smart-event-icon" aria-hidden="true">${icon}</span>` : ''}${esc(event.title)}</span>${progressHTML}${view.type.startsWith('timeGrid') ? `<span class="smart-event-owner">${esc(ownerNames[owner])}</span>` : ''}`;
+  wrapper.innerHTML = `<div class="smart-event-time">${esc(clock)}${p.isRepeatOccurrence ? '<span aria-label="Repeating">↻</span>' : ''}</div><span class="smart-event-title">${icon ? `<span class="smart-event-icon" aria-hidden="true">${icon}</span>` : ''}${esc(event.title)}</span>${p.withFrankie ? '<span class="frankie-tag">+ Frankie</span>' : ''}${progressHTML}${view.type.startsWith('timeGrid') ? `<span class="smart-event-owner">${esc(ownerNames[owner])}</span>` : ''}`;
   return { domNodes: [wrapper] };
 }
 
@@ -59,7 +59,7 @@ export function initCalendarExperience({ calendar, getEvents, getFilteredEvents,
     const dayEvents = eventsOnDay(filtered, selected);
     html('selectedDayEvents', dayEvents.length ? dayEvents.map(event => {
       const owner = ownerOf(event), label = event.allDay ? 'All day' : localDate(event.start) < selected ? 'Ongoing' : time(event.start);
-      return `<button type="button" class="day-event ${owner}" ${eventAttrs(event)}><span class="day-event-time">${esc(label)}</span><span class="day-event-copy"><strong>${esc(event.title)}</strong><small>${esc(ownerNames[owner])}${event.extendedProps?.isRepeatOccurrence ? ' · Repeats' : ''}${event.extendedProps?.icloud ? ' · iCloud' : ''}</small></span></button>`;
+      return `<button type="button" class="day-event ${owner}${event.extendedProps?.withFrankie ? ' with-frankie' : ''}" ${eventAttrs(event)}><span class="day-event-time">${esc(label)}</span><span class="day-event-copy"><strong>${esc(event.title)}</strong><small>${esc(ownerNames[owner])}${event.extendedProps?.withFrankie ? ' + Frankie' : ''}${event.extendedProps?.isRepeatOccurrence ? ' · Repeats' : ''}${event.extendedProps?.icloud ? ' · iCloud' : ''}</small></span></button>`;
     }).join('') : '<div class="empty-state"><strong>A little breathing room.</strong>No plans match this day.<br />Make some room for something good.</div>');
 
     const next = allEvents.filter(event => eventEnd(event) > now).sort((a, b) => localDate(a.start) - localDate(b.start))[0];
@@ -69,7 +69,7 @@ export function initCalendarExperience({ calendar, getEvents, getFilteredEvents,
       let countdown = '';
       const minutes = Math.ceil((start - now) / 60000);
       if (!next.allDay && minutes > 0 && minutes < 60) countdown = ` · in ${minutes} min`;
-      html('nextEventCard', `<div class="eyebrow next-label">${happening ? next.allDay ? 'HAPPENING TODAY' : 'HAPPENING NOW' : 'UP NEXT'}${esc(countdown.toUpperCase())}</div><button type="button" ${eventAttrs(next)}><h2>${esc(next.title)}</h2><p>${esc(next.allDay ? `${happening ? 'Today' : day} · All day` : `${happening ? 'Now' : day} · ${time(start)}${next.end ? ` – ${time(next.end)}` : ''}`)}</p><span class="next-footer"><span class="next-owner">${esc(ownerNames[ownerOf(next)])}</span><span class="next-arrow" aria-hidden="true">&#8594;</span></span></button>`);
+      html('nextEventCard', `<div class="eyebrow next-label">${happening ? next.allDay ? 'HAPPENING TODAY' : 'HAPPENING NOW' : 'UP NEXT'}${esc(countdown.toUpperCase())}</div><button type="button" ${eventAttrs(next)}><h2>${esc(next.title)}</h2><p>${esc(next.allDay ? `${happening ? 'Today' : day} · All day` : `${happening ? 'Now' : day} · ${time(start)}${next.end ? ` – ${time(next.end)}` : ''}`)}</p><span class="next-footer"><span class="next-owner">${esc(ownerNames[ownerOf(next)])}${next.extendedProps?.withFrankie ? ' + Frankie' : ''}</span><span class="next-arrow" aria-hidden="true">&#8594;</span></span></button>`);
     } else html('nextEventCard', '<span class="next-empty-icon" aria-hidden="true">✳</span><div class="eyebrow">LOOKING GOOD</div><h2>A little room<br />to breathe.</h2><p>Your next plan will appear here.</p>');
   }
 

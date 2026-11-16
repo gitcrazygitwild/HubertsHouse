@@ -1,5 +1,6 @@
 import { overlappingEvents, preferredCalendar } from './event-planning.js';
 import { initCatCrew } from './cat-crew.js';
+import { initHuckleberry } from './baby.js';
 // app.js — Hubert’s House
 // Household dashboard, authenticated Firebase sync and iCloud calendar integration.
 // Upcoming + Outstanding checklist panels + checklist-focused modal
@@ -160,7 +161,7 @@ function openDetailsModal(payload) {
   const owner = normalizeOwner(payload.owner);
   const ownerLabel = owner === "custom" ? (payload.ownerCustom || "Other") : owner;
 
-  if (detailsOwnerPill) detailsOwnerPill.textContent = ownerLabel;
+  if (detailsOwnerPill) { detailsOwnerPill.textContent = ownerLabel + (original?.withFrankie ? " + Frankie" : ""); detailsOwnerPill.classList.toggle("frankie-tag", !!original?.withFrankie); }
   if (detailsTitle) detailsTitle.textContent = payload.title || "";
   if (detailsWhen) detailsWhen.textContent = formatWhenForPanel({
     start: payload.start ? new Date(payload.start) : null,
@@ -478,7 +479,7 @@ async function initApp() {
     document.getElementById('accountLabel').textContent = 'Preview mode. No real household or Apple data is loaded.';
     startHousehold(demoStore()); localDocs = demoEvents(); rebuildEvents();
     setCalendarStatus('Sample calendar', 'ready');
-    initCloudCalendar(null,{demo:true,onEvents:() => {},onCalendars:() => {}}); return;
+    initCloudCalendar(null,{demo:true,onEvents:() => {},onCalendars:() => {}}); initHuckleberry(null,{demo:true}); return;
   }
   onAuthStateChanged(auth,async user => {
     if (!user) { memberVerified = false; gate.classList.remove('hidden'); if (dataStarted) location.reload(); return; }
@@ -499,8 +500,9 @@ async function initApp() {
         setCalendarStatus('Sync unavailable', 'offline');
         showNotice('The calendar could not sync. Check your connection and household access.');
       });
+      initHuckleberry(app);
       await initCloudCalendar(app,{
-        onEvents:records => { cloudDocs = records.map(e => ({...e,end:e.editEnd,cloudEnd:e.end,owner:'both',type:'general',checklist:[],repeat:'none'})); rebuildEvents(); },
+        onEvents:records => { cloudDocs = records.map(e => ({...e,end:e.editEnd,cloudEnd:e.end,owner:e.owner || 'both',type:'general',checklist:[],repeat:'none'})); rebuildEvents(); },
         onCalendars:connection => {
           const select = document.getElementById('evtCalendar'); const current = select.value;
           select.replaceChildren(new Option('Hubert’s House','household'));
@@ -564,8 +566,8 @@ function rebuildEvents() {
   rawDocs = [...localDocs,...cloudDocs];
   expandedEvents = [...expandRepeats(normalizeDocs(localDocs)),...cloudDocs.map(e => ({
     id:e.id,title:e.title,start:e.start,end:e.cloudEnd,allDay:e.allDay,
-    backgroundColor:'#dfe8d6',borderColor:'#8da475',textColor:'#34432e',editable:!e.readOnlyReason,
-    extendedProps:{sourceId:e.id,owner:'both',type:'general',notes:e.notes,checklist:[],icloud:true,isRepeatOccurrence:!!e.recurring}
+    backgroundColor:(OWNER_STYLE[e.owner] || OWNER_STYLE.both).bg,borderColor:(OWNER_STYLE[e.owner] || OWNER_STYLE.both).border,textColor:'#34432e',editable:!e.readOnlyReason,
+    extendedProps:{sourceId:e.id,owner:e.owner || 'both',ownerCustom:e.ownerCustom || '',withFrankie:!!e.withFrankie,type:'general',notes:e.notes,checklist:[],icloud:true,isRepeatOccurrence:!!e.recurring}
   }))];
   renderCalendarFromCache(); renderPanels(); updateHouseholdEvents(expandedEvents);
   if (!backdrop?.classList.contains("hidden")) updateEventOverlap();
@@ -739,7 +741,7 @@ function initCalendarUI() {
       ? localStorage.getItem('hh_calendar_view') : window.innerWidth < 650 ? 'listCustom' : 'dayGridMonth',
     headerToolbar: false,
     eventContent: calendarEventContent,
-    eventClassNames: arg => [`owner-${normalizeOwner(arg.event.extendedProps?.owner)}`],
+    eventClassNames: arg => [`owner-${normalizeOwner(arg.event.extendedProps?.owner)}`, ...(arg.event.extendedProps?.withFrankie ? ["with-frankie"] : [])],
     dayHeaderFormat: { weekday: 'short' },
     dayHeaderContent: info => {
       // Month headers use abstract UTC weekdays. FullCalendar's formatted text
@@ -1353,6 +1355,7 @@ function openEventModal(payload) {
 
   const owner = normalizeOwner(payload.owner);
   if (evtOwner) evtOwner.value = owner;
+  document.getElementById("evtWithFrankie").checked = !!(original?.withFrankie ?? payload.withFrankie);
   ownerCustomWrap?.classList.toggle("hidden", owner !== "custom");
   if (evtOwnerCustom) evtOwnerCustom.value = payload.ownerCustom || "";
 
@@ -1493,7 +1496,7 @@ function updateEventOverlap() {
   const box = document.getElementById('eventOverlap');
   const cloud = document.getElementById('evtCalendar').value !== 'household';
   const overlaps = overlappingEvents({ id:editingDocId, start:evtStart.value, end:evtEnd.value, allDay:evtAllDay.checked,
-    owner:cloud ? 'both' : evtOwner.value, ownerCustom:evtOwnerCustom.value }, expandedEvents);
+    owner:evtOwner.value, ownerCustom:evtOwnerCustom.value, withFrankie:document.getElementById('evtWithFrankie').checked }, expandedEvents);
   box.replaceChildren(); box.classList.toggle('hidden', !overlaps.length);
   if (!overlaps.length) return;
   const label = document.createElement('strong'); label.textContent = 'A little heads-up: plans overlap'; box.append(label);
@@ -1507,10 +1510,15 @@ function updateDestinationUI() {
   document.getElementById('evtCalendarHint').textContent = cloud ? 'Saves directly to iCloud. Create repeats and invitations in Apple Calendar.' : 'Shared with everyone in Hubert’s House.';
   evtRepeat.closest('.row').classList.toggle('hidden',cloud);
   checklistEl.closest('.field').classList.toggle('hidden',cloud);
-  evtOwner.closest('.row').classList.toggle('hidden',cloud);
-  ownerCustomWrap.classList.toggle('hidden',cloud || evtOwner.value !== 'custom');
+  evtOwner.closest('.row').classList.remove('hidden');
+  evtType.closest('.field').classList.toggle('hidden',cloud);
+  const frankie = document.getElementById('evtWithFrankie');
+  frankie.disabled = !['hanry','karena','both'].includes(evtOwner.value);
+  if (frankie.disabled) frankie.checked = false;
+  ownerCustomWrap.classList.toggle('hidden',evtOwner.value !== 'custom');
 }
 document.getElementById('evtCalendar').addEventListener('change',updateDestinationUI);
+evtOwner.addEventListener('change',updateDestinationUI);
 async function handleSave() {
   if (savingEvent) return;
   savingEvent = true; saveBtn.disabled = true; saveBtnTop.disabled = true;
@@ -1551,6 +1559,7 @@ async function saveEventValues() {
     allDay,
     owner,
     ownerCustom,
+    withFrankie: document.getElementById("evtWithFrankie").checked && ["hanry","karena","both"].includes(owner),
     type,
     notes,
     checklist,
@@ -1564,7 +1573,7 @@ async function saveEventValues() {
   const destination = document.getElementById('evtCalendar').value;
   if (destination !== 'household') {
     const original = rawDocs.find(d => d.id === editingDocId);
-    await saveCloudEvent({title,notes,allDay,start:start.toISOString(),end:(end || addHours(start,1)).toISOString(),
+    await saveCloudEvent({title,notes,allDay,owner,ownerCustom,withFrankie:payload.withFrankie,start:start.toISOString(),end:(end || addHours(start,1)).toISOString(),
       startLocal:evtStart.value,endLocal:evtEnd.value || toInputValue(addHours(start,1),false),startDate:evtStart.value.slice(0,10),endDate:evtEnd.value.slice(0,10) || evtStart.value.slice(0,10),repeat:'none'},original,destination,eventRequestId);
     closeModal(); showNotice('Saved to iCloud.'); await refreshCloud();
   } else {
@@ -1586,7 +1595,7 @@ async function persistMovedEvent(fcEvent) {
   if (original?.icloud) {
     const lastDay = fcEvent.end ? new Date(fcEvent.end) : new Date(fcEvent.start);
     if (fcEvent.allDay && fcEvent.end) lastDay.setDate(lastDay.getDate()-1);
-    await saveCloudEvent({title:original.title,notes:original.notes || '',allDay:fcEvent.allDay,start:patch.start,end:patch.end || addHours(fcEvent.start,1).toISOString(),startLocal:toInputValue(fcEvent.start,false),endLocal:toInputValue(fcEvent.end || addHours(fcEvent.start,1),false),startDate:dateKey(fcEvent.start),endDate:dateKey(lastDay),repeat:'none'},original,original.calendarId,crypto.randomUUID());
+    await saveCloudEvent({title:original.title,notes:original.notes || '',owner:original.owner || 'both',ownerCustom:original.ownerCustom || '',withFrankie:!!original.withFrankie,allDay:fcEvent.allDay,start:patch.start,end:patch.end || addHours(fcEvent.start,1).toISOString(),startLocal:toInputValue(fcEvent.start,false),endLocal:toInputValue(fcEvent.end || addHours(fcEvent.start,1),false),startDate:dateKey(fcEvent.start),endDate:dateKey(lastDay),repeat:'none'},original,original.calendarId,crypto.randomUUID());
     await refreshCloud();
   } else {
     if (fcEvent.allDay && fcEvent.end) { const inclusive=new Date(fcEvent.end); inclusive.setDate(inclusive.getDate()-1); patch.end=inclusive.toISOString(); }
@@ -1707,6 +1716,7 @@ function normalizeDocs(docs) {
       allDay: !!d.allDay,
       owner,
       ownerCustom: d.ownerCustom || "",
+      withFrankie: !!d.withFrankie && ["hanry","karena","both"].includes(owner),
       type: d.type || "general",
       notes: d.notes || "",
       checklist: Array.isArray(d.checklist) ? d.checklist : [],
@@ -1729,6 +1739,7 @@ function expandRepeats(norm) {
       sourceId: d.id,
       owner: d.owner,
       ownerCustom: d.ownerCustom,
+      withFrankie: d.withFrankie,
       type: d.type,
       notes: d.notes,
       checklist: d.checklist

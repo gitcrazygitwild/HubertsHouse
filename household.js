@@ -22,7 +22,6 @@ export function showView(view) {
 async function setDisplayMode(on) {
   displayMode = on; document.body.classList.toggle('display-mode', on);
   document.body.classList.toggle('monitor-mode', on);
-  if (on) showView('today');
   localStorage.setItem('hh_display', on ? '1' : '0');
   $('displayBtn').setAttribute('aria-pressed', String(on));
   $('displayBtn').textContent = on ? 'Exit monitor' : '⛶ Monitor mode';
@@ -134,6 +133,7 @@ function editItem(item, kind = 'chore') {
   $('itemId').value = item?.id || ''; $('itemKind').value = kind; $('itemTitle').value = item?.title || '';
   $('itemDialogTitle').textContent = `${item ? 'Edit' : 'Add'} ${kind === 'grocery' ? 'groceries' : kind === 'task' ? 'a checklist item' : 'a chore'}`;
   $('itemTitle').previousElementSibling.textContent = kind === 'grocery' ? 'What do we need?' : 'What needs doing?';
+  $('itemWithFrankie').checked = !!item?.withFrankie;
   $('itemOwner').value = item?.owner || 'both'; $('itemDue').value = item?.due || (kind === 'chore' ? dateKey() : '');
   $('itemCadence').value = item?.cadence || 'none'; $('itemList').value = item?.list || '';
   $('itemQuantity').value = item?.quantity || ''; $('itemCategory').value = item?.category || 'Other';
@@ -145,7 +145,7 @@ async function saveItem(e) {
   e.preventDefault(); $('itemError').textContent = ''; $('saveItem').disabled = true;
   try {
     const kind = $('itemKind').value; const old = items.find(x => x.id === $('itemId').value);
-    const data = validateItem({ kind, title: $('itemTitle').value, owner: kind === 'grocery' ? 'both' : $('itemOwner').value,
+    const data = validateItem({ kind, withFrankie:kind !== 'grocery' && $('itemWithFrankie').checked, title: $('itemTitle').value, owner: kind === 'grocery' ? 'both' : $('itemOwner').value,
       due: kind === 'grocery' ? '' : $('itemDue').value, cadence: kind === 'chore' ? $('itemCadence').value : 'none',
       list: kind === 'task' ? $('itemList').value.trim().slice(0, 80) : '', quantity: kind === 'grocery' ? $('itemQuantity').value.trim().slice(0, 60) : '',
       category: kind === 'grocery' ? $('itemCategory').value : 'Other', completed: old?.completed || false });
@@ -156,7 +156,7 @@ async function saveItem(e) {
 }
 function itemHTML(item) {
   const due = dueLabel(item); const sub = item.kind === 'grocery' ? esc(item.quantity || 'Tap to edit details') : `${item.due < dateKey() && item.due ? '<span class="overdue">' : '<span>'}${esc(due)}</span>${item.cadence !== 'none' ? `<span>↻ ${esc(item.cadence)}</span>` : ''}`;
-  return `<div class="item-row ${item.completed ? 'done' : ''}"><input type="checkbox" class="item-check" data-complete="${esc(item.id)}" aria-label="${esc(item.completed ? 'Uncheck' : 'Complete')} ${esc(item.title)}" ${item.completed ? 'checked' : ''} /><div class="item-copy"><button type="button" class="item-edit" data-edit-item="${esc(item.id)}">${esc(item.title)}</button><div class="item-meta">${sub}</div></div>${item.kind !== 'grocery' ? `<span class="owner-tag ${esc(item.owner)}">${esc(OWNERS[item.owner] || 'Both')}</span>` : ''}</div>`;
+  return `<div class="item-row ${item.withFrankie ? 'with-frankie ' : ''}${item.completed ? 'done' : ''}"><input type="checkbox" class="item-check" data-complete="${esc(item.id)}" aria-label="${esc(item.completed ? 'Uncheck' : 'Complete')} ${esc(item.title)}" ${item.completed ? 'checked' : ''} /><div class="item-copy"><button type="button" class="item-edit" data-edit-item="${esc(item.id)}">${esc(item.title)}</button><div class="item-meta">${sub}</div></div>${item.kind !== 'grocery' ? `<span class="owner-tag ${esc(item.owner)}">${esc(OWNERS[item.owner] || 'Both')}${item.withFrankie ? ' + Frankie' : ''}</span>` : ''}</div>`;
 }
 function empty(title, detail) { return `<div class="empty-state"><strong>${esc(title)}</strong>${esc(detail)}</div>`; }
 function groupsHTML(list, key, sortKeys) {
@@ -178,7 +178,7 @@ function render() {
   renderHTML($('homeAgenda'), upcoming.length ? upcoming.map(e => {
     const d = localDate(e.start), owner = e.extendedProps?.owner || 'both';
     const time = e.allDay ? 'All day' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    return `<button type="button" class="agenda-row" data-open-event="${esc(e.extendedProps?.sourceId || e.id)}" data-occ="${esc(d.toISOString())}"><span class="agenda-date">${esc(d.toLocaleDateString([], { weekday: 'short' }).toUpperCase())}<strong>${d.getDate()}</strong>${esc(d.toLocaleDateString([], { month: 'short' }))}</span><span class="agenda-copy ${esc(owner)}"><strong>${esc(e.title)}</strong><small>${esc(time)}${e.extendedProps?.icloud ? ' · iCloud' : ''}</small></span><span class="agenda-owner">${esc(OWNERS[owner] || 'Both')}</span></button>`;
+    return `<button type="button" class="agenda-row${e.extendedProps?.withFrankie ? ' with-frankie' : ''}" data-open-event="${esc(e.extendedProps?.sourceId || e.id)}" data-occ="${esc(d.toISOString())}"><span class="agenda-date">${esc(d.toLocaleDateString([], { weekday: 'short' }).toUpperCase())}<strong>${d.getDate()}</strong>${esc(d.toLocaleDateString([], { month: 'short' }))}</span><span class="agenda-copy ${esc(owner)}"><strong>${esc(e.title)}</strong><small>${esc(time)}${e.extendedProps?.icloud ? ' · iCloud' : ''}</small></span><span class="agenda-owner">${esc(OWNERS[owner] || 'Both')}${e.extendedProps?.withFrankie ? ' + Frankie' : ''}</span></button>`;
   }).join('') : empty('Nothing coming up yet.', 'Add your first plan, or connect an iCloud calendar in Settings.'));
   const sorted = [...pending].sort((a,b) => (a.due || '9999').localeCompare(b.due || '9999'));
   renderHTML($('homeChores'), sorted.length ? sorted.slice(0, 5).map(itemHTML).join('') : empty('A fresh start for your home.', 'Add a chore or a checklist item to get everyone on the same page.'));

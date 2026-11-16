@@ -3,9 +3,15 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { JSDOM } from 'jsdom';
 import { dateKey } from '../household-model.js';
-import { homeCalendarWeek, initHomeCalendar } from '../home-calendar.js';
+import { homeCalendarWeek, homeCalendarRange, initHomeCalendar } from '../home-calendar.js';
 
 process.env.TZ = 'America/New_York';
+
+test('day and month ranges use local boundaries through DST and leap years', () => {
+  const day = homeCalendarRange([],'2026-11-01','day'); assert.equal(day.end-day.start,25*3600000); assert.equal(day.days.length,1);
+  const month = homeCalendarRange([],'2028-02-29','month'); assert.equal(month.days.length,42); assert.equal(dateKey(month.start),'2028-01-30'); assert.equal(dateKey(month.end),'2028-03-12');
+  assert.equal(month.days.filter(({date}) => date.getMonth() === 1).length,29);
+});
 
 test('the home calendar shows seven complete local dates across daylight saving, counting spans only once', () => {
   const trip = { id: 'trip', start: '2026-10-31', end: '2026-11-03', allDay: true };

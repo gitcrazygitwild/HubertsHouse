@@ -8,25 +8,18 @@
 .crew-cats button[aria-pressed="true"] { background: var(--card); border-color: var(--border); }
 .crew-cats svg { width: 65px; height: 65px; transition: transform .2s; }
 .crew-cats button:hover svg { transform: rotate(-5deg); }
-.monitor-mode .house-sidebar, .monitor-mode #catLayer { display: none !important; }
-.monitor-mode .house-main { margin-left: 0; max-width: none; width: 100%; padding: 20px 28px; }
-.monitor-mode #view-today > :not(.home-calendar):not(.cat-crew) { display: none; }
+/* Fullscreen is a complete workspace, with the same navigation and content. */
 .monitor-mode .house-header { margin-bottom: 18px; }
-.monitor-mode .house-header .house-clock { display: block; font-size: 26px; font-variant-numeric: tabular-nums; }
-.monitor-mode .home-calendar-nav [data-go="calendar"] { display: none; }
-.monitor-mode .cat-crew { margin: 12px 0 0; padding: 5px 18px; }
-.monitor-mode .crew-cats svg { width: 45px; height: 45px; }
+.monitor-mode .house-header .house-clock { display: block; font-size: 24px; font-variant-numeric: tabular-nums; }
 .monitor-mode .house-header #displayBtn { display: block; white-space: nowrap; }
+.monitor-mode .home-calendar { min-height: 0; }
 @media (min-width: 901px) {
-  .monitor-mode .house-main { display: flex; flex-direction: column; height: 100svh; min-height: 570px; }
-  .monitor-mode .house-header, .monitor-mode .demo-banner { flex-shrink: 0; }
-  .monitor-mode #view-today { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-  .monitor-mode .home-calendar { min-height: 0; flex: 1; margin: 0; }
-  .monitor-mode .home-week-grid { min-height: 0; }
-  .monitor-mode .home-week-day { min-height: 0; }
-  .monitor-mode .home-day-plans { overflow-y: auto; min-height: 0; scrollbar-width: thin; }
-  .monitor-mode .home-week-event { flex-shrink: 0; }
-  .monitor-mode .cat-crew { flex-shrink: 0; }
+  body.monitor-mode .house-sidebar { width: 185px; padding: 24px 14px; }
+  .monitor-mode .house-brand { justify-content: flex-start; font-size: 24px; }
+  .monitor-mode .house-brand > span, .monitor-mode .sidebar-bottom, .monitor-mode .house-nav button > span:last-child { display: block; }
+  .monitor-mode .house-nav button { justify-content: flex-start; font-size: 12px; gap: 12px; }
+  .monitor-mode .house-main { margin-left: 185px; padding: 24px; }
+  .monitor-mode .home-week-day { min-height: 300px; }
 }
 @media (max-width: 650px) {
   .cat-crew { gap: 10px; padding: 14px; flex-direction: column; text-align: center; }

@@ -31,6 +31,8 @@ async function fixture(options = {}) {
   }
   await module('household.js',['initHousehold','updateHouseholdEvents','showNotice','showView'],'const esc=escapeHTML;');
   await module('cloud-calendar.js',['initCloudCalendar','setCloudRange','refreshCloud','saveCloudEvent','deleteCloudEvent'],'const esc=escapeHTML;');
+  await module('baby-model.js',['purrfectWindow','huckleberryPrediction']);
+  await module('baby.js',['initHuckleberry'],'const esc=escapeHTML;');
   await module('calendar-view.js',['initCalendarExperience','calendarEventContent'],'const esc=escapeHTML;');
   await module('home-calendar.js',['initHomeCalendar','homeCalendarWeek'],'const esc=escapeHTML;');
   await module('weather-shared.js',['richmondDay','forecastCondition','weatherIcon']);
@@ -39,6 +41,44 @@ async function fixture(options = {}) {
   w.eval(clean(await read('app.js')) + ';window.__testApp={getDocs:()=>rawDocs,persistMovedEvent,redraw:()=>updateHouseholdEvents(expandedEvents)};'); await settle();
   return {dom,w,doc:w.document,errors};
 }
+test('home views, theme and monitor navigation work together without hiding the daily extras', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  doc.getElementById('themeToggle').click(); assert.equal(doc.documentElement.dataset.theme,'dark'); assert.equal(w.localStorage.getItem('hh_theme'),'dark');
+  doc.querySelector('[data-home-view="month"]').click(); assert.equal(doc.querySelectorAll('.home-week-day').length,42);
+  assert.equal(new Set([...doc.querySelectorAll('.home-week-day')].map(el => el.dataset.homeDate)).size,42);
+  doc.querySelector('[data-home-view="day"]').click(); assert.equal(doc.querySelectorAll('.home-week-day').length,1);
+  doc.querySelector('[data-home-view="week"]').click(); assert.equal(doc.querySelectorAll('.home-week-day').length,7);
+  doc.querySelector('[data-view="tasks"]').click(); doc.getElementById('displayBtn').click(); await settle();
+  assert.equal(doc.body.classList.contains('monitor-mode'),true); assert.equal(doc.getElementById('view-tasks').classList.contains('hidden'),false);
+  doc.dispatchEvent(new w.Event('visibilitychange')); await settle(); assert.equal(doc.getElementById('view-tasks').classList.contains('hidden'),false);
+  doc.querySelector('[data-view="today"]').click();
+  for (const id of ['dailyQuote','dailyFact','dailyWord','dailyJoke','catCrew','babyStats']) assert.ok(doc.getElementById(id));
+  assert.deepEqual(errors,[]);
+});
+test('Frankie stays paired with an adult and is preserved when opening an event again', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  doc.getElementById('quickEvent').click(); doc.getElementById('evtTitle').value='Frankie comes along';
+  doc.getElementById('evtOwner').value='hanry'; doc.getElementById('evtOwner').dispatchEvent(new w.Event('change')); doc.getElementById('evtWithFrankie').checked=true;
+  doc.getElementById('saveBtnTop').click(); await settle();
+  const record = w.__testApp.getDocs().find(d => d.title === 'Frankie comes along'); assert.equal(record.withFrankie,true); assert.equal(record.owner,'hanry');
+  const card=doc.querySelector(`#homeWeek [data-home-event="${record.id}"]`); assert.ok(card.classList.contains('with-frankie')); card.click();
+  assert.match(doc.getElementById('detailsOwnerPill').textContent,/hanry \+ Frankie/);
+  doc.getElementById('detailsEditBtn').click(); assert.equal(doc.getElementById('evtWithFrankie').checked,true);
+  doc.getElementById('evtOwner').value='custom'; doc.getElementById('evtOwner').dispatchEvent(new w.Event('change'));
+  assert.equal(doc.getElementById('evtWithFrankie').disabled,true); assert.equal(doc.getElementById('evtWithFrankie').checked,false);
+  assert.deepEqual(errors,[]);
+});
+test('sample baby logs support bottles, diapers and sleep without calling a connected service', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  doc.querySelector('[data-baby-log="bottle"]').click(); assert.equal(doc.getElementById('babyLogDialog').open,true);
+  doc.getElementById('babyLogAmount').value='5'; doc.getElementById('babyLogForm').dispatchEvent(new w.Event('submit',{cancelable:true})); await settle();
+  assert.equal(doc.getElementById('babyLogDialog').open,false); assert.match(doc.getElementById('babyStats').textContent,/5 oz/);
+  doc.querySelector('[data-baby-log="diaper"]').click(); doc.getElementById('babyLogDiaper').value='poo'; doc.getElementById('babyLogForm').dispatchEvent(new w.Event('submit',{cancelable:true})); await settle();
+  assert.match(doc.getElementById('babyStats').textContent,/Dirty/);
+  doc.getElementById('babySleep').click(); await settle(); assert.match(doc.getElementById('babySleep').textContent,/Finish sleep/); assert.match(doc.getElementById('babyPredictions').textContent,/Sleeping now/);
+  doc.getElementById('babySleep').click(); await settle(); assert.match(doc.getElementById('babySleep').textContent,/Start sleep/);
+  assert.deepEqual(errors,[]);
+});
 test('sample preview keeps data isolated and supports navigation, grocery editing and recurring chore undo', async t => {
   const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
   assert.ok(doc.getElementById('gate').classList.contains('hidden'));

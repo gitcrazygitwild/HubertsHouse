@@ -5,6 +5,19 @@ const read = key => { try { return localStorage.getItem(key); } catch { return n
 const write = (key, value) => { try { localStorage.setItem(key, value); } catch {} };
 
 export function initDashboard({ onAppearanceChange = () => {} } = {}) {
+  function theme(value) {
+    const selected = value === 'dark' ? 'dark' : 'light';
+    document.documentElement.dataset.theme = selected;
+    for (const id of ['themeToggle', 'settingsThemeToggle']) {
+      const button = $(id); if (!button) continue;
+      button.setAttribute('aria-pressed', String(selected === 'dark'));
+      button.textContent = selected === 'dark' ? '☀ Light mode' : '☾ Dark mode';
+    }
+    write('hh_theme', selected);
+  }
+  const savedTheme = read('hh_theme');
+  theme(savedTheme || (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+  for (const id of ['themeToggle', 'settingsThemeToggle']) $(id)?.addEventListener('click', () => theme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'));
   const palettes = ['sage', 'coast', 'clay'];
   function palette(value) {
     const selected = palettes.includes(value) ? value : 'sage';

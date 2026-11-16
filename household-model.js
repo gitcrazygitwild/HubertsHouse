@@ -37,6 +37,7 @@ export function validateItem(data) {
   if (!title || title.length > 180) throw new Error('Add a name under 180 characters.');
   if (data.due) parseDay(data.due);
   if (!Object.hasOwn(OWNERS, data.owner)) throw new Error('Choose a household member.');
+  if (data.withFrankie !== undefined && typeof data.withFrankie !== 'boolean') throw new Error('Choose whether Frankie is coming along.');
   if (!['none', 'daily', 'weekly', 'monthly'].includes(data.cadence)) throw new Error('Choose a valid repeat schedule.');
   if (data.kind === 'chore' && data.cadence !== 'none' && !data.due) throw new Error('Choose a first due date for a repeating chore.');
   return { ...data, title };

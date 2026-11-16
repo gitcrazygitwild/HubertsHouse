@@ -16,6 +16,17 @@ export function homeCalendarWeek(events, anchor) {
   return { start, end, days, count: plans.length };
 }
 
+export function homeCalendarRange(events, anchor, view = 'week') {
+  if (view === 'week') return homeCalendarWeek(events, anchor);
+  const start = startOfDay(anchor), end = new Date(start);
+  if (view === 'month') { start.setDate(1); start.setDate(1 - start.getDay()); end.setTime(+start); end.setDate(end.getDate() + 42); }
+  else end.setDate(end.getDate() + 1);
+  const plans = events.filter(event => localDate(event.start) < end && eventEnd(event) > start);
+  const days = [];
+  for (let date = new Date(start); date < end; date.setDate(date.getDate() + 1)) days.push({ date: new Date(date), events: eventsOnDay(plans, date) });
+  return { start, end, days, count: plans.length };
+}
+
 function eventTime(event, day) {
   if (event.allDay) return 'All day';
   const start = localDate(event.start), end = eventEnd(event);
@@ -33,47 +44,60 @@ function eventCard(event, day, now) {
   const happening = !event.allDay && start <= now && end > now && dateKey(day) === dateKey(now);
   const progress = checklistProgress(props.checklist);
   const progressHTML = progress.total ? `<span class="home-event-checklist" aria-label="${progress.done} of ${progress.total} checklist items complete">✓ ${progress.done}/${progress.total}</span>` : '';
-  return `<button type="button" class="home-week-event owner-${owner}${end <= now ? ' is-past' : ''}${happening ? ' is-happening' : ''}" data-home-event="${esc(props.sourceId || event.id)}" data-occurrence="${esc(start.toISOString())}">
+  return `<button type="button" class="home-week-event owner-${owner}${props.withFrankie ? ' with-frankie' : ''}${end <= now ? ' is-past' : ''}${happening ? ' is-happening' : ''}" data-home-event="${esc(props.sourceId || event.id)}" data-occurrence="${esc(start.toISOString())}">
     <span class="home-event-time">${esc(eventTime(event, day))}${happening ? '<span class="home-event-now">Now</span>' : ''}</span>
     <strong>${esc(event.title)}</strong>
-    <span class="home-event-meta"><span>${esc(label)}${props.isRepeatOccurrence ? ' · ↻' : ''}${props.icloud ? ' · iCloud' : ''}</span>${progressHTML}</span>
+    <span class="home-event-meta"><span>${esc(label)}${props.withFrankie ? ' + Frankie' : ''}${props.isRepeatOccurrence ? ' · ↻' : ''}${props.icloud ? ' · iCloud' : ''}</span>${progressHTML}</span>
   </button>`;
 }
 
 export function initHomeCalendar({ getEvents, openEvent, addEvent, onRangeChange = () => {}, now = () => new Date() }) {
   const $ = id => document.getElementById(id);
   const text = (id, value) => { if ($(id).textContent !== value) $(id).textContent = value; };
-  let anchor = startOfDay(now()), followingToday = true, lastRange = '';
-  const getRange = () => { const end = new Date(anchor); end.setDate(end.getDate() + 7); return { start: new Date(anchor), end }; };
+  let anchor = startOfDay(now()), followingToday = true, lastRange = '', view = 'week';
+  try { const saved = localStorage.getItem('hh_home_calendar_view'); if (['day','week','month'].includes(saved)) view = saved; } catch {}
+  const getRange = () => { const { start, end } = homeCalendarRange([], anchor, view); return { start, end }; };
   function render() {
     const current = now();
     if (followingToday) anchor = startOfDay(current);
-    const week = homeCalendarWeek(getEvents(), anchor), today = dateKey(current);
-    const last = week.days[6].date;
+    const week = homeCalendarRange(getEvents(), anchor, view), today = dateKey(current);
+    const last = week.days.at(-1).date;
     const format = new Intl.DateTimeFormat([], { month: 'short', day: 'numeric', ...(anchor.getFullYear() !== current.getFullYear() || last.getFullYear() !== current.getFullYear() ? { year: 'numeric' } : {}) });
-    text('homeCalendarRange', format.formatRange(anchor, last));
-    text('homeCalendarSummary', `${week.count} plan${week.count === 1 ? '' : 's'} · ${followingToday ? 'today + the next six days' : 'seven days together'}`);
+    text('homeCalendarTitle', view === 'month' ? 'YOUR MONTH, TOGETHER' : view === 'day' ? 'YOUR DAY, TOGETHER' : 'YOUR WEEK, TOGETHER');
+    text('homeCalendarRange', view === 'month' ? anchor.toLocaleDateString([], { month:'long', year:'numeric' }) : view === 'day' ? anchor.toLocaleDateString([], { weekday:'long', month:'short', day:'numeric' }) : format.formatRange(anchor, last));
+    const summary = view === 'week' ? (followingToday ? 'today + the next six days' : 'seven days together') : view === 'month' ? 'in the month grid' : 'on this day';
+    text('homeCalendarSummary', `${week.count} plan${week.count === 1 ? '' : 's'} · ${summary}`);
+    $('homeWeek').dataset.calendarMode = view;
+    document.querySelectorAll('[data-home-view]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.homeView === view)));
+    for (const [id, direction] of [['homeCalendarPrev','Previous'], ['homeCalendarNext','Next']]) $(id).setAttribute('aria-label', `${direction} ${view === 'week' ? 'seven days' : view}`);
     $('homeCalendarToday').classList.toggle('is-current', followingToday);
     renderHTML($('homeWeek'), week.days.map(({ date, events }) => {
       const key = dateKey(date), isToday = key === today;
       const name = date.toLocaleDateString([], { weekday: 'short' });
       const longDate = date.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-      return `<section class="home-week-day${isToday ? ' is-today' : ''}" data-home-date="${key}" aria-label="${esc(longDate)}">
+      const shown = view === 'month' ? events.slice(0, 3) : events;
+      return `<section class="home-week-day${isToday ? ' is-today' : ''}${view === 'month' && date.getMonth() !== anchor.getMonth() ? ' outside-month' : ''}" data-home-date="${key}" aria-label="${esc(longDate)}">
         <button type="button" class="home-day-heading" data-week-day="${key}" aria-label="Open ${esc(longDate)} in the calendar"${isToday ? ' aria-current="date"' : ''}><span>${esc(name)}${isToday ? '<small>Today</small>' : ''}</span><strong>${date.getDate()}</strong></button>
-        <div class="home-day-plans">${events.length ? events.map(event => eventCard(event, date, current)).join('') : '<p class="home-day-empty">A little breathing room.</p>'}</div>
+        <div class="home-day-plans">${events.length ? shown.map(event => eventCard(event, date, current)).join('') : view === 'month' ? '' : '<p class="home-day-empty">A little breathing room.</p>'}${events.length > shown.length ? `<button type="button" class="home-more" data-week-day="${key}">+ ${events.length - shown.length} more</button>` : ''}</div>
         <button type="button" class="home-day-add" data-home-add="${key}" aria-label="Add a plan on ${esc(longDate)}"><span aria-hidden="true">＋</span> Add a plan</button>
       </section>`;
     }).join(''));
-    const rangeKey = dateKey(anchor);
+    const rangeKey = `${view}:${dateKey(anchor)}`;
     if (rangeKey !== lastRange) { lastRange = rangeKey; onRangeChange(getRange()); }
   }
-  function move(days) {
-    anchor.setDate(anchor.getDate() + days);
+  function move(direction) {
+    if (view === 'month') { anchor.setDate(1); anchor.setMonth(anchor.getMonth() + direction); }
+    else anchor.setDate(anchor.getDate() + direction * (view === 'day' ? 1 : 7));
     followingToday = dateKey(anchor) === dateKey(now());
     render();
   }
-  $('homeCalendarPrev').addEventListener('click', () => move(-7));
-  $('homeCalendarNext').addEventListener('click', () => move(7));
+  $('homeCalendarPrev').addEventListener('click', () => move(-1));
+  $('homeCalendarNext').addEventListener('click', () => move(1));
+  document.querySelectorAll('[data-home-view]').forEach(button => button.addEventListener('click', () => {
+    view = button.dataset.homeView;
+    try { localStorage.setItem('hh_home_calendar_view', view); } catch {}
+    render();
+  }));
   $('homeCalendarToday').addEventListener('click', () => { followingToday = true; render(); });
   $('homeWeek').addEventListener('click', event => {
     const card = event.target.closest('[data-home-event]');

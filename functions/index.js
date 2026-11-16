@@ -5,6 +5,8 @@ import { defineSecret } from 'firebase-functions/params';
 import { CalDAV, CalendarError, resourceToken, appleURL } from './caldav.js';
 import { readEvents, writeEvent, canDelete } from './ical.js';
 import { encryptCredential, decryptCredential } from './crypto.js';
+import { HuckleberryError } from './huckleberry-provider.js';
+import { createHuckleberryHandler } from './huckleberry-service.js';
 initializeApp();
 const db = getFirestore();
 const encryptionKey = defineSecret('CALENDAR_ENCRYPTION_KEY');
@@ -18,12 +20,13 @@ function endpoint(handler) {
     try { return await handler(request.auth.uid,request.data || {}); }
     catch (error) {
       if (error instanceof HttpsError) throw error;
-      if (error instanceof CalendarError) throw new HttpsError(error.code,error.message);
+      if (error instanceof CalendarError || error instanceof HuckleberryError) throw new HttpsError(error.code,error.message);
       // Never log request bodies, credentials, calendar data, or raw provider errors.
-      throw new HttpsError('unavailable','The calendar service is temporarily unavailable. Try again shortly.');
+      throw new HttpsError('unavailable','The connected service is temporarily unavailable. Try again shortly.');
     }
   });
 }
+export const huckleberry = endpoint(createHuckleberryHandler({db,key:() => encryptionKey.value()}));
 const connectionRef = uid => db.doc(`privateCalendarConnections/${uid}`);
 async function connection(uid) {
   const snap = await connectionRef(uid).get(); if (!snap.exists) throw new CalendarError('failed-precondition','Connect your iCloud account first.');

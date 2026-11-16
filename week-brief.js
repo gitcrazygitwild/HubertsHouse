@@ -3,6 +3,7 @@ import { eventsOnDay, localDate, eventEnd } from './calendar-model.js';
 import { renderHTML } from './dom.js';
 
 function sharedPeople(a, b) {
+  if (a.extendedProps?.withFrankie && b.extendedProps?.withFrankie) return true;
   const ownerA = a.extendedProps?.owner || 'both', ownerB = b.extendedProps?.owner || 'both';
   if (ownerA === 'both' || ownerB === 'both') return true;
   if (ownerA !== ownerB) return false;

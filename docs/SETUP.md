@@ -1,4 +1,4 @@
-# Activate household sign-in and iCloud
+# Activate household sign-in, iCloud, and Huckleberry
 
 The repository is configured for the existing Firebase project **huberts-house**. The live app is **https://huberts-house.web.app**. Authentication, membership rules, and the private calendar functions are deployed as of November 15, 2026. Existing users can start at step 4 to connect their Apple account. Steps 1–3 document provisioning a new deployment. No data migration is required: household events keep using the original `events` collection.
 
@@ -32,13 +32,13 @@ openssl rand -base64 32 | firebase functions:secrets:set CALENDAR_ENCRYPTION_KEY
 firebase deploy --only functions:household-calendar --project huberts-house
 ```
 
-Keep the generated secret intact for existing connections. Rotating it requires reconnecting the Apple accounts (or a separate credential migration). The Functions service account needs its normal Firestore access and permission to read this secret; Firebase’s deployment prompts establish the secret binding.
+Keep the generated secret intact for existing connections. Rotating it requires reconnecting the Apple and Huckleberry accounts (or a separate credential migration). The Functions service account needs its normal Firestore access and permission to read this secret; Firebase’s deployment prompts establish the secret binding.
 
 The deployed runtime must be able to reach `https://caldav.icloud.com` and Apple's `https://pNN-caldav.icloud.com` calendar shards. The application refuses credentials on other hosts and checks redirect destinations before following them.
 
 ## 3. Activate and publish the frontend
 
-Change `calendarServiceEnabled` to `true` in `config.js` only after the service has deployed. There are no private values in that file.
+Change `calendarServiceEnabled` and `huckleberryServiceEnabled` to `true` in `config.js` only after the service has deployed. There are no private values in that file.
 
 ```sh
 npm run check
@@ -81,3 +81,32 @@ Use a disposable test calendar and event for the initial checks:
 - Check signed-out reads are denied, a non-member Firebase account is denied, and members cannot directly read `privateCalendarConnections`.
 
 The deployed functions are ACTIVE with zero minimum instances and a maximum of one instance per function. Build-image cleanup is set to one day. The private Apple connection and the live Apple round trip still require the account owner to connect in the app. Automated tests use simulated provider responses and never contact or modify real calendars. The deployment environment allows Google APIs but blocks direct calls to the public `cloudfunctions.net` URLs, so the live callable response must also be confirmed from the app. These usage controls are not a spending cap.
+
+
+## 5. Connect Huckleberry in the app
+
+The `huckleberry` callable uses the same existing encryption secret and household membership check as the calendar service. It is deployed with zero minimum instances, at most one instance, and concurrency one. The runtime needs outbound HTTPS/gRPC access to Google Identity Toolkit, Secure Token, and Firestore for Huckleberry’s `simpleintervals` project. The public API configuration is not a credential; each request uses the connected user's Huckleberry ID token, never this project's service account.
+
+1. Open **Settings → Huckleberry** while signed in to Hubert’s House.
+2. Enter the Huckleberry email/password in that form, never in chat. Apple/Google-only sign-ins need an email/password login established with Huckleberry first. This is a community integration using an undocumented API, not an official Huckleberry partnership; provider changes may interrupt it.
+3. Check the baby's IANA time zone (for example `America/New_York`). With multiple child profiles, choose one and save. A single profile is selected automatically.
+4. On Home, use **Start sleep / Finish sleep**, **Bottle**, **Diaper**, or **Finished sleep**. Manual entries use the device's time zone, which the dialog displays. Writes go directly to the selected Huckleberry child. Edit/delete existing logs in Huckleberry.
+5. Confirm a real intended entry appears in Huckleberry, then change a log there and refresh Home. No real baby logs are created by automated tests or deployment.
+
+The password is cleared from the form immediately and is not stored. Only the ID/refresh session is encrypted, bound to the household user's UID with a Huckleberry-specific authentication context, in `privateHuckleberryConnections/{uid}`. A normalized snapshot containing only the selected child's recent tracking data is cached in `privateBabySnapshots/{uid}`. Both collections deny all direct client reads/writes; member-only callable access is required. Child membership is rechecked before reads/writes. Nothing is saved in browser storage. Disconnect deletes the local connection and cached snapshot and leaves Huckleberry's records untouched.
+
+Visible Home/Settings sessions check at most every two minutes, with history refreshed at most every 15 minutes during passive checks; explicit refreshes and completed writes load fresh history. Background/hidden pages do not poll. Reads are bounded to 14 days, at most 500 regular sleep entries and 80 archived batch documents; reaching a limit marks history incomplete and suppresses the personal estimate. Writes use stable request IDs and transactions to avoid duplicates. Finishing sleep checks the timer's UUID/start to avoid stopping a different session. Backdated entries do not replace a newer last-entry summary.
+
+**SweetSpot:** displays the selected stored Huckleberry prediction, with expired/stale states. SweetSpot requires an eligible Huckleberry plan; this connection does not unlock it. Huckleberry can wait until its app opens to recalculate, so refreshing this dashboard is not a promise of a newly calculated time.
+
+**Hubert’s Purrfect Window:** a transparent personal-history daytime estimate, independent of Huckleberry's algorithm. It merges overlapping/duplicate sleeps, filters overnight and obvious missing-log gaps, then uses up to 20 recent daytime wake gaps from the last 14 days. It prefers gaps beginning within three local clock hours of the latest wake, falling back to other daytime gaps when needed. At least three gaps across two days are required. The center is the median and the range is the interquartile range extended to at least ±10 minutes. The UI shows sample counts, varied/early patterns, passed windows, missing history, and active sleep. No age-based prescription or population model is claimed; this is a convenience estimate, not medical advice.
+
+This adds no separately billed API or AI model. An existing eligible Huckleberry subscription is still needed for SweetSpot, and ordinary Firebase Blaze usage applies. Instance limits and caching reduce usage but do not impose a dollar cap.
+
+## Family display acceptance checks
+
+- Switch Home between day/week/month, navigate across a month boundary, reload, and confirm the selected view persists.
+- Toggle dark mode, reload, and check the event editor, baby forms, and sidebar.
+- Enter monitor mode and use every sidebar destination. Return Home and confirm the quote, fact, word, joke, weather, missions, and cat crew remain available.
+- Save an event with hanry, Karena, or both plus Frankie. Confirm the adult color and pink stripe in both calendars and after reopening the editor. Other/custom assignments disable Frankie.
+- For iCloud events, verify the owner/Frankie assignment survives a save/refresh; Apple itself may not display Hubert’s custom accent.

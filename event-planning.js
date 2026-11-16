@@ -9,7 +9,7 @@ export function overlappingEvents(draft, events) {
     const props = event.extendedProps || {};
     if ((props.sourceId || event.id) === draft.id) return false;
     const owner = props.owner || 'both';
-    const samePerson = owner === 'both' || draft.owner === 'both' || (owner === draft.owner && (owner !== 'custom' || props.ownerCustom === draft.ownerCustom));
+    const samePerson = (draft.withFrankie && props.withFrankie) || owner === 'both' || draft.owner === 'both' || (owner === draft.owner && (owner !== 'custom' || props.ownerCustom === draft.ownerCustom));
     return samePerson && localDate(event.start) < end && eventEnd(event) > start;
   }).sort((a, b) => localDate(a.start) - localDate(b.start));
 }

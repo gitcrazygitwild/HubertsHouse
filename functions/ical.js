@@ -25,6 +25,9 @@ export function readEvents(object, calendar, start, end) {
       id:`icloud:${calendar.id}:${object.token}:${s.toString()}`, title:event.summary || '(Untitled)',
       start:outputDate(s), end:outputDate(e), allDay:s.isDate, notes:event.description || '',
       calendarId:calendar.id, calendarName:calendar.name, token:object.token, etag:object.etag || null,
+      owner:['hanry','karena','both','custom'].includes(event.component.getFirstPropertyValue('x-huberts-owner')) ? event.component.getFirstPropertyValue('x-huberts-owner') : 'both',
+      ownerCustom:String(event.component.getFirstPropertyValue('x-huberts-owner-name') || ''),
+      withFrankie:event.component.getFirstPropertyValue('x-huberts-frankie') === 'TRUE' && ['hanry','karena','both'].includes(event.component.getFirstPropertyValue('x-huberts-owner') || 'both'),
       color:calendar.color, uid:event.uid, recurring, readOnlyReason, icloud:true,
       // The existing household editor uses inclusive all-day ends.
       editEnd:s.isDate ? (() => { const last = e.clone(); last.adjust(-1,0,0,0); return `${localDate(last)}T00:00:00`; })() : outputDate(e)
@@ -85,6 +88,12 @@ export function writeEvent(payload, existing, uid, now = new Date()) {
     }
   }
   event.uid = event.uid || uid; event.summary = payload.title.trim(); event.description = payload.notes;
+  if (payload.owner !== undefined) {
+    if (!['hanry','karena','both','custom'].includes(payload.owner) || (payload.withFrankie && !['hanry','karena','both'].includes(payload.owner))) throw new CalendarError('invalid-argument','Frankie must be with hanry, Karena, or both.');
+    component.updatePropertyWithValue('x-huberts-owner', payload.owner);
+    component.updatePropertyWithValue('x-huberts-owner-name', String(payload.ownerCustom || '').slice(0,100));
+    component.updatePropertyWithValue('x-huberts-frankie', payload.withFrankie ? 'TRUE' : 'FALSE');
+  }
   component.removeAllProperties('duration');
   event.startDate = start; event.endDate = end;
   component.updatePropertyWithValue('dtstamp', utc(now)); component.updatePropertyWithValue('last-modified',utc(now));
