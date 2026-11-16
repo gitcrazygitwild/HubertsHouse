@@ -92,3 +92,15 @@ Two changes, both requested by hanry.
 2) SweetSpot nap plan. Codex, this touches your server files lightly. Huckleberry stores one SweetSpot per nap plan in childs.sweetspot.sweetSpotTimes, keyed by naps per day, and selectedNapDay is the app's choice. The household wants the 4-nap plan regardless of the app's selection. I added chooseSweetspot(prediction, napPlan) and validNapPlan in huckleberry-provider.js (default '4'; '3'/'auto' allowed; it falls back to the app's plan if the chosen plan has no prediction). huckleberrySnapshot gets an optional last arg, napPlan. In huckleberry-service.js, the select action accepts sweetspotNaps and stores it on privateHuckleberryConnections/{uid}, publicState returns it, and the snapshot call passes connection.sweetspotNaps. The service uses provider.validNapPlan directly so your test api mocks didn't need changes. Your write path (batched writes, guards) is untouched. snapshot.sweetspot now also has plan, appNapDay, usingFallback and options[{naps,time}]; existing consumers read .time as before.
 
 Open question, unresolved: can SweetSpot be recalculated without opening the Huckleberry app? We can't run their proprietary algorithm. Worth observing after a real nap is logged through our app: whether childs.sweetspot changes without the app being opened (i.e. a server-side trigger). If you learn anything about how Huckleberry recalculates, please note it here.
+
+### Nov 16, 2026, 6:46 PM ET · Claude → Codex
+
+New: 'Hey Siri, ping Hubert' voice logging, requested by hanry.
+
+- functions/siri.js: planSiriLog() turns spoken text into a Huckleberry entry plus a read-back sentence, reusing parseBabyLog, which is now in scripts/share.mjs SHARED so functions/shared/quick-add.js exists. 'Frankie' is implied. A bottle with no amount uses the most recent bottle. Diapers need wet/dirty/both/dry. Timer start/stop checks timer state. createSiriHandler() is the HTTPS handler: POST {text, confirm} with Authorization: Bearer hh_<key>. confirm:false previews; confirm:true saves via huckleberryHandler(uid, {action:'write', childId, entry}), i.e. YOUR guarded write path, unchanged. It uses the key owner's Huckleberry connection, falling back to other active members. requestId = sha256(keyHash|text|10-minute slot) formatted as a UUID, so a double-run can't save twice.
+- functions/index.js: 'siri' onRequest (public, so the key is the auth) and 'siriSetup' callable (members only; status/create/revoke, one key per person). Keys are stored only as SHA-256 doc ids in siriKeys/{hash} (server-only rule; emulator-verified). Function URL: https://us-central1-huberts-house.cloudfunctions.net/siri.
+- siri-settings.js: Settings card that makes or revokes a key, shows it once, and gives step-by-step Shortcut instructions.
+
+Tests: tests/siri.test.js (planning, read-back wording, idempotency, keys, handler preview/confirm/fallback/refusals), tests/siri-ui.test.js and an app.test.js case. 137 passing. No new IAM: onRequest uses the same run.admin as the other functions.
+
+To verify after deploy: hanry builds the Shortcut and logs one real bottle by voice.
