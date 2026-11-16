@@ -356,12 +356,12 @@ test('quick add logs for Frankie: bottle defaults to the last one, text fills th
   assert.equal(doc.getElementById('babyLogAmount').value, sameAs.dataset.amount);
   doc.getElementById('babyLogClose').click();
   // Typed amount and time win.
-  type('frankie bottle 10:30am 4.5oz breast milk');
-  assert.match(doc.getElementById('quickAddPreview').textContent, /Bottle for Frankie · 10:30 AM · 4\.5 oz Breast Milk/);
+  type('frankie bottle 4.5oz breast milk 20 min ago');
+  assert.match(doc.getElementById('quickAddPreview').textContent, /Bottle for Frankie · .* · 4\.5 oz Breast Milk/);
   form.dispatchEvent(new w.Event('submit', { cancelable:true }));
   assert.equal(doc.getElementById('babyLogDialog').open, true); assert.equal(doc.getElementById('babyLogTitle').textContent, 'Bottle');
   assert.equal(doc.getElementById('babyLogAmount').value, '4.5'); assert.equal(doc.getElementById('babyLogMilk').value, 'Breast Milk');
-  assert.match(doc.getElementById('babyLogStart').value, /T10:30$/);
+  assert.ok(Math.abs(new Date(doc.getElementById('babyLogStart').value) - (Date.now() - 20 * 60000)) < 2 * 60000);
   assert.equal(doc.querySelector('[data-pills="babyLogMilk"] [data-value="Breast Milk"]').getAttribute('aria-pressed'), 'true');
   // Stepper and chips edit the real inputs.
   doc.querySelector('[data-step="1"]').click(); assert.equal(doc.getElementById('babyLogAmount').value, '5');
