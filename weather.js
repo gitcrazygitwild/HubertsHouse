@@ -27,6 +27,7 @@ export function initWeather({ demo = false } = {}) {
   const degree = value => value === null ? '—' : `${Math.round(units === 'C' ? (value - 32) * 5 / 9 : value)}°`;
   function render(note = '') {
     statusNote = note;
+    window.hhForecast = forecast; window.dispatchEvent(new CustomEvent('hh:forecast', { detail:forecast }));
     const today = forecast?.days[0];
     document.querySelectorAll('[data-weather-icon]').forEach(el => { el.innerHTML = weatherIcon(today?.kind); });
     const link = $('weatherAppLink');
