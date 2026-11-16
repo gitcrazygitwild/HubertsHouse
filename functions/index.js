@@ -23,7 +23,7 @@ function endpoint(handler) {
     try { return await handler(request.auth.uid,request.data || {}); }
     catch (error) {
       if (error instanceof HttpsError) throw error;
-      if(error instanceof HuckleberryError && error.details?.service==='huckleberry') warn('Huckleberry authentication rejected',{reason:error.details.reason,httpStatus:error.details.httpStatus});
+      if(error instanceof HuckleberryError && error.details?.service==='huckleberry') warn('Huckleberry request rejected',{operation:error.details.operation || 'authentication',reason:error.details.reason,...(error.details.httpStatus !== undefined ? {httpStatus:error.details.httpStatus} : {}),...(error.details.grpcCode !== undefined ? {grpcCode:error.details.grpcCode} : {})});
       if (error instanceof CalendarError || error instanceof HuckleberryError || error instanceof NewsletterError) throw new HttpsError(error.code,error.message,error instanceof HuckleberryError ? error.details : undefined);
       // Never log request bodies, credentials, calendar data, or raw provider errors.
       throw new HttpsError('unavailable','The connected service is temporarily unavailable. Try again shortly.');

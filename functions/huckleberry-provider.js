@@ -179,41 +179,64 @@ export async function writeHuckleberry(client, childId, input, timezone, now = D
   const parent = client.doc(`${collection}/${child}`), hash = createHash('sha256').update(`${child}/${input.requestId}/${data.kind}`).digest('hex');
   const entryId = collection === 'sleep' ? hash.slice(0,16) : `${data.start}-${hash.slice(0,20)}`;
   const interval = parent.collection('intervals').doc(entryId), seconds = now / 1000;
-  return client.runTransaction(async transaction => {
-    const [current, existing] = await Promise.all([transaction.get(parent), transaction.get(interval)]);
+  // Huckleberry accepts ordinary reads with a Firebase user token, but rejects
+  // the server SDK's locking read/write transaction before any write occurs.
+  // Use an atomic batch with optimistic document-version preconditions instead.
+  // Stable interval IDs and create-only writes make uncertain retries safe.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const [current, existing] = await Promise.all([parent.get(), interval.get()]);
     if (existing.exists) return {saved:true,duplicate:true};
     const state = current.data() || {}, timer = state.timer || {}, offset = offsetAt(data.start, timezone);
+    const batch = client.batch(), patch = {};
     if (data.kind === 'sleep-start') {
       if (timer.uuid === hash.slice(0,16)) return {saved:true,duplicate:true};
       if (timer.active) fail('failed-precondition','A sleep timer is already running. Refresh to see it.');
-      transaction.set(parent,{timer:{active:true,paused:false,timerStartTime:data.start,timestamp:{seconds},local_timestamp:seconds,uuid:hash.slice(0,16)}},{mergeFields:['timer']});
-      return {saved:true};
-    }
-    let entry, last, field;
-    if (data.kind === 'sleep-stop') {
-      if (!timer.active || !input.timerId || timer.uuid !== input.timerId || epochMs(timer.timerStartTime) !== Date.parse(input.expectedStart)) fail('aborted','This sleep timer changed in Huckleberry. Refresh before stopping it.');
-      const start = epochMs(timer.timerStartTime), end = timer.paused ? epochMs(timer.timerEndTime) : data.start;
-      if (!start || !end || end <= start || end - start > 48 * 3600000 || end > now + 60000) fail('failed-precondition','Check this sleep timer in Huckleberry before completing it.');
-      entry = {start:start / 1000,duration:Math.floor((end - start) / 1000),offset:offsetAt(start,timezone),end_offset:offsetAt(end,timezone),...(timer.details ? {details:timer.details} : {}),lastUpdated:seconds};
-      field = 'lastSleep'; last = {start:entry.start,duration:entry.duration,offset:entry.offset};
-    } else if (data.kind === 'sleep-log') {
-      entry = {start:data.start / 1000,duration:Math.floor((data.end - data.start) / 1000),offset,end_offset:offsetAt(data.end,timezone),lastUpdated:seconds,...(data.notes ? {details:{notes:data.notes}} : {})};
-      field = 'lastSleep'; last = {start:entry.start,duration:entry.duration,offset};
-    } else if (data.kind === 'bottle') {
-      entry = {mode:'bottle',start:data.start / 1000,amount:data.amount,units:data.units,bottleType:data.bottleType,offset,end_offset:offset,lastUpdated:seconds,...(data.notes ? {notes:data.notes} : {})};
-      field = 'lastBottle'; last = {mode:'bottle',start:entry.start,bottleType:data.bottleType,bottleAmount:data.amount,bottleUnits:data.units,offset};
+      patch.timer = {active:true,paused:false,timerStartTime:data.start,timestamp:{seconds},local_timestamp:seconds,uuid:hash.slice(0,16)};
     } else {
-      entry = {mode:data.mode,start:data.start / 1000,offset,lastUpdated:seconds,...(data.notes ? {notes:data.notes} : {})};
-      field = 'lastDiaper'; last = {start:entry.start,mode:data.mode,offset};
+      let entry, last, field;
+      if (data.kind === 'sleep-stop') {
+        if (!timer.active || !input.timerId || timer.uuid !== input.timerId || epochMs(timer.timerStartTime) !== Date.parse(input.expectedStart)) fail('aborted','This sleep timer changed in Huckleberry. Refresh before stopping it.');
+        const start = epochMs(timer.timerStartTime), end = timer.paused ? epochMs(timer.timerEndTime) : data.start;
+        if (!start || !end || end <= start || end - start > 48 * 3600000 || end > now + 60000) fail('failed-precondition','Check this sleep timer in Huckleberry before completing it.');
+        entry = {start:start / 1000,duration:Math.floor((end - start) / 1000),offset:offsetAt(start,timezone),end_offset:offsetAt(end,timezone),...(timer.details ? {details:timer.details} : {}),lastUpdated:seconds};
+        field = 'lastSleep'; last = {start:entry.start,duration:entry.duration,offset:entry.offset};
+      } else if (data.kind === 'sleep-log') {
+        entry = {start:data.start / 1000,duration:Math.floor((data.end - data.start) / 1000),offset,end_offset:offsetAt(data.end,timezone),lastUpdated:seconds,...(data.notes ? {details:{notes:data.notes}} : {})};
+        field = 'lastSleep'; last = {start:entry.start,duration:entry.duration,offset};
+      } else if (data.kind === 'bottle') {
+        entry = {mode:'bottle',start:data.start / 1000,amount:data.amount,units:data.units,bottleType:data.bottleType,offset,end_offset:offset,lastUpdated:seconds,...(data.notes ? {notes:data.notes} : {})};
+        field = 'lastBottle'; last = {mode:'bottle',start:entry.start,bottleType:data.bottleType,bottleAmount:data.amount,bottleUnits:data.units,offset};
+      } else {
+        entry = {mode:data.mode,start:data.start / 1000,offset,lastUpdated:seconds,...(data.notes ? {notes:data.notes} : {})};
+        field = 'lastDiaper'; last = {start:entry.start,mode:data.mode,offset};
+      }
+      batch.create(interval, entry);
+      const prefs = {};
+      if (!state.prefs?.[field]?.start || epochMs(state.prefs[field].start) <= epochMs(last.start)) {
+        prefs[field] = last; prefs.timestamp = {seconds}; prefs.local_timestamp = seconds;
+        if (data.kind === 'bottle') Object.assign(prefs,{bottleType:data.bottleType,bottleAmount:data.amount,bottleUnits:data.units});
+      }
+      for (const [name,value] of Object.entries(prefs)) patch[`prefs.${name}`] = value;
+      if (data.kind === 'sleep-stop') patch.timer = {active:false,paused:false,timerStartTime:null,uuid:timer.uuid,timestamp:{seconds},local_timestamp:seconds};
     }
-    transaction.create(interval, entry);
-    const prefs = {};
-    if (!state.prefs?.[field]?.start || epochMs(state.prefs[field].start) <= epochMs(last.start)) {
-      prefs[field] = last; prefs.timestamp = {seconds}; prefs.local_timestamp = seconds;
-      if (data.kind === 'bottle') Object.assign(prefs,{bottleType:data.bottleType,bottleAmount:data.amount,bottleUnits:data.units});
+    if (Object.keys(patch).length) {
+      if (current.exists) batch.update(parent,patch,{lastUpdateTime:current.updateTime});
+      else {
+        // create() takes nested document data, while update() takes field paths.
+        const initial = {};
+        for (const [path,value] of Object.entries(patch)) {
+          if (path.startsWith('prefs.')) (initial.prefs ||= {})[path.slice(6)] = value;
+          else initial[path] = value;
+        }
+        batch.create(parent,initial);
+      }
     }
-    if (Object.keys(prefs).length) transaction.set(parent,{prefs},{merge:true});
-    if (data.kind === 'sleep-stop') transaction.update(parent,{timer:{active:false,paused:false,timerStartTime:null,uuid:timer.uuid,timestamp:{seconds},local_timestamp:seconds}});
-    return {saved:true};
-  }, {maxAttempts:3});
+    try { await batch.commit(); return {saved:true}; }
+    catch (error) {
+      // Concurrent create, stale updateTime, or contention: re-read everything
+      // and recheck the timer/newest-summary guards before attempting again.
+      if (![6,9,10].includes(error.code)) throw error;
+      if (attempt === 2) fail('aborted','Huckleberry changed while saving this entry. Refresh and try again.');
+    }
+  }
 }
