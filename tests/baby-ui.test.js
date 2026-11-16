@@ -5,14 +5,14 @@ import {JSDOM} from 'jsdom';
 import {escapeHTML} from '../household-model.js';
 import {renderHTML} from '../dom.js';
 import {purrfectWindow,huckleberryPrediction,miaForecast} from '../baby-model.js';
-import {predictionEntry,scorePredictions,MODELS} from '../prediction-log.js';
+import {sweetspotEntry,sweetspotPatch,previousSweetspot,scorePredictions} from '../prediction-log.js';
 const settle = () => new Promise(resolve => setTimeout(resolve,20));
 const connection = {connected:true,selected:'child',children:[{id:'child',name:'Frankie'}],timezone:'America/New_York'};
 const snapshot = {childId:'child',name:'Frankie',checkedAt:new Date().toISOString(),sleeps:[],historyComplete:true,timer:{active:false},sweetspot:{time:null}};
 async function fixture(handler) {
   const dom = new JSDOM(await readFile(new URL('../index.html',import.meta.url),'utf8'),{url:'https://house.test/',runScripts:'outside-only',pretendToBeVisual:true}), w=dom.window, notices=[];
   w.setInterval=()=>0; w.HTMLDialogElement.prototype.showModal=function(){this.open=true;}; w.HTMLDialogElement.prototype.close=function(){this.open=false;};
-  Object.assign(w,{config:{huckleberryServiceEnabled:true},getFunctions:()=>({}),httpsCallable:()=>async data=>({data:await handler(data)}),esc:escapeHTML,renderHTML,purrfectWindow,huckleberryPrediction,miaForecast,predictionEntry,scorePredictions,MODELS,renderFrankie:()=>{},initFrankie:()=>{},sampleHistory:()=>({sleeps:[],bottles:[]}),samplePredictions:()=>[],showNotice:value=>notices.push(value),showView:()=>{}});
+  Object.assign(w,{config:{huckleberryServiceEnabled:true},getFunctions:()=>({}),httpsCallable:()=>async data=>({data:await handler(data)}),esc:escapeHTML,renderHTML,purrfectWindow,huckleberryPrediction,miaForecast,sweetspotEntry,sweetspotPatch,previousSweetspot,scorePredictions,renderFrankie:()=>{},initFrankie:()=>{},sampleHistory:()=>({sleeps:[],bottles:[]}),samplePredictions:()=>[],showNotice:value=>notices.push(value),showView:()=>{}});
   const source = (await readFile(new URL('../baby.js',import.meta.url),'utf8')).replace(/^import[^\n]+\n/gm,'').replace(/\bexport /g,'');
   w.eval(source+';window.initBaby=initHuckleberry;'); await w.initBaby({}); return {dom,w,doc:w.document,notices};
 }

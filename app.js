@@ -1,7 +1,7 @@
 import { overlappingEvents, preferredCalendar } from './event-planning.js';
 import { initCatCrew } from './cat-crew.js';
 import { initHuckleberry } from './baby.js';
-import { missingFields } from './prediction-log.js';
+import { sweetspotPatch } from './prediction-log.js';
 import { initUpgrades } from './upgrades.js';
 import { initEventDateEditor } from './event-editor.js';
 import { holidayEvents, holidaysEnabled } from './holidays.js';
@@ -593,7 +593,7 @@ function startUpgrades() {
     ]
   });
 }
-// Nap scoreboard records: add missing guesses only; the rules freeze the rest.
+// Nap scoreboard: the latest SweetSpot per wake-up (Hubert and Mia are replayed).
 function predictionStore() {
   const col = collection(db,'babyPredictions');
   return {
@@ -601,9 +601,9 @@ function predictionStore() {
     async record(entry) {
       const { id, ...data } = entry, ref = doc(col,id);
       await runTransaction(db,async transaction => {
-        const current = await transaction.get(ref), patch = missingFields(current.exists() ? current.data() : null, data);
+        const current = await transaction.get(ref), patch = sweetspotPatch(current.exists() ? current.data() : null, data);
         if (!patch) return;
-        if (current.exists()) transaction.update(ref,patch); else transaction.set(ref,{...patch,createdAt:serverTimestamp()});
+        if (current.exists()) transaction.update(ref,{...patch,updatedAt:serverTimestamp()}); else transaction.set(ref,{...patch,createdAt:serverTimestamp()});
       });
     }
   };

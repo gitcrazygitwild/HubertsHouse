@@ -3,7 +3,7 @@ import { config } from './config.js';
 import { escapeHTML as esc } from './household-model.js';
 import { showNotice, showView } from './household.js';
 import { purrfectWindow, huckleberryPrediction, miaForecast } from './baby-model.js';
-import { predictionEntry, scorePredictions, MODELS } from './prediction-log.js';
+import { sweetspotEntry, sweetspotPatch, previousSweetspot, scorePredictions } from './prediction-log.js';
 import { sampleHistory, samplePredictions } from './baby-sample.js';
 import { renderFrankie, initFrankie } from './frankie.js';
 import { renderHTML } from './dom.js';
@@ -33,14 +33,14 @@ function home() {
   }
   const huck = huckleberryPrediction(snapshot), own = purrfectWindow({sleeps:snapshot.sleeps,timer:snapshot.timer,timezone:zone(),complete:snapshot.historyComplete});
   const mia = miaForecast({sleeps:snapshot.sleeps,timer:snapshot.timer,timezone:zone(),complete:snapshot.historyComplete});
-  logPredictions(huck, own, mia); glance(huck, own, mia);
-  const score = scorePredictions(predictions, snapshot.sleeps, snapshot.timer), leader = score.summary.find(model => model.key === score.leader);
+  logPredictions(huck); glance(huck, own, mia);
+  const score = scorePredictions(predictions, snapshot.sleeps, snapshot.timer, zone()), leader = score.summary.find(model => model.key === score.leader);
   const miaWhy = mia.available ? [`nap ${mia.napNumber} usually comes ${Math.floor(mia.baseMinutes / 60)}h ${mia.baseMinutes % 60}m after waking`, mia.trendMinutes ? `${mia.trendMinutes > 0 ? '+' : '−'}${Math.abs(mia.trendMinutes)}m for this week’s trend` : '', mia.napMinutes ? `${mia.napMinutes > 0 ? '+' : '−'}${Math.abs(mia.napMinutes)}m because the last nap was ${mia.previousNap}m (usually ${mia.typicalNap}m)` : ''].filter(Boolean).join(', ') : '';
   const outdated = Date.now() - Date.parse(snapshot.checkedAt) > 10 * 60000;
   renderHTML($('babyPredictions'), `<article class="nap-card huck-nap"><div class="nap-label"><span>HUCKLEBERRY</span><span>${demo ? 'Sample prediction' : 'SweetSpot®'}</span></div><h3>${huck.available ? esc(time(huck.time)) : 'Waiting for a prediction'}</h3><span class="nap-state">${huck.sleeping ? 'Sleep in progress' : huck.expired ? 'Previous prediction · passed' : huck.staleRead ? 'Saved prediction · stale' : huck.available ? 'Stored in Huckleberry' : 'From your Huckleberry account'}</span><p>${esc(huck.available ? huck.note : huck.reason)} Your Huckleberry plan must include SweetSpot.</p></article>
     <article class="nap-card purr-nap"><div class="nap-label"><span>HUBERT’S PURRFECT WINDOW</span><span aria-hidden="true">🐾</span></div><h3>${own.available ? `${esc(time(own.start))} – ${esc(time(own.end))}` : 'Learning your rhythm'}</h3><span class="nap-state">${outdated ? 'Saved history · refresh needed' : own.available ? `${esc(own.pattern)} · ${own.phase === 'passed' ? 'window passed' : own.phase === 'within' ? 'in the window' : 'next daytime window'}` : 'Your own sleep-history estimate'}</span><p>${own.available ? `Based on ${own.samples} logged wake windows across ${own.days} days${own.matchedTime ? ', around this time of day' : ''}. Center: ${esc(time(own.target))}.` : esc(own.reason)}</p></article>
     <article class="nap-card mia-nap"><div class="nap-label"><span>MIA’S CATNAP FORECAST</span><span aria-hidden="true">🌤</span></div><h3>${mia.available ? `${esc(time(mia.start))} – ${esc(time(mia.end))}` : 'Gathering clues'}</h3><span class="nap-state">${outdated ? 'Saved history · refresh needed' : mia.available ? `${esc(mia.confidence)} · nap ${mia.napNumber} of the day · ${mia.phase === 'passed' ? 'window passed' : mia.phase === 'within' ? 'in the window' : 'up next'}` : 'Nap-by-nap forecast'}</span><p>${mia.available ? `${esc(miaWhy.charAt(0).toUpperCase() + miaWhy.slice(1))}. Best guess: ${esc(time(mia.target))}.` : esc(mia.reason)}</p></article>`);
-  renderHTML($('babyScore'), score.scoredNaps ? `<button type="button" class="baby-score" data-go="frankie"><span aria-hidden="true">🏆</span><span>${leader ? `<strong>${esc(leader.owner)}’s ${esc(leader.name)}</strong> is most accurate so far · ±${leader.mae} min across ${leader.n} naps` : `${score.scoredNaps} nap${score.scoredNaps === 1 ? '' : 's'} scored · a leader appears after three naps each`}</span><span class="baby-score-link">Scoreboard →</span></button>` : '');
+  renderHTML($('babyScore'), score.scoredNaps ? `<button type="button" class="baby-score" data-go="frankie"><span aria-hidden="true">🏆</span><span>${leader ? `<strong>${esc(leader.owner)}’s ${esc(leader.name)}</strong> is most accurate so far · ±${leader.mae} min across ${leader.n} naps` : `${score.scoredNaps} nap${score.scoredNaps === 1 ? '' : 's'} scored · a leader appears after three scored naps`}</span><span class="baby-score-link">Scoreboard →</span></button>` : '');
   const timer = snapshot.timer, elapsed = timer?.start ? Math.max(0,Math.floor(((timer.paused ? Date.parse(timer.end) : Date.now()) - Date.parse(timer.start)) / 60000)) : 0;
   const latest = snapshot.sleeps.at(-1), bottle = snapshot.lastBottle, diaper = snapshot.lastDiaper;
   renderHTML($('babyStats'), `<div><span>☾ Sleep</span><strong>${timer?.active ? `${Math.floor(elapsed / 60)}h ${elapsed % 60}m${timer.paused ? ' · paused' : ' · asleep'}` : latest ? `Awake since ${esc(time(latest.end))}` : 'No sleep logged'}</strong><small>${timer?.active ? `Started ${esc(when(timer.start))}` : latest ? esc(when(latest.end)) : 'Start a timer or log a finished sleep'}</small></div><div><span>◒ Last bottle</span><strong>${bottle ? `${esc(bottle.amount ?? '—')} ${esc(bottle.units)} · ${esc(bottle.type)}` : 'No bottle logged'}</strong><small>${esc(when(bottle?.time))}</small></div><div><span>♡ Last diaper</span><strong>${diaper ? ({pee:'Wet',poo:'Dirty',both:'Wet + dirty',dry:'Dry'}[diaper.mode] || 'Diaper change') : 'No change logged'}</strong><small>${esc(when(diaper?.time))}</small></div>`);
@@ -51,15 +51,15 @@ function frankie() { renderFrankie({snapshot,timezone:zone(),predictions,demo,co
 function glance(huck, own, mia) {
   window.dispatchEvent(new CustomEvent('hh:baby',{detail:snapshot ? {name:snapshot.name,timer:snapshot.timer,lastWake:snapshot.sleeps.at(-1)?.end,lastBottle:snapshot.bottles?.at(-1)?.start || snapshot.lastBottle?.time,huck,purr:own,mia} : null}));
 }
-// Lock in each model's guess the first time it appears after a wake-up.
-function logPredictions(huck, own, mia) {
+// Save Huckleberry's latest SweetSpot for this wake-up while Frankie is awake.
+// Hubert's and Mia's guesses are replayed from history, so they need no saving.
+function logPredictions(huck) {
   if (!predictionStore || !snapshot || snapshot.historyComplete === false) return;
   const lastWake = snapshot.sleeps.at(-1)?.end; if (!lastWake) return;
-  const entry = predictionEntry({lastWake,childId:snapshot.childId,sweetspot:huck,purrfect:own,mia,timezone:zone()});
-  if (!entry) return;
-  const signature = `${entry.id}:${MODELS.filter(model => entry[model.key]).map(model => model.key).join(',')}`;
-  const saved = predictions.find(item => item.id === entry.id);
-  if (signature === lastLogged || (saved && MODELS.every(model => !entry[model.key] || saved[model.key]))) return;
+  const entry = sweetspotEntry({lastWake,childId:snapshot.childId,sweetspot:huck,previousTarget:previousSweetspot(predictions,lastWake),timer:snapshot.timer,timezone:zone()});
+  if (!entry || !sweetspotPatch(predictions.find(item => item.id === entry.id), entry)) return;
+  const signature = `${entry.id}:${entry.sweetspot.target}`;
+  if (signature === lastLogged) return;
   lastLogged = signature;
   predictionStore.record(entry).catch(() => { lastLogged = ''; });
 }
@@ -129,7 +129,7 @@ function sampleSnapshot() {
 }
 function memoryPredictions(seed) {
   let entries = seed, notify;
-  return { subscribe(cb) { notify = cb; cb(entries); }, async record(entry) { const saved = entries.find(item => item.id === entry.id); if (saved) { for (const model of MODELS) if (entry[model.key] && !saved[model.key]) saved[model.key] = entry[model.key]; } else entries = [entry, ...entries]; notify?.(entries); } };
+  return { subscribe(cb) { notify = cb; cb(entries); }, async record(entry) { const saved = entries.find(item => item.id === entry.id), patch = sweetspotPatch(saved, entry); if (!patch) return; if (saved) Object.assign(saved, patch); else entries = [entry, ...entries]; notify?.(entries); } };
 }
 export async function initHuckleberry(app, options = {}) {
   demo = !!options.demo; service = app ? httpsCallable(getFunctions(app,config.functionsRegion),'huckleberry',{timeout:120000}) : null;

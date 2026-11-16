@@ -2,8 +2,11 @@
 // Huckleberry prediction, or population training data enters this calculation.
 const MINUTE = 60000, DAY = 86400000;
 const stamp = value => typeof value === 'number' ? value : Date.parse(value);
+// Building an Intl formatter is slow; reuse one per time zone.
+const formatters = new Map();
 function localParts(value, timezone) {
-  const parts = new Intl.DateTimeFormat('en-CA', { timeZone:timezone, year:'numeric',month:'2-digit',day:'2-digit',hour:'numeric',hourCycle:'h23' }).formatToParts(new Date(value));
+  if (!formatters.has(timezone)) formatters.set(timezone, new Intl.DateTimeFormat('en-CA', { timeZone:timezone, year:'numeric',month:'2-digit',day:'2-digit',hour:'numeric',hourCycle:'h23' }));
+  const parts = formatters.get(timezone).formatToParts(new Date(value));
   const get = type => parts.find(part => part.type === type).value;
   return { day:`${get('year')}-${get('month')}-${get('day')}`, hour:Number(get('hour')) };
 }

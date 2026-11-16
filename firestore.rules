@@ -32,24 +32,22 @@ service cloud.firestore {
       allow create: if member() && valid() && request.resource.data.version == 0;
       allow update: if member() && valid() && request.resource.data.version == resource.data.version + 1;
     }
-    // Nap prediction scoreboard: one record per wake-up. Each model's guess can be
-    // added once and is then frozen, so a later refresh cannot rewrite history.
+    // Nap prediction scoreboard: Huckleberry's SweetSpot per daytime wake-up.
+    // Hubert's and Mia's guesses are recomputed from sleep history, never stored.
+    // A newer capture may replace an older one (latest prediction while awake).
     match /babyPredictions/{id} {
-      function guess(g) {
-        return g is map && g.keys().hasOnly(['start','end','target','loggedAt']) && g.target is string && g.target.size() <= 40
-          && g.loggedAt is string && (!('start' in g) || (g.start is string && g.end is string));
-      }
       function valid() {
         let d = request.resource.data;
-        return d.keys().hasOnly(['lastWake','childId','sweetspot','purrfect','mia','createdAt'])
+        return d.keys().hasOnly(['lastWake','childId','sweetspot','createdAt','updatedAt'])
           && d.lastWake is string && d.lastWake.size() <= 40 && d.childId is string && d.childId.size() <= 150
-          && (!('sweetspot' in d) || guess(d.sweetspot)) && (!('purrfect' in d) || guess(d.purrfect)) && (!('mia' in d) || guess(d.mia));
+          && d.sweetspot is map && d.sweetspot.keys().hasOnly(['target','loggedAt'])
+          && d.sweetspot.target is string && d.sweetspot.target.size() <= 40 && d.sweetspot.loggedAt is string && d.sweetspot.loggedAt.size() <= 40;
       }
-      function frozen(key) { return !(key in resource.data) || request.resource.data[key] == resource.data[key]; }
       allow read: if member();
       allow create: if member() && valid() && id.matches('^w[0-9]{10,14}$');
       allow update: if member() && valid() && request.resource.data.lastWake == resource.data.lastWake
-        && request.resource.data.childId == resource.data.childId && frozen('sweetspot') && frozen('purrfect') && frozen('mia');
+        && request.resource.data.childId == resource.data.childId
+        && request.resource.data.sweetspot.loggedAt > resource.data.sweetspot.loggedAt;
       allow delete: if false;
     }
     // Daily cat care: one document per local date, each task {by, at} or absent.

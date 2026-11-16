@@ -3,13 +3,14 @@
 const DAY = 86400000, MINUTE = 60000, OZ_PER_ML = 1 / 29.5735;
 export const toOunces = (amount, units) => units === 'ml' ? amount * OZ_PER_ML : amount;
 
+const cache = new Map(), fmt = (key, timezone, options) => { const id = `${key}|${timezone}`; if (!cache.has(id)) cache.set(id, new Intl.DateTimeFormat(key === 'day' ? 'en-CA' : 'en-US', { timeZone:timezone, ...options })); return cache.get(id); };
 function offsetMinutes(stamp, timezone) {
-  const name = new Intl.DateTimeFormat('en-US', { timeZone:timezone, timeZoneName:'longOffset' }).formatToParts(new Date(stamp)).find(part => part.type === 'timeZoneName').value;
+  const name = fmt('offset', timezone, { timeZoneName:'longOffset' }).formatToParts(new Date(stamp)).find(part => part.type === 'timeZoneName').value;
   const match = name.match(/GMT([+-])(\d{2}):(\d{2})/);
   return match ? (match[1] === '+' ? 1 : -1) * (Number(match[2]) * 60 + Number(match[3])) : 0;
 }
 export function localDay(stamp, timezone) {
-  return new Intl.DateTimeFormat('en-CA', { timeZone:timezone, year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date(stamp));
+  return fmt('day', timezone, { year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date(stamp));
 }
 // UTC milliseconds of local midnight for a YYYY-MM-DD key.
 export function dayStart(key, timezone) {
@@ -23,7 +24,7 @@ export function dayKeys(days, timezone, now = Date.now()) {
   for (let i = 0; i < days; i++) { keys.unshift(key); key = localDay(dayStart(key, timezone) - DAY / 2, timezone); }
   return keys;
 }
-const hourAt = (stamp, timezone) => Number(new Intl.DateTimeFormat('en-US', { timeZone:timezone, hour:'numeric', hourCycle:'h23' }).format(new Date(stamp)));
+const hourAt = (stamp, timezone) => Number(fmt('hour', timezone, { hour:'numeric', hourCycle:'h23' }).format(new Date(stamp)));
 // Same rule as Mia's forecast: a daytime sleep under four hours is a nap.
 export const sleepKind = (sleep, timezone) => { const hour = hourAt(sleep.start, timezone); return hour >= 5 && hour < 19 && sleep.end - sleep.start < 4 * 3600000 ? 'nap' : 'night'; };
 

@@ -1,7 +1,6 @@
 // Preview-only sample history: a believable ~4-month-old rhythm with gently
 // lengthening wake windows. Deterministic so screenshots and tests are stable.
-import { purrfectWindow, miaForecast } from './baby-model.js';
-import { predictionEntry } from './prediction-log.js';
+import { sweetspotEntry } from './prediction-log.js';
 
 const MIN = 60000, H = 3600000;
 function rng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
@@ -34,16 +33,16 @@ export function sampleHistory(now = Date.now(), days = 45) {
   };
 }
 
-// What each model would have said right after each recent wake-up.
+// Simulated SweetSpot captures for recent wake-ups (some missing, as when the
+// app was not opened). Hubert's and Mia's guesses are replayed, not stored.
 export function samplePredictions(sleeps, timezone, now = Date.now(), days = 12) {
   const random = rng(7), entries = [];
   const wakes = sleeps.map(s => Date.parse(s.end)).filter(end => end > now - days * 86400000 && end < now - 3 * H);
   for (const wake of wakes) {
-    const at = new Date(wake + 2 * MIN), known = sleeps.filter(s => Date.parse(s.end) <= wake);
-    const next = sleeps.find(s => Date.parse(s.start) > wake);
-    const purrfect = purrfectWindow({ sleeps:known, timezone }, at), mia = miaForecast({ sleeps:known, timezone }, at);
-    const sweetspot = next ? { available:true, time:new Date(Date.parse(next.start) + (random() - .45) * 50 * MIN).toISOString() } : null;
-    const entry = predictionEntry({ lastWake:new Date(wake).toISOString(), childId:'sample-frankie', sweetspot, purrfect, mia, timezone, now:at });
+    const next = sleeps.find(s => Date.parse(s.start) > wake), roll = random();
+    if (!next || roll < .15) continue;
+    const sweetspot = { available:true, time:new Date(Date.parse(next.start) + (random() - .45) * 50 * MIN).toISOString() };
+    const entry = sweetspotEntry({ lastWake:new Date(wake).toISOString(), childId:'sample-frankie', sweetspot, timezone, now:new Date(wake + 5 * MIN) });
     if (entry) entries.push(entry);
   }
   return entries;

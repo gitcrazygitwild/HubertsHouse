@@ -1,48 +1,63 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { predictionEntry, missingFields, actualSleepStart, scorePredictions, isDaytimeWake } from '../prediction-log.js';
+import { sweetspotEntry, sweetspotPatch, previousSweetspot, actualSleepStart, replayGuesses, scorePredictions, isDaytimeWake, predictionId } from '../prediction-log.js';
+import { purrfectWindow, miaForecast } from '../baby-model.js';
 
-const wake = '2026-11-16T14:00:00.000Z', at = minutes => new Date(Date.parse(wake) + minutes * 60000).toISOString();
-const win = (start, end, target) => ({ available:true, start:at(start), end:at(end), target:at(target) });
+const zone = 'UTC', DAY = 86400000, H = 3600000, M = 60000;
+const today = Date.parse('2026-11-16T00:00:00Z'), iso = ms => new Date(ms).toISOString();
+// Night until 7:00, then naps placed by wake windows and nap lengths (minutes).
+function day(offset, windows = [90, 120, 140], naps = [60, 70, 40]) {
+  const base = today - offset * DAY, sleeps = [{ start:base - 5 * H, end:base + 7 * H }];
+  let cursor = base + 7 * H;
+  windows.forEach((w, i) => { const start = cursor + w * M; sleeps.push({ start, end:start + naps[i] * M }); cursor = start + naps[i] * M; });
+  return sleeps;
+}
+const history = days => Array.from({ length:days }, (_, i) => day(days - i)).flat().map(s => ({ start:iso(s.start), end:iso(s.end) }));
 
-test('entries lock in only models with a guess for this wake-up', () => {
-  const entry = predictionEntry({ lastWake:wake, childId:'c', now:new Date(at(5)),
-    sweetspot:{ available:true, time:at(-30) }, purrfect:win(100,130,115), mia:{ available:false } });
-  assert.equal(entry.id, `w${Date.parse(wake)}`); assert.equal(entry.sweetspot, undefined); assert.equal(entry.mia, undefined);
-  assert.equal(entry.purrfect.target, at(115));
-  assert.equal(predictionEntry({ lastWake:wake, purrfect:{ available:false }, now:new Date(at(5)) }), null);
-  assert.equal(predictionEntry({ lastWake:wake, purrfect:win(1,2,1), now:new Date(at(9 * 60)) }), null);
-  // 3am (New York) feed wake: SweetSpot alone must not be scored as a nap.
-  const night = '2026-11-16T08:00:00.000Z';
-  assert.equal(isDaytimeWake(night, 'America/New_York'), false); assert.equal(isDaytimeWake(wake, 'America/New_York'), true);
-  assert.equal(predictionEntry({ lastWake:night, timezone:'America/New_York', sweetspot:{ available:true, time:'2026-11-16T09:00:00.000Z' }, now:new Date('2026-11-16T08:05:00Z') }), null);
+test('SweetSpot is captured for daytime wake-ups while awake, and the latest capture wins', () => {
+  const wake = iso(today + 9 * H), now = new Date(today + 9.1 * H), sweetspot = { available:true, time:iso(today + 11 * H) };
+  const entry = sweetspotEntry({ lastWake:wake, childId:'c', sweetspot, timezone:zone, now });
+  assert.equal(entry.id, predictionId(wake)); assert.equal(entry.sweetspot.target, sweetspot.time);
+  // Asleep, overnight, expired, or the previous nap's unrecalculated prediction: nothing to save.
+  assert.equal(sweetspotEntry({ lastWake:wake, sweetspot, timer:{ active:true }, timezone:zone, now }), null);
+  assert.equal(sweetspotEntry({ lastWake:iso(today + 3 * H), sweetspot, timezone:zone, now:new Date(today + 3.1 * H) }), null);
+  assert.equal(sweetspotEntry({ lastWake:wake, sweetspot:{ available:true, time:iso(today + 8 * H) }, timezone:zone, now }), null);
+  assert.equal(sweetspotEntry({ lastWake:wake, sweetspot, previousTarget:sweetspot.time, timezone:zone, now }), null);
+  assert.equal(isDaytimeWake('2026-11-16T08:00:00.000Z', 'America/New_York'), false);
+  // Huckleberry recalculated: replace; same prediction again: no write.
+  const newer = sweetspotEntry({ lastWake:wake, childId:'c', sweetspot:{ available:true, time:iso(today + 11.3 * H) }, timezone:zone, now:new Date(today + 9.5 * H) });
+  assert.deepEqual(sweetspotPatch(entry, newer), { sweetspot:newer.sweetspot });
+  assert.equal(sweetspotPatch(newer, newer), null); assert.equal(sweetspotPatch(null, entry), entry);
+  assert.equal(previousSweetspot([entry, { id:'x', lastWake:iso(today + 12 * H), sweetspot:{ target:'later' } }], iso(today + 12 * H)), sweetspot.time);
 });
 
-test('a guess already logged is never replaced; missing ones can be added', () => {
-  const first = { purrfect:{ target:at(115) } };
-  assert.equal(missingFields(first, { purrfect:{ target:at(90) } }), null);
-  assert.deepEqual(missingFields(first, { purrfect:{ target:at(90) }, mia:{ target:at(120) } }), { mia:{ target:at(120) } });
-  assert.deepEqual(missingFields(null, { mia:{ target:at(1) } }), { mia:{ target:at(1) } });
+test('Hubert and Mia are replayed as of the wake-up, using only sleep logged before it', () => {
+  const sleeps = history(8), wake = sleeps.at(-2).end, known = sleeps.filter(s => Date.parse(s.end) <= Date.parse(wake));
+  const replay = replayGuesses(sleeps, wake, zone), at = new Date(Date.parse(wake) + M);
+  assert.equal(replay.purrfect.target, purrfectWindow({ sleeps:known, timezone:zone }, at).target);
+  assert.equal(replay.mia.target, miaForecast({ sleeps:known, timezone:zone }, at).target);
+  // The nap that came after the wake-up cannot influence its guesses.
+  const altered = sleeps.map((s, i) => i === sleeps.length - 1 ? { start:iso(Date.parse(s.start) + 40 * M), end:s.end } : s);
+  assert.deepEqual(replayGuesses(altered, wake, zone), replay);
+});
+
+test('a backfilled nap gets Hubert and Mia guesses; scoring needs all three models', () => {
+  const sleeps = history(8), wakes = sleeps.slice(-4, -1).map(s => s.end);
+  const entries = wakes.map(w => ({ id:predictionId(w), lastWake:w, sweetspot:{ target:iso(actualSleepStart(w, sleeps) + 10 * M) } }));
+  // Drop the SweetSpot for the middle wake-up, as if the nap was backfilled later.
+  const partial = entries.filter((_, i) => i !== 1), score = scorePredictions(partial, sleeps, null, zone);
+  assert.equal(score.scoredNaps, 2); assert.equal(score.skipped, 1); assert.equal(score.leader, null);
+  for (const row of score.results) assert.deepEqual(Object.keys(row.models).sort(), ['mia', 'purrfect', 'sweetspot']);
+  assert.equal(score.results[0].models.sweetspot.error, -10); assert.equal(score.results[0].models.sweetspot.hit, true);
+  const full = scorePredictions(entries, sleeps, null, zone);
+  assert.equal(full.scoredNaps, 3); assert.ok(full.leader); assert.equal(full.summary[0].n, 3);
+  // Naps before the first saved SweetSpot predate the scoreboard and are not "skipped".
+  assert.equal(full.skipped, 0);
 });
 
 test('the actual nap is the first sleep after the wake-up, including a running timer', () => {
-  assert.equal(actualSleepStart(wake, [{ start:at(-60) }, { start:at(130) }, { start:at(300) }]), Date.parse(at(130)));
-  assert.equal(actualSleepStart(wake, [], { active:true, start:at(95) }), Date.parse(at(95)));
-  assert.equal(actualSleepStart(wake, [{ start:at(10 * 60) }]), null);
-});
-
-test('scores error, hits, wins and a leader once each model has three naps', () => {
-  const entries = [0, 1, 2].map(day => {
-    const shift = day * 1440, w = at(shift);
-    return { id:String(day), lastWake:w, sweetspot:{ target:at(shift + 140) }, purrfect:{ start:at(shift + 100), end:at(shift + 130), target:at(shift + 115) }, mia:{ start:at(shift + 110), end:at(shift + 135), target:at(shift + 122) } };
-  });
-  const sleeps = [0, 1, 2].map(day => ({ start:at(day * 1440 + 120), end:at(day * 1440 + 180) }));
-  const { summary, leader, results } = scorePredictions(entries, sleeps);
-  const by = Object.fromEntries(summary.map(s => [s.key, s]));
-  assert.equal(results.length, 3);
-  assert.equal(by.purrfect.mae, 5); assert.equal(by.purrfect.bias, 5); assert.equal(by.purrfect.hitRate, 100);
-  assert.equal(by.mia.mae, 2); assert.equal(by.mia.wins, 3);
-  assert.equal(by.sweetspot.mae, 20); assert.equal(by.sweetspot.hitRate, 0);
-  assert.equal(leader, 'mia');
-  assert.equal(scorePredictions(entries.slice(0, 2), sleeps).leader, null);
+  const wake = iso(today + 9 * H);
+  assert.equal(actualSleepStart(wake, [{ start:iso(today + 8 * H) }, { start:iso(today + 11 * H) }]), today + 11 * H);
+  assert.equal(actualSleepStart(wake, [], { active:true, start:iso(today + 10 * H) }), today + 10 * H);
+  assert.equal(actualSleepStart(wake, [{ start:iso(today + 19 * H) }]), null);
 });
