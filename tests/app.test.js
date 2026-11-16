@@ -39,6 +39,7 @@ async function fixture(options = {}) {
   await module('prediction-log.js',['MODELS','predictionId','isDaytimeWake','sweetspotEntry','sweetspotPatch','previousSweetspot','actualSleepStart','replayGuesses','scorePredictions']);
   await module('baby-history.js',['toOunces','localDay','dayStart','dayKeys','sleepKind','dailySleep','dailyBottles','timelineRows','babySummary']);
   await module('baby-sample.js',['sampleHistory','samplePredictions']);
+  await module('awards.js',['frankieAwards']);
   await module('frankie.js',['renderFrankie','initFrankie'],'const esc=escapeHTML;');
   await module('baby.js',['initHuckleberry'],'const esc=escapeHTML;');
   await module('calendar-view.js',['initCalendarExperience','calendarEventContent'],'const esc=escapeHTML;');
@@ -47,8 +48,11 @@ async function fixture(options = {}) {
   await module('weather.js',['initWeather'],'const esc=escapeHTML;');
   await module('week-brief.js',['renderWeekBrief'],'const esc=escapeHTML;');
   await module('quick-add.js',['parseQuickAdd','describeDraft']);
-  await module('smart-home.js',['isOutdoor','weatherFlags','nextUp','untilText','CATS','CAT_TASKS','catCareStatus']);
+  await module('smart-home.js',['isOutdoor','weatherFlags','nextUp','untilText']);
+  await module('free-nights.js',['freeEvenings','dateNightDraft']);
+  await module('sky.js',['skyState','skyArt']);
   await module('upgrades.js',['initUpgrades'],'const esc=escapeHTML;');
+  await module('newsletter-settings.js',['initNewsletterSettings'],'const esc=escapeHTML;');
   w.eval(clean(await read('app.js')) + ';window.__testApp={getDocs:()=>rawDocs,setCloudDocs:(records)=>{cloudDocs=records;rebuildEvents();},persistMovedEvent,redraw:()=>updateHouseholdEvents(expandedEvents)};'); await settle();
   return {dom,w,doc:w.document,errors};
 }
@@ -308,7 +312,7 @@ test('a partial Apple save retains the checklist draft and retries only househol
   doc.getElementById('saveBtnTop').click();await settle();assert.equal(appleWrites,1);assert.equal(doc.getElementById('modalBackdrop').classList.contains('hidden'),false);assert.equal(doc.getElementById('evtTitle').disabled,true);assert.equal(doc.querySelector('#checklist input[type="text"]').value,'Pack a bottle');
   doc.getElementById('saveBtnTop').click();await settle();assert.equal(appleWrites,1);assert.equal(metadataWrites,1);assert.equal(doc.getElementById('modalBackdrop').classList.contains('hidden'),true);assert.deepEqual(errors,[]);
 });
-test('quick add, the command palette, cat care, the Frankie page and the after-dark joke work in the preview', async t => {
+test('quick add, the command palette, Now & Next, the Frankie page and the after-dark joke work in the preview', async t => {
   const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
   // Natural-language quick add opens a prefilled draft; nothing saves until the editor does.
   const before = w.__testApp.getDocs().length;
@@ -326,11 +330,9 @@ test('quick add, the command palette, cat care, the Frankie page and the after-d
   assert.match(doc.querySelector('#paletteList [aria-selected="true"]').textContent, /Groceries/);
   input.dispatchEvent(new w.KeyboardEvent('keydown', { key:'Enter', bubbles:true })); await settle();
   assert.equal(doc.getElementById('paletteDialog').open, false); assert.equal(w.location.hash, '#groceries');
-  // Cat care toggles and reports progress; the device owner is remembered.
-  doc.getElementById('deviceOwner').value = 'karena'; doc.getElementById('deviceOwner').dispatchEvent(new w.Event('change'));
-  doc.querySelector('[data-cat-task="mack_am"]').click(); await settle();
-  assert.match(doc.querySelector('[data-cat-task="mack_am"]').textContent, /Karena/);
-  assert.equal(doc.getElementById('catCareProgress').textContent, '1 of 8 done today');
+  // The cat tracker is gone; Now & Next lives under the page title.
+  assert.equal(doc.getElementById('catCare'), null); assert.ok(doc.querySelector('.house-header + #nowNext'));
+  assert.match(doc.getElementById('nowNext').textContent, /Next:/);
   // Three nap predictions on Home; the Frankie page renders charts and the scoreboard.
   assert.equal(doc.querySelectorAll('#babyPredictions .nap-card').length, 3);
   doc.querySelector('[data-view="frankie"]').click(); await settle();

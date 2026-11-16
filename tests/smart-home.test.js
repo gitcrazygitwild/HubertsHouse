@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { weatherFlags, nextUp, untilText, isOutdoor, catCareStatus, CAT_TASKS } from '../smart-home.js';
+import { weatherFlags, nextUp, untilText, isOutdoor } from '../smart-home.js';
 import { dateKey } from '../household-model.js';
 
 const now = new Date(2026, 10, 16, 9, 0);
@@ -26,11 +26,4 @@ test('now and next', () => {
   assert.equal(current.event.id, '1'); assert.equal(current.minutesLeft, 60);
   assert.equal(next.event.id, '2'); assert.equal(next.minutesUntil, 180);
   assert.equal(untilText(45), 'in 45m'); assert.equal(untilText(135), 'in 2h 15m'); assert.equal(untilText(3000), 'in 2 days');
-});
-
-test('cat care knows who is still waiting for a meal', () => {
-  const evening = new Date(2026, 10, 16, 18, 0), at7 = { by:'hanry', at:'x' };
-  const status = catCareStatus({ hubert_am:at7, mack_am:at7, mia_am:at7, hubert_pm:at7 }, evening);
-  assert.deepEqual(status.hungry, ['Mack', 'Mia']); assert.equal(status.done, 4); assert.equal(status.total, CAT_TASKS.length);
-  assert.deepEqual(catCareStatus({}, new Date(2026, 10, 16, 5, 0)).hungry, []);
 });

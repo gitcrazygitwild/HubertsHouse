@@ -1,17 +1,18 @@
 // Smart-calendar upgrades: natural-language quick add, the ⌘K command palette,
-// the live Now & Next strip, weather-aware plan flags and the cat crew tracker.
+// the live Now & Next line and weather-aware plan flags.
 import { escapeHTML as esc, dateKey } from './household-model.js';
 import { renderHTML } from './dom.js';
 import { parseQuickAdd, describeDraft } from './quick-add.js';
-import { weatherFlags, nextUp, untilText, catCareStatus, CAT_TASKS, CATS } from './smart-home.js';
-import { cats, portrait } from './cat-crew.js';
+import { weatherFlags, nextUp, untilText } from './smart-home.js';
+import { freeEvenings, dateNightDraft } from './free-nights.js';
+import { skyState, skyArt } from './sky.js';
 
 const $ = id => document.getElementById(id);
 const read = key => { try { return localStorage.getItem(key); } catch { return null; } };
 const write = (key, value) => { try { localStorage.setItem(key, value); } catch { /* optional */ } };
 const clock = date => new Date(date).toLocaleTimeString([], { hour:'numeric', minute:'2-digit' });
 const dayName = date => new Date(date).toLocaleDateString([], { weekday:'short' });
-let ctx, baby = null, forecast = null, care = {}, careDay = '', careUnsub = null, lastFlags = [];
+let ctx, baby = null, forecast = null, lastFlags = [];
 
 // ---------- Quick add ----------
 function draftPayload(draft) {
@@ -87,25 +88,40 @@ function initPalette() {
 }
 
 // ---------- Now & Next ----------
+// One quiet line under the page title: the next plan, Frankie, and rain.
 function renderNowNext() {
   const root = $('nowNext'); if (!root) return;
-  const now = new Date(), events = ctx.getEvents(), chips = [];
+  const now = new Date(), events = ctx.getEvents(), parts = [];
+  const eventLink = (event, from, label) => `<button type="button" class="nn-link" data-nn-event="${esc(event.extendedProps?.sourceId || event.id)}" data-nn-occ="${esc(from.toISOString())}">${label}</button>`;
   const { current, next } = nextUp(events, now);
-  if (current) chips.push(`<button type="button" class="nn-chip nn-now" data-nn-event="${esc(current.event.extendedProps?.sourceId || current.event.id)}" data-nn-occ="${esc(current.from.toISOString())}"><span class="nn-dot" aria-hidden="true"></span><span><small>Happening now</small><strong>${esc(current.event.title)}</strong></span><em>${current.minutesLeft}m left</em></button>`);
-  if (next) chips.push(`<button type="button" class="nn-chip" data-nn-event="${esc(next.event.extendedProps?.sourceId || next.event.id)}" data-nn-occ="${esc(next.from.toISOString())}"><span class="nn-icon" aria-hidden="true">◷</span><span><small>Next up · ${esc(next.minutesUntil < 1440 ? clock(next.from) : `${dayName(next.from)} ${clock(next.from)}`)}</small><strong>${esc(next.event.title)}</strong></span><em>${esc(untilText(next.minutesUntil))}</em></button>`);
-  else if (!current) chips.push('<div class="nn-chip"><span class="nn-icon" aria-hidden="true">✳</span><span><small>Next up</small><strong>Nothing on the calendar this week</strong></span></div>');
+  if (current) parts.push(`<span class="nn-item"><span class="nn-live" aria-hidden="true"></span>${eventLink(current.event, current.from, `Now: <strong>${esc(current.event.title)}</strong>`)} <span class="nn-muted">${current.minutesLeft}m left</span></span>`);
+  if (next) parts.push(`<span class="nn-item"><span aria-hidden="true">◷</span>${eventLink(next.event, next.from, `Next: <strong>${esc(next.event.title)}</strong>`)} <span class="nn-muted">${esc(next.minutesUntil < 1440 ? clock(next.from) : `${dayName(next.from)} ${clock(next.from)}`)} · ${esc(untilText(next.minutesUntil))}</span></span>`);
   if (baby) {
     const minutes = stamp => Math.max(0, Math.round((+now - Date.parse(stamp)) / 60000)), hm = m => m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`;
-    const status = baby.timer?.active ? `Asleep ${hm(minutes(baby.timer.start))}` : baby.lastWake ? `Awake ${hm(minutes(baby.lastWake))}` : 'No sleep logged';
-    const window = baby.mia?.available ? `Mia: ${clock(baby.mia.start)}–${clock(baby.mia.end)}` : baby.purr?.available ? `Purrfect: ${clock(baby.purr.start)}–${clock(baby.purr.end)}` : '';
-    chips.push(`<button type="button" class="nn-chip nn-baby" data-nn-view="frankie"><span class="nn-icon" aria-hidden="true">${baby.timer?.active ? '☾' : '☀'}</span><span><small>${esc(baby.name)}${window ? ` · ${esc(window)}` : ''}</small><strong>${esc(status)}</strong></span>${baby.lastBottle ? `<em>🍼 ${esc(hm(minutes(baby.lastBottle)))} ago</em>` : ''}</button>`);
+    const status = baby.timer?.active ? `asleep ${hm(minutes(baby.timer.start))}` : baby.lastWake ? `awake ${hm(minutes(baby.lastWake))}` : 'no sleep logged';
+    const nap = !baby.timer?.active && baby.mia?.available ? ` · nap ~${clock(baby.mia.target)}` : '';
+    parts.push(`<span class="nn-item"><span aria-hidden="true">${baby.timer?.active ? '☾' : '☀'}</span><button type="button" class="nn-link" data-nn-view="frankie">${esc(baby.name)} <strong>${esc(status)}</strong></button><span class="nn-muted">${esc(nap)}${baby.lastBottle ? ` · bottle ${esc(hm(minutes(baby.lastBottle)))} ago` : ''}</span></span>`);
   }
   const flags = forecast ? weatherFlags(events, forecast.days, now) : [];
-  if (flags.length) chips.push(`<button type="button" class="nn-chip nn-weather" data-nn-event="${esc(flags[0].id)}" data-nn-occ="${esc(flags[0].start)}"><span class="nn-icon" aria-hidden="true">☔</span><span><small>${esc(dayName(flags[0].start))} · ${flags[0].rain == null ? esc(flags[0].label) : `${flags[0].rain}% rain`}</small><strong>${esc(flags[0].title)}</strong></span><em>${flags.length > 1 ? `+${flags.length - 1} more` : 'plan B?'}</em></button>`);
-  const cat = catCareStatus(care, now);
-  chips.push(`<button type="button" class="nn-chip nn-cats" data-nn-scroll="catCare"><span class="nn-icon" aria-hidden="true">🐾</span><span><small>Cat crew · ${cat.done}/${cat.total}</small><strong>${cat.hungry.length ? `${esc(cat.hungry.length > 1 ? `${cat.hungry.slice(0, -1).join(', ')} & ${cat.hungry.at(-1)}` : cat.hungry[0])} ${cat.hungry.length === 1 ? 'is' : 'are'} waiting` : cat.complete ? 'All taken care of' : 'Fed and happy'}</strong></span></button>`);
-  renderHTML(root, chips.join(''));
+  if (flags.length) parts.push(`<span class="nn-item"><span aria-hidden="true">☔</span>${eventLink({ id:flags[0].id }, new Date(flags[0].start), `<strong>${esc(flags[0].title)}</strong>`)} <span class="nn-muted">${esc(dayName(flags[0].start))} · ${flags[0].rain == null ? esc(flags[0].label) : `${flags[0].rain}% rain`}</span></span>`);
+  renderHTML(root, parts.join(''));
+  root.hidden = !parts.length;
   lastFlags = flags; markWeather(flags);
+}
+// ---------- Living sky ----------
+function renderSky() {
+  const card = document.querySelector('.welcome-card'); if (!card) return;
+  const state = skyState(new Date(), forecast?.days?.[0]?.kind);
+  if (card.dataset.sky === state.phase && card.dataset.weather === state.weather && card.querySelector('.sky-art')) return;
+  card.dataset.sky = state.phase; card.dataset.weather = state.weather;
+  card.querySelector('.sky-art')?.remove(); card.insertAdjacentHTML('afterbegin', skyArt(state));
+  const greeting = $('skyGreeting'); if (greeting) greeting.textContent = `${state.greeting.toUpperCase()} · AT YOUR PACE`;
+}
+// ---------- Free nights ----------
+function renderFreeNights() {
+  const root = $('freeNights'); if (!root) return;
+  const nights = freeEvenings(ctx.getEvents(), new Date());
+  renderHTML(root, nights.length ? `<span class="free-label">Free nights</span>${nights.map(night => `<button type="button" data-free-night="${night.date.toISOString()}" title="Draft a date night">${esc(night.date.toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' }))}</button>`).join('')}` : '<span class="free-label">No free evenings in the next two weeks</span>');
 }
 // Adds a small rain badge to matching plans on the home calendar.
 function markWeather(flags) {
@@ -117,56 +133,22 @@ function markWeather(flags) {
   });
 }
 
-// ---------- Cat crew tracker ----------
-const OWNER_LABEL = { hanry:'hanry', karena:'Karena', '':'' };
-function renderCatCare() {
-  const root = $('catCareGrid'); if (!root) return;
-  const status = catCareStatus(care), tile = task => {
-    const done = care[task.key];
-    return `<button type="button" class="cat-task${done ? ' is-done' : ''}" data-cat-task="${task.key}" aria-pressed="${!!done}"><span class="cat-task-label">${task.icon ? `<span aria-hidden="true">${task.icon}</span> ` : ''}${esc(task.label)}</span><span class="cat-task-meta">${done ? `✓ ${esc([OWNER_LABEL[done.by] || '', clock(done.at)].filter(Boolean).join(' · '))}` : 'Tap when done'}</span></button>`;
-  };
-  renderHTML(root, CATS.map(name => {
-    const cat = cats.find(c => c.name === name), tasks = CAT_TASKS.filter(task => task.cat === name);
-    return `<div class="cat-care-col"><div class="cat-care-name">${portrait(cat)}<strong>${esc(name)}</strong></div>${tasks.map(tile).join('')}</div>`;
-  }).join('') + `<div class="cat-care-col cat-care-house"><div class="cat-care-name"><span class="cat-care-house-icon" aria-hidden="true">🏠</span><strong>The house</strong></div>${CAT_TASKS.filter(task => !task.cat).map(tile).join('')}</div>`);
-  $('catCareProgress').textContent = `${status.done} of ${status.total} done today`;
-  $('catCareProgressBar').style.width = `${Math.round(100 * status.done / status.total)}%`;
-  renderNowNext();
-}
-function watchCatDay() {
-  const today = dateKey(new Date());
-  if (today === careDay) return;
-  careDay = today; careUnsub?.(); care = {};
-  careUnsub = ctx.catStore.subscribe(today, record => { care = record || {}; renderCatCare(); });
-}
-function initCatCare() {
-  const owner = $('deviceOwner'); owner.value = read('hh_device_owner') || '';
-  owner.addEventListener('change', () => write('hh_device_owner', owner.value));
-  $('catCareGrid').addEventListener('click', async event => {
-    const button = event.target.closest('[data-cat-task]'); if (!button || button.disabled) return;
-    const key = button.dataset.catTask, value = care[key] ? null : { by:read('hh_device_owner') || '', at:new Date().toISOString() };
-    button.disabled = true;
-    try { await ctx.catStore.set(careDay, key, value); } catch { ctx.notice('The cat crew could not sync. Try again.'); } finally { button.disabled = false; }
-  });
-  watchCatDay();
-}
-
 export function initUpgrades(options) {
   ctx = options;
-  initQuickAdd(); initPalette(); initCatCare();
+  initQuickAdd(); initPalette();
   $('nowNext').addEventListener('click', event => {
-    const target = event.target.closest('[data-nn-event],[data-nn-view],[data-nn-scroll]'); if (!target) return;
+    const target = event.target.closest('[data-nn-event],[data-nn-view]'); if (!target) return;
     if (target.dataset.nnEvent) ctx.openEvent(target.dataset.nnEvent, target.dataset.nnOcc);
-    else if (target.dataset.nnView) ctx.showView(target.dataset.nnView);
-    else $(target.dataset.nnScroll)?.scrollIntoView?.({ behavior:'smooth', block:'center' });
+    else ctx.showView(target.dataset.nnView);
   });
   window.addEventListener('hh:baby', event => { baby = event.detail; renderNowNext(); });
-  window.addEventListener('hh:forecast', event => { forecast = event.detail; renderNowNext(); });
-  window.addEventListener('hh:events', () => requestAnimationFrame(renderNowNext));
+  window.addEventListener('hh:forecast', event => { forecast = event.detail; renderNowNext(); renderSky(); });
+  window.addEventListener('hh:events', () => requestAnimationFrame(() => { renderNowNext(); renderFreeNights(); }));
+  $('freeNights')?.addEventListener('click', event => { const button = event.target.closest('[data-free-night]'); if (button) ctx.openDraft(dateNightDraft(new Date(button.dataset.freeNight))); });
   forecast = window.hhForecast || null;
   // Week navigation re-renders the home calendar; keep rain badges attached.
   const home = document.querySelector('.home-calendar'); let pending;
   if (home) new MutationObserver(() => { clearTimeout(pending); pending = setTimeout(() => markWeather(lastFlags), 60); }).observe(home, { childList:true, subtree:true });
-  setInterval(() => { if (document.visibilityState === 'visible') { watchCatDay(); renderNowNext(); } }, 30000);
-  renderNowNext();
+  setInterval(() => { if (document.visibilityState === 'visible') { renderNowNext(); renderSky(); } }, 30000);
+  renderNowNext(); renderSky(); renderFreeNights();
 }

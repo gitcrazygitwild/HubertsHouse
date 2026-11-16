@@ -26,9 +26,12 @@ A household dashboard for hanry, Karena, Frankie, Hubert, Mack, and Mia, designe
 - Jokes: a dad joke of the day from a 60-joke rotation, with an optional folded-away “After dark” grown-up joke underneath (hide it per device in Settings).
 - Quick add in plain words: “Pediatrician Tue 3pm with Frankie”, “Dinner with friends Fri 7–9pm”, “Yoga for Karena tomorrow 8am for 90 min”. It understands days, dates, times, ranges, durations, people and Frankie, and opens a prefilled editor so nothing saves unseen.
 - ⌘K / Ctrl+K command palette: jump anywhere, find upcoming plans, log a bottle or sleep, add groceries, search the calendar, or type a plan to create it.
-- Now & Next: a live strip with what’s happening now and next (with a countdown), Frankie’s awake time and nap window, time since the last bottle, rain warnings and the cat crew’s status.
+- Now & Next: one quiet line under the page title with what’s happening now and next (with a countdown), Frankie’s awake/asleep time and next nap, time since the last bottle, and rain warnings.
 - Weather-aware plans: outdoor-sounding plans (park, walk, market, picnic, zoo…) on days with a 40%+ rain chance get a ☔ badge on the home calendar and a heads-up in Now & Next.
-- Cat crew tracker: breakfast and dinner for Hubert, Mack and Mia, plus litter and fresh water, shared across both phones (Firestore `catCare`, one document per day) and reset each morning. Settings → “This device belongs to” records who did it.
+- Morning newsletter: at 6:30am each member gets an email digest of the home page — weather, today’s plans, Frankie’s night and yesterday’s ounces, the nap challenge, chores, free date nights and the dad joke. Per-person on/off, greeting name and optional after-dark joke in Settings, plus “Send me one now”. Setup: [docs/SETUP.md](docs/SETUP.md#morning-newsletter).
+- Living sky: the welcome banner follows the real time of day and today’s forecast — dawn, midday, golden hour, dusk, stars at night, clouds, rain or snow.
+- Free nights: the welcome banner lists the next evenings (5–10pm) with nothing planned for hanry or Karena, weekends first; tap one to draft a date night.
+- Frankie’s Weekly Awards: Nap of the Week, Longest Stretch, Early Bird, Thirstiest Day, Big Gulp, Nap Queen and Milk Mileage from the last seven full days (also in Monday’s newsletter).
 - Resident supervisors: personalized tabby portraits for Hubert (darker brown, yellow eyes), Mack (brown, green eyes), and Mia (light tabby/Siamese mix, blue eyes). Tap a cat for a little note.
 
 ## Current activation status

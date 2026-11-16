@@ -30,7 +30,7 @@ actual=$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')
 [ "$actual" = "$PROJECT_NUMBER" ] || { echo "Project number is $actual, expected $PROJECT_NUMBER. Stopping."; exit 1; }
 
 echo "== Turning on the Google APIs this needs"
-gcloud services enable iamcredentials.googleapis.com sts.googleapis.com cloudresourcemanager.googleapis.com --quiet
+gcloud services enable iamcredentials.googleapis.com sts.googleapis.com cloudresourcemanager.googleapis.com cloudscheduler.googleapis.com --quiet
 
 echo "== Creating the deploy account ($SA)"
 gcloud iam service-accounts describe "$SA" >/dev/null 2>&1 ||
@@ -46,7 +46,8 @@ for role in \
   roles/iam.serviceAccountUser \
   roles/secretmanager.viewer \
   roles/serviceusage.serviceUsageConsumer \
-  roles/firebase.viewer; do
+  roles/firebase.viewer \
+  roles/cloudscheduler.admin; do
   retry gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:$SA" --role="$role" --condition=None --quiet >/dev/null
   echo "   $role"
 done

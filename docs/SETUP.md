@@ -68,6 +68,19 @@ bash scripts/setup-github-deploy.sh
 
 The script is safe to re-run. To turn automatic deploys off, disable the workflow in the Actions tab, or delete the `github` workload identity pool in Google Cloud (IAM → Workload Identity Federation).
 
+Re-run the script whenever it gains a permission. The morning newsletter added Cloud Scheduler (`roles/cloudscheduler.admin` and the Cloud Scheduler API); without it, the deploy of the scheduled `morningNewsletter` function fails.
+
+### Morning newsletter
+
+`morningNewsletter` runs at 6:30am America/New_York and emails each active household member (to their Firebase login email) a digest of the home page: Richmond weather and rain warnings, today’s and tomorrow’s plans (household events plus that member’s selected iCloud calendars), Frankie’s current status, yesterday’s sleep and ounces, the nap predictions and scoreboard leader, Monday’s weekly awards, chores due, groceries, free date nights, and the daily quote, fact, word and dad joke. A log document per member per day (`newsletterLog`) prevents duplicates.
+
+1. Pick one Gmail account to send from. Turn on 2-Step Verification for it and create an app password at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords).
+2. In **Settings → Morning newsletter**, enter that Gmail address and app password under the sending account. The server checks them with Gmail, then stores the password encrypted with the existing calendar encryption key (`privateNewsletterSender`, server-only). No Cloud Shell secret is needed.
+3. Each person chooses whether to receive it, the name to be greeted by, and whether to include the after-dark joke (off by default) — stored server-side in `newsletterPrefs/{uid}`.
+4. Use **Send me one now** to preview it in your inbox.
+
+The digest is built from the same modules as the app: `scripts/share.mjs` copies them into `functions/shared/` before tests, builds and deploys (a Firebase `predeploy` step covers manual deploys too). `functions/shared/` is generated and not committed.
+
 ## 4. Connect Apple Calendar in the app
 
 1. Sign in to Hubert’s House with a household account.
