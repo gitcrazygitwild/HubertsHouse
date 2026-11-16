@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 const files = ['index.html', 'app.js', 'styles.css', 'home.css', 'calendar.css', 'calendar-view.js', 'household.js',
-  'household-model.js', 'cloud-calendar.js', 'config.js', 'demo.js', 'icon.svg', 'manifest.webmanifest', 'weather.js', 'week-brief.js', 'home-upgrades.css', 'flapurr-icon.svg', 'calendar-model.js', 'dom.js', 'daily-content.js', 'dashboard.js', 'event-templates.js', 'compact.css', 'home-calendar.js', 'home-calendar.css', 'weather-shared.js', 'event-planning.js', 'cat-crew.js', 'connected-home.css', 'family.css', 'baby.css', 'baby.js', 'baby-model.js', 'holidays.js', 'event-editor.js', 'planning.css', 'checklists.js'];
+  'household-model.js', 'cloud-calendar.js', 'config.js', 'demo.js', 'icon.svg', 'manifest.webmanifest', 'weather.js', 'week-brief.js', 'home-upgrades.css', 'flapurr-icon.svg', 'calendar-model.js', 'dom.js', 'daily-content.js', 'dashboard.js', 'event-templates.js', 'compact.css', 'home-calendar.js', 'home-calendar.css', 'weather-shared.js', 'event-planning.js', 'cat-crew.js', 'connected-home.css', 'family.css', 'baby.css', 'baby.js', 'baby-model.js', 'holidays.js', 'event-editor.js', 'planning.css', 'checklists.js', 'frankie.css', 'frankie.js', 'baby-history.js', 'baby-sample.js', 'prediction-log.js', 'jokes.js', 'quick-add.js', 'smart-home.js', 'upgrades.js', 'upgrades.css'];
 await rm('dist', { recursive: true, force: true });
 await mkdir('dist', { recursive: true });
 const sources = await Promise.all(files.map(file => readFile(file, 'utf8')));

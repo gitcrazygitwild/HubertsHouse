@@ -106,26 +106,53 @@ export function normalizeSleepHistory(documents, from, to) {
   }
   return [...records.values()].sort((a,b) => Date.parse(a.start) - Date.parse(b.start));
 }
+export const HISTORY_DAYS = 60;
+const HISTORY_LIMIT = 1000, BATCH_LIMIT = 80;
+const BOTTLE_TYPES = ['Formula','Breast Milk','Cow Milk','Soy Milk','Other'];
+// Bottle feeds only: amounts are what the daily ounces chart needs. Breast
+// feeds carry durations rather than volumes and are left out on purpose.
+export function normalizeFeedHistory(documents, from, to) {
+  const records = new Map();
+  for (const document of documents) {
+    const value = typeof document.data === 'function' ? document.data() : document;
+    const entries = value?.multi ? Object.values(value.data || {}) : [value];
+    for (const entry of entries) {
+      if (entry?.mode !== 'bottle') continue;
+      const start = epochMs(entry.start), amount = Number(entry.amount), units = entry.units === 'ml' ? 'ml' : entry.units === 'oz' ? 'oz' : null;
+      if (!Number.isFinite(start) || start < from || start > to || !units || !Number.isFinite(amount) || amount <= 0 || amount > (units === 'oz' ? 64 : 2000)) continue;
+      records.set(`${start}:${amount}:${units}`, {start:new Date(start).toISOString(),amount:Math.round(amount * 100) / 100,units,type:BOTTLE_TYPES.includes(entry.bottleType) ? entry.bottleType : 'Other'});
+    }
+  }
+  return [...records.values()].sort((a,b) => Date.parse(a.start) - Date.parse(b.start));
+}
+async function intervalHistory(client, path, from, now) {
+  const intervals = client.collection(path);
+  const [regular, batches] = await Promise.all([
+    intervals.where('start','>=',from / 1000).where('start','<',now / 1000).orderBy('start').limit(HISTORY_LIMIT).get(),
+    intervals.where('multi','==',true).limit(BATCH_LIMIT).get()
+  ]);
+  return {docs:[...regular.docs,...batches.docs],complete:regular.size < HISTORY_LIMIT && batches.size < BATCH_LIMIT};
+}
 export async function huckleberrySnapshot(client, childId, timezone, cached, forceHistory = false, now = Date.now()) {
   const child = id(childId);
   const [profile, sleepDoc, feedDoc, diaperDoc] = await Promise.all(['childs','sleep','feed','diaper'].map(collection => client.doc(`${collection}/${child}`).get()));
   if (!profile.exists) fail('not-found','This Huckleberry child profile is no longer available.');
   const sleep = sleepDoc.data() || {}, feed = feedDoc.data() || {}, diaper = diaperDoc.data() || {}, details = profile.data();
-  let sleeps = cached?.sleeps || [], historyComplete = cached?.historyComplete ?? false, historyCheckedAt = cached?.historyCheckedAt;
+  const from = now - HISTORY_DAYS * 86400000;
+  // A cache from before bottle history existed has no `bottles` field; reload it.
+  let sleeps = cached?.sleeps || [], bottles = cached?.bottles || [], historyComplete = cached?.historyComplete ?? false, feedsComplete = cached?.feedsComplete ?? false, historyCheckedAt = Array.isArray(cached?.bottles) ? cached?.historyCheckedAt : undefined;
   if (forceHistory || !historyCheckedAt || now - Date.parse(historyCheckedAt) > 15 * 60000) {
-    const intervals = client.collection(`sleep/${child}/intervals`), from = now - 14 * 86400000;
-    const [regular, batches] = await Promise.all([
-      intervals.where('start','>=',from / 1000).where('start','<',now / 1000).orderBy('start').limit(500).get(),
-      intervals.where('multi','==',true).limit(80).get()
-    ]);
-    sleeps = normalizeSleepHistory([...regular.docs,...batches.docs],from,now);
-    historyComplete = regular.size < 500 && batches.size < 80; historyCheckedAt = new Date(now).toISOString();
+    const [sleepHistory, feedHistory] = await Promise.all([intervalHistory(client,`sleep/${child}/intervals`,from,now),intervalHistory(client,`feed/${child}/intervals`,from,now)]);
+    sleeps = normalizeSleepHistory(sleepHistory.docs,from,now); bottles = normalizeFeedHistory(feedHistory.docs,from,now);
+    historyComplete = sleepHistory.complete; feedsComplete = feedHistory.complete; historyCheckedAt = new Date(now).toISOString();
   }
   const lastSleep = sleep.prefs?.lastSleep;
-  if (lastSleep) sleeps = normalizeSleepHistory(sleeps.map(item => ({start:Date.parse(item.start)/1000,duration:(Date.parse(item.end)-Date.parse(item.start))/1000})).concat(lastSleep),now - 14 * 86400000,now);
+  if (lastSleep) sleeps = normalizeSleepHistory(sleeps.map(item => ({start:Date.parse(item.start)/1000,duration:(Date.parse(item.end)-Date.parse(item.start))/1000})).concat(lastSleep),from,now);
+  const latestBottle = feed.prefs?.lastBottle;
+  if (latestBottle) bottles = normalizeFeedHistory(bottles.map(item => ({mode:'bottle',start:Date.parse(item.start),amount:item.amount,units:item.units,bottleType:item.type})).concat({mode:'bottle',start:latestBottle.start,amount:latestBottle.bottleAmount,units:latestBottle.bottleUnits,bottleType:latestBottle.bottleType}),from,now);
   const prediction = details.sweetspot || {}, selected = prediction.selectedNapDay != null && Number.isFinite(Number(prediction.selectedNapDay)) ? String(Math.trunc(Number(prediction.selectedNapDay))) : '';
   const bottle = feed.prefs?.lastBottle, change = diaper.prefs?.lastDiaper;
-  return {childId:child,name:String(details.childsName || 'Baby').slice(0,100),timezone,checkedAt:new Date(now).toISOString(),historyCheckedAt,historyComplete,sleeps,
+  return {childId:child,name:String(details.childsName || 'Baby').slice(0,100),timezone,checkedAt:new Date(now).toISOString(),historyCheckedAt,historyComplete,feedsComplete,historyDays:HISTORY_DAYS,sleeps,bottles,
     timer:{active:sleep.timer?.active === true,paused:sleep.timer?.paused === true,start:iso(sleep.timer?.timerStartTime),end:iso(sleep.timer?.timerEndTime),uuid:String(sleep.timer?.uuid || '')},
     sweetspot:{time:iso(prediction.sweetSpotTimes?.[selected]),selectedNapDay:selected || null},
     lastBottle:bottle ? {time:iso(bottle.start),amount:Number.isFinite(bottle.bottleAmount) ? bottle.bottleAmount : null,units:bottle.bottleUnits === 'oz' ? 'oz' : 'ml',type:String(bottle.bottleType || 'Bottle').slice(0,60)} : null,

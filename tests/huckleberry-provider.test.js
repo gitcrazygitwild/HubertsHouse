@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { authenticateHuckleberry, huckleberryClient, huckleberrySnapshot, normalizeSleepHistory, validateBabyWrite, writeHuckleberry } from '../functions/huckleberry-provider.js';
+import { authenticateHuckleberry, huckleberryClient, huckleberrySnapshot, normalizeSleepHistory, normalizeFeedHistory, HISTORY_DAYS, validateBabyWrite, writeHuckleberry } from '../functions/huckleberry-provider.js';
 // The exact gRPC copy Firestore uses, resolved from Firestore's own dependency tree.
 const functionsRequire = createRequire(new URL('../functions/package.json', import.meta.url));
 const grpc = createRequire(functionsRequire.resolve('google-gax'))('@grpc/grpc-js');
@@ -93,6 +93,27 @@ test('invalid writes are rejected before touching provider data', () => {
 test('snapshot selects the saved SweetSpot and exposes only normalized fields', async () => {
   const records = {'childs/child':{childsName:'Frankie',private:'omit',sweetspot:{selectedNapDay:2,sweetSpotTimes:{2:now+3600000,3:now+7200000}}},'sleep/child':{timer:{active:true,timerStartTime:now-3600000,uuid:'timer'},prefs:{lastSleep:{start:(now-7200000)/1000,duration:1800}}},'feed/child':{prefs:{lastBottle:{start:now/1000,bottleAmount:4,bottleUnits:'oz',bottleType:'Formula'}}}};
   const client = {doc:path => ({get:async () => ({exists:!!records[path],data:() => records[path]})})};
-  const snapshot = await huckleberrySnapshot(client,'child','America/New_York',{sleeps:[],historyComplete:true,historyCheckedAt:new Date(now).toISOString()},false,now);
+  const snapshot = await huckleberrySnapshot(client,'child','America/New_York',{sleeps:[],bottles:[],historyComplete:true,historyCheckedAt:new Date(now).toISOString()},false,now);
+  assert.equal(snapshot.bottles.length,1); assert.equal(snapshot.bottles[0].amount,4);
   assert.equal(snapshot.sweetspot.time,'2026-11-15T16:00:00.000Z'); assert.equal(snapshot.timer.start,start); assert.equal(snapshot.sleeps.length,1); assert.equal(snapshot.lastBottle.amount,4); assert.equal(snapshot.private,undefined);
+});
+
+test('bottle history keeps only valid bottle feeds, including archived batches, and drops breast feeds', () => {
+  const bottle = {mode:'bottle',start:(now - 3600000)/1000,amount:4,units:'oz',bottleType:'Formula'};
+  const values = normalizeFeedHistory([bottle,{multi:true,data:{a:bottle,b:{mode:'bottle',start:now - 7200000,amount:120,units:'ml',bottleType:'Breast Milk'}}},
+    {mode:'breast',start:now/1000 - 60,leftDuration:300},{mode:'bottle',start:now/1000 - 60,amount:0,units:'oz'},{mode:'bottle',start:now/1000 - 60,amount:5,units:'cups'},{mode:'bottle',start:now/1000 - 60,amount:99,units:'oz'}],now - 86400000,now);
+  assert.deepEqual(values.map(v => [v.amount,v.units,v.type]),[[120,'ml','Breast Milk'],[4,'oz','Formula']]);
+});
+test(`snapshot reloads ${HISTORY_DAYS} days of sleep and bottle history, and refreshes a cache made before bottles existed`, async () => {
+  const records = {'childs/child':{childsName:'Frankie'},'sleep/child':{},'feed/child':{},'diaper/child':{}};
+  const queries = [];
+  const query = (path, clauses = []) => ({where:(field,op,value) => query(path,[...clauses,[field,op,value]]),orderBy:() => query(path,clauses),limit:() => query(path,clauses),
+    get:async () => { queries.push({path,clauses}); const multi = clauses.some(([field]) => field === 'multi');
+      const docs = multi ? [] : path.startsWith('sleep') ? [{data:() => ({start:(now - 40 * 86400000)/1000,duration:3600})}] : [{data:() => ({mode:'bottle',start:(now - 50 * 86400000)/1000,amount:3,units:'oz'})}];
+      return {docs,size:docs.length}; }});
+  const client = {doc:path => ({get:async () => ({exists:!!records[path],data:() => records[path]})}),collection:path => query(path)};
+  const snapshot = await huckleberrySnapshot(client,'child','America/New_York',{sleeps:[],historyComplete:true,historyCheckedAt:new Date(now).toISOString()},false,now);
+  const range = queries.find(q => q.path === 'feed/child/intervals' && q.clauses.length === 2);
+  assert.equal(range.clauses[0][2],(now - HISTORY_DAYS * 86400000)/1000);
+  assert.equal(snapshot.sleeps.length,1); assert.equal(snapshot.bottles.length,1); assert.equal(snapshot.feedsComplete,true); assert.equal(snapshot.historyDays,HISTORY_DAYS);
 });

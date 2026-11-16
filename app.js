@@ -1,6 +1,8 @@
 import { overlappingEvents, preferredCalendar } from './event-planning.js';
 import { initCatCrew } from './cat-crew.js';
 import { initHuckleberry } from './baby.js';
+import { sweetspotPatch } from './prediction-log.js';
+import { initUpgrades } from './upgrades.js';
 import { initEventDateEditor } from './event-editor.js';
 import { holidayEvents, holidaysEnabled } from './holidays.js';
 import { checklistKey, eventChecklistKey } from './checklists.js';
@@ -319,8 +321,11 @@ import {
   orderBy,
   serverTimestamp,
   getDoc,
+  setDoc,
+  deleteField,
   runTransaction,
-  writeBatch
+  writeBatch,
+  limit
 } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
 
 const firebaseConfig = config.firebase;
@@ -484,7 +489,7 @@ async function initApp() {
     document.getElementById('accountLabel').textContent = 'Preview mode. No real household or Apple data is loaded.';
     startHousehold(demoStore()); localDocs = demoEvents(); rebuildEvents();
     setCalendarStatus('Sample calendar', 'ready');
-    initCloudCalendar(null,{demo:true,onEvents:() => {},onCalendars:() => {}}); initHuckleberry(null,{demo:true}); return;
+    initCloudCalendar(null,{demo:true,onEvents:() => {},onCalendars:() => {}}); startUpgrades(); initHuckleberry(null,{demo:true}); return;
   }
   onAuthStateChanged(auth,async user => {
     if (!user) { memberVerified = false; gate.classList.remove('hidden'); if (dataStarted) location.reload(); return; }
@@ -505,7 +510,7 @@ async function initApp() {
         setCalendarStatus('Sync unavailable', 'offline');
         showNotice('The calendar could not sync. Check your connection and household access.');
       });
-      initHuckleberry(app);
+      startUpgrades(); initHuckleberry(app,{predictions:predictionStore()});
       await initCloudCalendar(app,{
         onEvents:records => { cloudDocs = records.map(e => ({...e,end:e.editEnd,cloudEnd:e.end,owner:e.owner || 'both',type:'general',checklist:e.checklist || [],repeat:'none'})); rebuildEvents(); },
         onChecklists:records => {cloudChecklistDocs=records;},
@@ -547,6 +552,62 @@ function startHousehold(store) {
     }
   });
 }
+// Daily cat care: one shared document per local date.
+function catCareStore() {
+  if (demo) {
+    const days = {}, listeners = {};
+    return { subscribe(day, next) { listeners[day] = next; next(days[day] || {}); return () => { delete listeners[day]; }; },
+      async set(day, key, value) { days[day] = { ...(days[day] || {}) }; if (value) days[day][key] = value; else delete days[day][key]; listeners[day]?.(days[day]); } };
+  }
+  return {
+    subscribe(day, next) { return onSnapshot(doc(db,'catCare',day),snap => next(snap.exists() ? snap.data() : {}),() => next({})); },
+    async set(day, key, value) { await setDoc(doc(db,'catCare',day),{[key]:value || deleteField(),updatedAt:serverTimestamp()},{merge:true}); }
+  };
+}
+function startUpgrades() {
+  const click = id => document.getElementById(id)?.click();
+  const babyLog = kind => { const button = document.querySelector(`#view-today [data-baby-log="${kind}"]`); if (button && !button.disabled) button.click(); else { showView('settings'); showNotice('Connect Huckleberry to log from here.'); } };
+  initUpgrades({
+    unlocked:isUnlocked, getEvents:() => expandedEvents, showView, notice:showNotice, catStore:catCareStore(),
+    openEvent:(id, occurrence) => openFromPanel(id, occurrence, false),
+    openDraft:payload => { if (isUnlocked()) openEventModal(payload); },
+    addGrocery:title => { showView('groceries'); const input = document.getElementById('quickGrocery'); input.value = title; document.getElementById('quickGroceryForm').requestSubmit(); },
+    searchCalendar:text => { showView('calendar'); requestAnimationFrame(() => { searchInput.value = text; searchInput.dispatchEvent(new Event('input')); searchInput.focus(); }); },
+    actions:() => [
+      { group:'Go to', icon:'⌂', label:'Today', keywords:'home dashboard', run:() => showView('today') },
+      { group:'Go to', icon:'▦', label:'Calendar', keywords:'month week', run:() => showView('calendar') },
+      { group:'Go to', icon:'☺', label:'Frankie', keywords:'baby sleep bottles scoreboard charts', run:() => showView('frankie') },
+      { group:'Go to', icon:'✓', label:'Chores & lists', keywords:'tasks checklists', run:() => showView('tasks') },
+      { group:'Go to', icon:'🛒', label:'Groceries', keywords:'shopping list', run:() => showView('groceries') },
+      { group:'Go to', icon:'⚙', label:'Settings', keywords:'preferences huckleberry icloud', run:() => showView('settings') },
+      { group:'Actions', icon:'＋', label:'New event', keywords:'add plan create', run:() => fab.click() },
+      { group:'Actions', icon:'♡', label:'Plan a date night', keywords:'template romance', run:() => openEventModal(eventTemplate('date-night')) },
+      { group:'Actions', icon:'◷', label:'Add an appointment', keywords:'doctor template', run:() => openEventModal(eventTemplate('appointment')) },
+      { group:'Frankie', icon:'🍼', label:'Log a bottle', keywords:'feed ounces milk formula', run:() => babyLog('bottle') },
+      { group:'Frankie', icon:'☾', label:'Start or finish a sleep timer', keywords:'nap', run:() => { showView('today'); click('babySleep'); } },
+      { group:'Frankie', icon:'＋', label:'Log a finished sleep', keywords:'nap', run:() => babyLog('sleep-log') },
+      { group:'Frankie', icon:'♡', label:'Log a diaper', keywords:'change wet dirty', run:() => babyLog('diaper') },
+      { group:'Actions', icon:'◐', label:'Toggle dark mode', keywords:'theme night light', run:() => click('themeToggle') },
+      { group:'Actions', icon:'⛶', label:'Monitor mode', keywords:'fullscreen display kiosk', run:() => click('displayBtn') },
+      { group:'Actions', icon:'🐾', label:'Cat crew checklist', keywords:'feed cats hubert mack mia litter water', run:() => { showView('today'); document.getElementById('catCare').scrollIntoView?.({behavior:'smooth',block:'center'}); } }
+    ]
+  });
+}
+// Nap scoreboard: the latest SweetSpot per wake-up (Hubert and Mia are replayed).
+function predictionStore() {
+  const col = collection(db,'babyPredictions');
+  return {
+    subscribe(next) { return onSnapshot(query(col,orderBy('lastWake','desc'),limit(400)),snap => next(snap.docs.map(d => ({id:d.id,...d.data()}))),() => next(null)); },
+    async record(entry) {
+      const { id, ...data } = entry, ref = doc(col,id);
+      await runTransaction(db,async transaction => {
+        const current = await transaction.get(ref), patch = sweetspotPatch(current.exists() ? current.data() : null, data);
+        if (!patch) return;
+        if (current.exists()) transaction.update(ref,{...patch,updatedAt:serverTimestamp()}); else transaction.set(ref,{...patch,createdAt:serverTimestamp()});
+      });
+    }
+  };
+}
 function firestoreStore() {
   const col = collection(db,'householdItems');
   const check = (snapshot,item) => { if (!snapshot.exists() || snapshot.data().version !== item.version) throw new Error('This item changed on another device. Try again.'); };
@@ -583,7 +644,7 @@ function rebuildEvents() {
     backgroundColor:(OWNER_STYLE[e.owner] || OWNER_STYLE.both).bg,borderColor:(OWNER_STYLE[e.owner] || OWNER_STYLE.both).border,textColor:'#34432e',editable:!e.readOnlyReason,
     extendedProps:{sourceId:e.id,owner:e.owner || 'both',ownerCustom:e.ownerCustom || '',withFrankie:!!e.withFrankie,type:'general',notes:e.notes,checklist:e.checklist || [],icloud:true,isRepeatOccurrence:!!e.recurring}
   }))];
-  renderCalendarFromCache(); renderPanels(); updateHouseholdEvents(expandedEvents);
+  renderCalendarFromCache(); renderPanels(); updateHouseholdEvents(expandedEvents); window.dispatchEvent(new Event('hh:events'));
   if (!backdrop?.classList.contains("hidden")) updateEventOverlap();
 }
 function findEventRecord(id) { return rawDocs.find(record=>record.id===id) || cloudChecklistDocs.find(record=>record.id===id); }

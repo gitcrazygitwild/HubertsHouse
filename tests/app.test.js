@@ -19,11 +19,12 @@ async function fixture(options = {}) {
   await module('household-model.js',['dateKey','dueLabel','completionPatch','validateItem','escapeHTML','OWNERS','CATEGORIES','filterTaskItems']);
   await module('calendar-model.js',['localDate','startOfDay','nextDay','eventEnd','eventsOnDay','checklistProgress']);
   await module('dom.js',['renderHTML']);
+  await module('jokes.js',['dadJokes','afterDarkJokes','dailyJokes']);
   await module('daily-content.js',['dailyContent']);
   await module('holidays.js',['usHolidays','holidaysInRange','holidaysEnabled','holidayEvents']);
   await module('event-editor.js',['initEventDateEditor','eventRangeSummary']);
   await module('event-planning.js',['overlappingEvents','preferredCalendar']);
-  await module('cat-crew.js',['initCatCrew']);
+  await module('cat-crew.js',['initCatCrew','cats','portrait']);
   await module('dashboard.js',['initDashboard']);
   await module('event-templates.js',['eventTemplate']);
   await module('demo.js',['demoStore','demoEvents']);
@@ -34,13 +35,20 @@ async function fixture(options = {}) {
   await module('checklists.js',['checklistKey','eventChecklistKey','eventChecklistGroups']);
   await module('household.js',['initHousehold','updateHouseholdEvents','showNotice','showView'],'const esc=escapeHTML;');
   await module('cloud-calendar.js',['initCloudCalendar','setCloudRange','refreshCloud','saveCloudEvent','saveCloudAssignment','deleteCloudEvent'],'const esc=escapeHTML;');
-  await module('baby-model.js',['purrfectWindow','huckleberryPrediction']);
+  await module('baby-model.js',['purrfectWindow','huckleberryPrediction','miaForecast','indexedWakeWindows']);
+  await module('prediction-log.js',['MODELS','predictionId','isDaytimeWake','sweetspotEntry','sweetspotPatch','previousSweetspot','actualSleepStart','replayGuesses','scorePredictions']);
+  await module('baby-history.js',['toOunces','localDay','dayStart','dayKeys','sleepKind','dailySleep','dailyBottles','timelineRows','babySummary']);
+  await module('baby-sample.js',['sampleHistory','samplePredictions']);
+  await module('frankie.js',['renderFrankie','initFrankie'],'const esc=escapeHTML;');
   await module('baby.js',['initHuckleberry'],'const esc=escapeHTML;');
   await module('calendar-view.js',['initCalendarExperience','calendarEventContent'],'const esc=escapeHTML;');
   await module('home-calendar.js',['initHomeCalendar','homeCalendarWeek'],'const esc=escapeHTML;');
   await module('weather-shared.js',['richmondDay','forecastCondition','weatherIcon']);
   await module('weather.js',['initWeather'],'const esc=escapeHTML;');
   await module('week-brief.js',['renderWeekBrief'],'const esc=escapeHTML;');
+  await module('quick-add.js',['parseQuickAdd','describeDraft']);
+  await module('smart-home.js',['isOutdoor','weatherFlags','nextUp','untilText','CATS','CAT_TASKS','catCareStatus']);
+  await module('upgrades.js',['initUpgrades'],'const esc=escapeHTML;');
   w.eval(clean(await read('app.js')) + ';window.__testApp={getDocs:()=>rawDocs,setCloudDocs:(records)=>{cloudDocs=records;rebuildEvents();},persistMovedEvent,redraw:()=>updateHouseholdEvents(expandedEvents)};'); await settle();
   return {dom,w,doc:w.document,errors};
 }
@@ -299,4 +307,38 @@ test('a partial Apple save retains the checklist draft and retries only househol
   doc.getElementById('evtTitle').value='New Apple appointment';doc.getElementById('addCheckItem').click();doc.querySelector('#checklist input[type="text"]').value='Pack a bottle';
   doc.getElementById('saveBtnTop').click();await settle();assert.equal(appleWrites,1);assert.equal(doc.getElementById('modalBackdrop').classList.contains('hidden'),false);assert.equal(doc.getElementById('evtTitle').disabled,true);assert.equal(doc.querySelector('#checklist input[type="text"]').value,'Pack a bottle');
   doc.getElementById('saveBtnTop').click();await settle();assert.equal(appleWrites,1);assert.equal(metadataWrites,1);assert.equal(doc.getElementById('modalBackdrop').classList.contains('hidden'),true);assert.deepEqual(errors,[]);
+});
+test('quick add, the command palette, cat care, the Frankie page and the after-dark joke work in the preview', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  // Natural-language quick add opens a prefilled draft; nothing saves until the editor does.
+  const before = w.__testApp.getDocs().length;
+  doc.getElementById('quickAddInput').value = 'Pediatrician Tue 3pm with Frankie';
+  doc.getElementById('quickAddInput').dispatchEvent(new w.Event('input'));
+  assert.match(doc.getElementById('quickAddPreview').textContent, /Pediatrician · Tue/);
+  doc.getElementById('quickAddForm').dispatchEvent(new w.Event('submit', { cancelable:true }));
+  assert.ok(!doc.getElementById('modalBackdrop').classList.contains('hidden'));
+  assert.equal(doc.getElementById('evtTitle').value, 'Pediatrician'); assert.equal(doc.getElementById('evtWithFrankie').checked, true);
+  assert.equal(w.__testApp.getDocs().length, before); doc.getElementById('modalClose').click();
+  // ⌘K / Ctrl+K opens the palette; typing filters; Enter runs the choice.
+  doc.dispatchEvent(new w.KeyboardEvent('keydown', { key:'k', ctrlKey:true, bubbles:true }));
+  assert.equal(doc.getElementById('paletteDialog').open, true);
+  const input = doc.getElementById('paletteInput'); input.value = 'groceries'; input.dispatchEvent(new w.Event('input'));
+  assert.match(doc.querySelector('#paletteList [aria-selected="true"]').textContent, /Groceries/);
+  input.dispatchEvent(new w.KeyboardEvent('keydown', { key:'Enter', bubbles:true })); await settle();
+  assert.equal(doc.getElementById('paletteDialog').open, false); assert.equal(w.location.hash, '#groceries');
+  // Cat care toggles and reports progress; the device owner is remembered.
+  doc.getElementById('deviceOwner').value = 'karena'; doc.getElementById('deviceOwner').dispatchEvent(new w.Event('change'));
+  doc.querySelector('[data-cat-task="mack_am"]').click(); await settle();
+  assert.match(doc.querySelector('[data-cat-task="mack_am"]').textContent, /Karena/);
+  assert.equal(doc.getElementById('catCareProgress').textContent, '1 of 8 done today');
+  // Three nap predictions on Home; the Frankie page renders charts and the scoreboard.
+  assert.equal(doc.querySelectorAll('#babyPredictions .nap-card').length, 3);
+  doc.querySelector('[data-view="frankie"]').click(); await settle();
+  assert.ok(doc.querySelector('#frankieBottles svg .mark-bottle')); assert.ok(doc.querySelector('#frankieTimeline svg .mark-nap'));
+  assert.equal(doc.querySelectorAll('#frankieScore .score-card').length, 3);
+  // The after-dark joke is folded away and can be hidden per device.
+  assert.equal(doc.getElementById('afterDarkJoke').open, false); assert.ok(doc.getElementById('afterDarkSetup').textContent.length > 8);
+  doc.getElementById('afterDarkSetting').checked = false; doc.getElementById('afterDarkSetting').dispatchEvent(new w.Event('change'));
+  assert.equal(doc.getElementById('afterDarkJoke').hidden, true); assert.equal(w.localStorage.getItem('hh_after_dark'), '0');
+  assert.deepEqual(errors, []);
 });

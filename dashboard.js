@@ -36,6 +36,9 @@ export function initDashboard({ onAppearanceChange = () => {} } = {}) {
   palette(read('hh_palette')); density(read('hh_density'));
   $('keyboardShortcuts').checked = read('hh_shortcuts') !== '0';
   $('keyboardShortcuts').addEventListener('change', event => write('hh_shortcuts', event.target.checked ? '1' : '0'));
+  const afterDark = on => { $('afterDarkJoke').hidden = !on; $('afterDarkSetting').checked = on; write('hh_after_dark', on ? '1' : '0'); };
+  afterDark(read('hh_after_dark') !== '0');
+  $('afterDarkSetting').addEventListener('change', event => afterDark(event.target.checked));
   let currentDay;
   function missionState(key) {
     const done = read('hh_mission_done') === key;
@@ -58,6 +61,9 @@ export function initDashboard({ onAppearanceChange = () => {} } = {}) {
     $('dailyJokeSetup').textContent = content.joke.setup;
     $('dailyJokeAnswer').textContent = content.joke.punchline;
     $('dailyJoke').open = false;
+    $('afterDarkSetup').textContent = content.afterDark.setup;
+    $('afterDarkAnswer').textContent = content.afterDark.punchline;
+    $('afterDarkJoke').open = false; $('afterDarkPunch').open = false;
     $('missionText').textContent = content.mission;
     $('dailyDate').textContent = new Date().toLocaleDateString([], { month: 'short', day: 'numeric' });
     missionState(currentDay);

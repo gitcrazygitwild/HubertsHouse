@@ -1,4 +1,5 @@
 import { dateKey } from './household-model.js';
+import { dailyJokes } from './jokes.js';
 
 // Original encouragement written for the house; no invented famous attributions.
 const quotes = [
@@ -49,22 +50,6 @@ const words = [
   ['effervescent','adjective','Lively, enthusiastic, and full of energy.','Her effervescent laugh brightened the room.'],
   ['liminal','adjective','At a boundary or between two stages.','Dawn is a liminal moment between night and day.']
 ];
-const jokes = [
-  ['Why was the broom late?', 'It overswept.'],
-  ['What did one wall say to the other?', 'I’ll meet you at the corner.'],
-  ['Why did the bicycle take a nap?', 'It was two-tired.'],
-  ['What do you call a cat who loves bowling?', 'An alley cat.'],
-  ['Why don’t eggs tell jokes?', 'They’d crack each other up.'],
-  ['What do you call a bear with no teeth?', 'A gummy bear.'],
-  ['Why did the tomato blush?', 'It saw the salad dressing.'],
-  ['How does a penguin build a house?', 'Igloos it together.'],
-  ['What do you call a sleeping dinosaur?', 'A dino-snore.'],
-  ['Why did the cookie go to the doctor?', 'It felt crummy.'],
-  ['What kind of music do balloons dislike?', 'Pop music.'],
-  ['What did the ocean say to the beach?', 'Nothing. It just waved.'],
-  ['Why did the calendar need a break?', 'Its days were numbered.'],
-  ['What do cats eat for breakfast?', 'Mice Krispies.']
-];
 const missions = [
   'Put five little things back where they belong.',
   'Tell someone one specific thing you appreciate about them.',
@@ -79,5 +64,5 @@ export function dailyContent(now = new Date()) {
   const ordinal = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86400000);
   const index = ((ordinal % 14) + 14) % 14;
   const [word, part, definition, example] = words[index];
-  return { key, quote: quotes[index], attribution: 'Hubert’s House', fact: facts[index], word: { word, part, definition, example }, joke: { setup: jokes[index][0], punchline: jokes[index][1] }, mission: missions[index % missions.length] };
+  return { key, quote: quotes[index], attribution: 'Hubert’s House', fact: facts[index], word: { word, part, definition, example }, ...dailyJokes(now), mission: missions[index % missions.length] };
 }
