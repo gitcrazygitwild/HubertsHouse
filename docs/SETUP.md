@@ -36,7 +36,7 @@ Keep the generated secret intact for existing connections. Rotating it requires 
 
 The deployed runtime must be able to reach `https://caldav.icloud.com` and Apple's `https://pNN-caldav.icloud.com` calendar shards. The application refuses credentials on other hosts and checks redirect destinations before following them.
 
-The calendar service includes `calendarAssign` for household-only event owners and Frankie accents. It requires the same membership and Apple access checks as reading an event, then writes to `privateCalendarAssignments` without modifying Apple. Existing household data needs no migration. Keep this collection when redeploying or reconnecting accounts; assignments use the connected calendar ID and Apple UID, with version checks for concurrent edits.
+The calendar service includes `calendarAssign` for household-only event owners, Frankie accents, and checklists. It requires the same membership and Apple access checks as reading an event, then writes to `privateCalendarAssignments` without modifying Apple. Existing household data needs no migration. Keep this collection when redeploying or reconnecting accounts; assignments use the connected calendar ID and Apple UID, with version checks for concurrent edits. Checklist metadata includes a saved title/date/resource reference so Chores & Lists can display lists outside the loaded calendar window. No checklist text is written into Apple notes or calendar properties. Selected-calendar access limits which saved lists are returned.
 
 ## 3. Activate and publish the frontend
 
@@ -118,3 +118,13 @@ This adds no separately billed API or AI model. An existing eligible Huckleberry
 - Click an event and confirm the editor opens directly. Change its start date and verify duration is preserved; test a timed overnight plan, an all-day multi-day span, and the Today/Tomorrow and duration shortcuts.
 - Confirm Frankie appears in the calendar legend and filters to events with Frankie alongside an adult.
 - Toggle **U.S. holidays** in Calendar and confirm both calendars update. Check Christmas Eve, Thanksgiving, and an observed holiday; household counts and overlap warnings must remain unaffected.
+
+## Checklist acceptance checks
+
+- Open a household or Apple event, add two checklist steps, and save. In **Chores & Lists → Checklists**, confirm the same steps appear under **From your calendar**. Complete a step there, reopen the event, and verify its completion and calendar progress badge.
+- Repeat on a read-only Apple event. Apple details must stay unchanged; the checklist belongs to Hubert’s House. Recurring events share one list for the series, rather than resetting tasks for every occurrence.
+- Browse the calendar to a different month and confirm the Apple checklist remains in Chores & Lists. Saved event dates are labeled when the original event is outside the loaded range; a freshly loaded event provides its current title/date.
+- Use **New checklist** to create “Clean shower” with several steps. Confirm it adds shared list items and no calendar event. **Add a checklist item** still supports single tasks or another item in a named list. Batch creation is atomic.
+- Check source, person, search, timing, and completed filters. Edit an event checklist using **Edit checklist → Save checklist**; canceling leaves the saved list untouched.
+- Open a checklist in two sessions, save one, then try a conflicting save from the old editor. Confirm it asks to reopen rather than overwriting the newer checklist.
+- Disconnect or deselect an Apple calendar and confirm its saved lists disappear from this session while provider events and saved metadata remain intact.

@@ -24,6 +24,20 @@ test('stale assignments cannot overwrite a newer owner, and a retry of the same 
   assert.equal((await store.apply([{calendarId:'cal',uid:'uid'}]))[0].owner,'karena');
   for(const patch of [{owner:'frankie'},{owner:'custom',withFrankie:true},{withFrankie:'yes'},{ownerCustom:'x'.repeat(101)}])assert.throws(()=>validateAssignment({...first,...patch}));
 });
+test('private checklists survive owner-only clients and reject stale item updates',async()=>{
+  const db=database(),store=createAssignmentStore(db),assignment={owner:'both',ownerCustom:'',withFrankie:true};
+  const first={...assignment,checklist:[{id:'snacks',text:'Pack snacks',done:false}]};
+  await store.save('cal','uid',first,0,{title:'Family visit',start:'2026-11-16'});
+  await store.save('cal','uid',{...assignment,owner:'karena'},1);
+  let event=(await store.apply([{calendarId:'cal',uid:'uid'}]))[0];assert.equal(event.checklist[0].text,'Pack snacks');assert.equal(event.assignmentVersion,2);
+  await store.save('cal','uid',{...assignment,owner:'karena',checklist:[{id:'snacks',text:'Pack snacks',done:true}]},2);
+  await assert.rejects(store.save('cal','uid',{...first,owner:'karena'},2),error=>error.code==='aborted');
+  assert.equal((await store.apply([{calendarId:'cal',uid:'uid'}]))[0].checklist[0].done,true);
+  for(const checklist of [[{text:'',done:false}],[{text:'x',done:'yes'}],Array.from({length:201},()=>({text:'x',done:false}))])assert.throws(()=>validateAssignment({...assignment,checklist}));
+  let selected;
+  db.collection=()=>({where:(field,operator,ids)=>{selected=ids;return {get:async()=>({docs:[...db.records.values()].filter(row=>ids.includes(row.calendarId)).map(row=>({data:()=>row}))})};}});
+  const lists=await store.lists(['cal']);assert.deepEqual(selected,['cal']);assert.equal(lists[0].title,'Family visit');assert.equal(lists[0].checklistOnly,true);assert.equal((await store.lists(['different-calendar'])).length,0);
+});
 test('member-only owner edits work for read-only Apple events without a CalDAV write; a partial save is reported honestly',async t=>{
   const {calendarAssign,calendarSave}=await import('../functions/index.js');
   const db=getFirestore(),fake=database(),key=randomBytes(32).toString('base64'),oldKey=process.env.CALENDAR_ENCRYPTION_KEY;
@@ -35,8 +49,8 @@ test('member-only owner edits work for read-only Apple events without a CalDAV w
   db.runTransaction=fake.runTransaction;
   const data='BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:stable-uid\r\nDTSTART:20261115T140000Z\r\nDTEND:20261115T150000Z\r\nSUMMARY:Appointment\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n';
   let reads=0,writes=0;CalDAV.prototype.read=async()=>{reads++;return {data,etag:'v1'};};CalDAV.prototype.put=async()=>{writes++;};
-  const input={calendarId:'cal',token:'resource',uid:'stable-uid',assignmentVersion:0,assignment:{owner:'karena',ownerCustom:'',withFrankie:true}};
-  const result=await calendarAssign.run({auth:{uid:'member'},data:input});assert.equal(result.assignment.owner,'karena');assert.equal(writes,0);assert.equal(reads,1);
+  const input={calendarId:'cal',token:'resource',uid:'stable-uid',assignmentVersion:0,context:{title:'Appointment',start:'2026-11-15T14:00:00Z',end:'2026-11-15T15:00:00Z'},assignment:{owner:'karena',ownerCustom:'',withFrankie:true,checklist:[{id:'bring-id',text:'Bring ID',done:false}]}};
+  const result=await calendarAssign.run({auth:{uid:'member'},data:input});assert.equal(result.assignment.owner,'karena');assert.equal(result.assignment.checklist[0].text,'Bring ID');assert.equal(writes,0);assert.equal(reads,1);
   await assert.rejects(calendarAssign.run({auth:{uid:'outsider'},data:input}),e=>e.code==='permission-denied');assert.equal(reads,1);
   await assert.rejects(calendarAssign.run({auth:{uid:'member'},data:{...input,uid:'replacement'}}),e=>e.code==='aborted');
   calendar.writable=true;db.runTransaction=async()=>{throw new Error('Database temporarily unavailable');};

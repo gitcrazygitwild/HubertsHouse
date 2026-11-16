@@ -31,6 +31,7 @@ async function fixture(options = {}) {
     const originalStore = w.demoStore;
     w.demoStore = () => ({ ...originalStore(), update: async () => { throw new Error('The connection interrupted this save.'); } });
   }
+  await module('checklists.js',['checklistKey','eventChecklistKey','eventChecklistGroups']);
   await module('household.js',['initHousehold','updateHouseholdEvents','showNotice','showView'],'const esc=escapeHTML;');
   await module('cloud-calendar.js',['initCloudCalendar','setCloudRange','refreshCloud','saveCloudEvent','saveCloudAssignment','deleteCloudEvent'],'const esc=escapeHTML;');
   await module('baby-model.js',['purrfectWindow','huckleberryPrediction']);
@@ -256,4 +257,46 @@ test('Today contains the live week calendar and adding there updates both calend
   assert.ok(doc.querySelector('#homeWeek [data-home-event="sample7"]'), 'Home always shows everyone, independent of full-calendar filters');
   assert.equal(doc.getElementById('homeCalendarStatus').textContent,'Sample calendar');
   assert.deepEqual(errors,[]);
+});
+
+test('event checklist completion is shared with Chores & Lists, and stale editors cannot undo it',async t=>{
+  const {dom,w,doc,errors}=await fixture();t.after(()=>dom.window.close());
+  doc.getElementById('quickEvent').click();doc.getElementById('evtTitle').value='Weekend packing';
+  doc.getElementById('addCheckItem').click();doc.querySelector('#checklist input[type="text"]').value='Pack Frankie’s snacks';
+  doc.getElementById('saveBtnTop').click();await settle();
+  const record=w.__testApp.getDocs().find(record=>record.title==='Weekend packing');assert.equal(record.checklist.length,1);
+  doc.querySelector('[data-view="tasks"]').click();doc.querySelector('[data-kind="task"]').click();
+  assert.match(doc.getElementById('eventChecklistGroups').textContent,/Weekend packing/);
+  doc.querySelector('[data-event-check]').click();await settle();assert.equal(w.__testApp.getDocs().find(r=>r.id===record.id).checklist[0].done,true);
+  doc.getElementById('showCompleted').click();doc.querySelector('[data-edit-event-checklist]').click();assert.equal(doc.querySelector('#taskChecklist input[type="checkbox"]').checked,true);
+  doc.querySelector('#taskChecklist input[type="text"]').value='Pack snacks and bottles';doc.getElementById('taskDone').click();await settle();assert.match(doc.getElementById('eventChecklistGroups').textContent,/snacks and bottles/);
+  doc.querySelector('[data-view="today"]').click();doc.querySelector(`[data-home-event="${record.id}"]`).click();
+  // A second session completes/changes the stored checklist while this editor is open.
+  w.__testApp.getDocs().find(r=>r.id===record.id).checklist[0].done=false;
+  doc.getElementById('saveBtnTop').click();await settle();assert.match(doc.getElementById('evtError').textContent,/checklist changed/);assert.equal(doc.getElementById('modalBackdrop').classList.contains('hidden'),false);
+  assert.deepEqual(errors,[]);
+});
+test('standalone checklists create multiple shared items without creating a calendar event',async t=>{
+  const {dom,w,doc,errors}=await fixture();t.after(()=>dom.window.close());const before=w.__testApp.getDocs().length;
+  doc.querySelector('[data-view="tasks"]').click();doc.querySelector('[data-kind="task"]').click();doc.getElementById('newChecklist').click();
+  doc.getElementById('standaloneChecklistName').value='Clean shower';doc.getElementById('standaloneChecklistItems').value='Spray tiles\nScrub grout\nRinse and dry';
+  doc.getElementById('standaloneChecklistForm').dispatchEvent(new w.Event('submit',{cancelable:true}));await settle();
+  assert.equal(doc.getElementById('standaloneChecklistDialog').open,false);assert.match(doc.getElementById('taskGroups').textContent,/Clean shower/);assert.match(doc.getElementById('taskGroups').textContent,/Rinse and dry/);assert.equal(w.__testApp.getDocs().length,before);assert.deepEqual(errors,[]);
+});
+test('read-only Apple checklist steps save through household metadata and never create local calendar duplicates',async t=>{
+  const {dom,w,doc,errors}=await fixture();t.after(()=>dom.window.close());const date=new Date().toISOString();
+  const record={id:'apple-checklist',icloud:true,uid:'stable',calendarId:'cal',token:'token',title:'Apple appointment',start:date,end:date,cloudEnd:date,owner:'both',ownerCustom:'',withFrankie:true,readOnlyReason:'Edit this invitation in Apple.',assignmentVersion:2,checklist:[{id:'id-card',text:'Bring ID',done:false}]};
+  w.__testApp.setCloudDocs([record]);const calls=[];w.saveCloudAssignment=async(assignment,original)=>{calls.push({assignment,original});return {assignment:{...assignment,assignmentVersion:3}};};w.saveCloudEvent=async()=>{throw new Error('Checklist must not write to Apple');};
+  doc.querySelector('[data-view="tasks"]').click();doc.querySelector('[data-kind="task"]').click();doc.querySelector('[data-event-check="apple-checklist"]').click();await settle();
+  assert.equal(calls.length,1);assert.equal(calls[0].assignment.checklist[0].done,true);assert.equal(calls[0].original.assignmentVersion,2);assert.equal(w.__testApp.getDocs().filter(r=>r.title==='Apple appointment').length,1);assert.equal(w.__testApp.getDocs().find(r=>r.id==='apple-checklist').assignmentVersion,3);assert.deepEqual(errors,[]);
+});
+
+test('a partial Apple save retains the checklist draft and retries only household metadata',async t=>{
+  const {dom,w,doc,errors}=await fixture();t.after(()=>dom.window.close());let appleWrites=0,metadataWrites=0;
+  w.saveCloudEvent=async()=>{appleWrites++;return {saved:true,token:'saved-resource',uid:'saved-uid',assignmentSaved:false,warning:'Apple saved; keep your checklist here.'};};
+  w.saveCloudAssignment=async(assignment,original)=>{metadataWrites++;assert.equal(original.uid,'saved-uid');assert.equal(original.token,'saved-resource');assert.equal(assignment.checklist[0].text,'Pack a bottle');return {saved:true};};
+  doc.getElementById('quickEvent').click();const calendar=doc.getElementById('evtCalendar');calendar.add(new w.Option('Apple','cal'));calendar.value='cal';calendar.dispatchEvent(new w.Event('change'));
+  doc.getElementById('evtTitle').value='New Apple appointment';doc.getElementById('addCheckItem').click();doc.querySelector('#checklist input[type="text"]').value='Pack a bottle';
+  doc.getElementById('saveBtnTop').click();await settle();assert.equal(appleWrites,1);assert.equal(doc.getElementById('modalBackdrop').classList.contains('hidden'),false);assert.equal(doc.getElementById('evtTitle').disabled,true);assert.equal(doc.querySelector('#checklist input[type="text"]').value,'Pack a bottle');
+  doc.getElementById('saveBtnTop').click();await settle();assert.equal(appleWrites,1);assert.equal(metadataWrites,1);assert.equal(doc.getElementById('modalBackdrop').classList.contains('hidden'),true);assert.deepEqual(errors,[]);
 });

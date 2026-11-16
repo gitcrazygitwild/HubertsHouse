@@ -16,7 +16,9 @@ export function calendarEventContent({ event, view }) {
   const clock = event.allDay ? 'All day' : time(event.start);
   const progress = checklistProgress(p.checklist);
   const progressHTML = progress.total ? `<span class="event-checklist-progress ${progress.done === progress.total ? 'is-complete' : ''}" aria-label="${progress.done} of ${progress.total} checklist items complete"><span aria-hidden="true">✓</span> ${progress.done}/${progress.total}<span class="event-checklist-track" aria-hidden="true"><i style="width:${Math.round(progress.done / progress.total * 100)}%"></i></span></span>` : '';
-  wrapper.innerHTML = `<div class="smart-event-time">${esc(clock)}${p.isRepeatOccurrence ? '<span aria-label="Repeating">↻</span>' : ''}</div><span class="smart-event-title">${icon ? `<span class="smart-event-icon" aria-hidden="true">${icon}</span>` : ''}${esc(event.title)}</span>${p.withFrankie ? '<span class="frankie-tag">+ Frankie</span>' : ''}${progressHTML}${view.type.startsWith('timeGrid') ? `<span class="smart-event-owner">${esc(ownerNames[owner])}</span>` : ''}`;
+  const people=`${owner==='custom' ? p.ownerCustom || 'Other' : ownerNames[owner]}${p.withFrankie?' · Frankie':''}`;
+  wrapper.title=`${event.title} · ${clock} · ${people}${progress.total ? ` · Checklist ${progress.done}/${progress.total}` : ''}`;
+  wrapper.innerHTML = `<div class="smart-event-time">${esc(clock)}${p.isRepeatOccurrence ? '<span aria-label="Repeating">↻</span>' : ''}</div><span class="smart-event-title">${icon ? `<span class="smart-event-icon" aria-hidden="true">${icon}</span>` : ''}${esc(event.title)}</span><div class="smart-event-meta">${view.type.startsWith('timeGrid') || p.withFrankie ? `<span class="smart-event-people">${p.withFrankie?'<i class="person-dot frankie" aria-hidden="true"></i>':''}${esc(people)}</span>` : ''}${progressHTML}</div>`;
   return { domNodes: [wrapper] };
 }
 
@@ -33,7 +35,10 @@ export function initCalendarExperience({ calendar, getEvents, getFilteredEvents,
     const now = new Date(), today = dateKey(now), view = calendar.view;
     const height = view.type.startsWith('timeGrid') ? Math.max(440, Math.min(720, window.innerHeight - 270)) : 'auto';
     if (calendar.getOption('height') !== height) calendar.setOption('height', height);
-    if (rangeChanged && view.type.startsWith('timeGrid')) requestAnimationFrame(() => calendar.scrollToTime('07:00:00'));
+    if (rangeChanged && view.type.startsWith('timeGrid')) {
+      const hour=now>=view.activeStart && now<view.activeEnd ? Math.max(0,now.getHours()-1) : 7;
+      requestAnimationFrame(() => calendar.scrollToTime(`${String(hour).padStart(2,'0')}:00:00`));
+    }
     if (rangeChanged && (selected < view.activeStart || selected >= view.activeEnd || view.type === 'timeGridDay')) selected = startOfDay(calendar.getDate());
     $('calendarTitleText').textContent = view.title;
     $('calendarTitle').setAttribute('aria-label', `${view.title}. Jump to a month`);

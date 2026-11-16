@@ -4,7 +4,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import { CalDAV, CalendarError, resourceToken, appleURL } from './caldav.js';
 import { readEvents, writeEvent, canDelete, eventUID } from './ical.js';
-import { createAssignmentStore, validateAssignment } from './calendar-assignments.js';
+import { createAssignmentStore, validateAssignment, assignmentKey } from './calendar-assignments.js';
 import { encryptCredential, decryptCredential } from './crypto.js';
 import { HuckleberryError } from './huckleberry-provider.js';
 import { createHuckleberryHandler } from './huckleberry-service.js';
@@ -40,6 +40,11 @@ function calendarFor(data,id) {
   if (!calendar || !data.selected.includes(id)) throw new CalendarError('permission-denied','Choose a connected calendar.');
   return calendar;
 }
+function checklistContext(input,calendar,token,uid) {
+  if(!input)return undefined; // Older clients can still change an owner.
+  if(typeof input.title!=='string' || input.title.length>500 || typeof input.start!=='string' || isNaN(new Date(input.start)) || (input.end && (typeof input.end!=='string' || isNaN(new Date(input.end))))) throw new CalendarError('invalid-argument','Refresh the event before saving its checklist.');
+  return {id:`icloud-checklist:${assignmentKey(calendar.id,uid)}`,title:input.title,start:input.start,end:input.end || null,allDay:!!input.allDay,recurring:!!input.recurring,calendarName:calendar.name || 'Apple Calendar',token};
+}
 export const calendarStatus = endpoint(async uid => {
   const snap = await connectionRef(uid).get(); if (!snap.exists) return {connected:false};
   const data = snap.data();
@@ -71,7 +76,8 @@ export const calendarEvents = endpoint(async (uid,input) => {
     return objects.flatMap(object => readEvents(object,calendar,start,end));
   }));
   const events = grouped.flat(); if (events.length > 5000) throw new CalendarError('resource-exhausted','Too many events in this range. Select fewer calendars.');
-  return {events:await assignments.apply(events),checkedAt:new Date().toISOString()};
+  const [assigned,checklists]=await Promise.all([assignments.apply(events),assignments.lists(data.selected)]);
+  return {events:assigned,checklists,checkedAt:new Date().toISOString()};
 });
 export const calendarAssign = endpoint(async (uid,input) => {
   const assignment=validateAssignment(input.assignment);
@@ -79,7 +85,7 @@ export const calendarAssign = endpoint(async (uid,input) => {
   // Even a read-only Apple resource can have a household-only assignment.
   const current=await client.read(calendar,input.token),identity=eventUID(current.data);
   if (input.uid!==identity) throw new CalendarError('aborted','This Apple event changed. Refresh before assigning it.');
-  return {saved:true,assignment:await assignments.save(calendar.id,identity,assignment,input.assignmentVersion)};
+  return {saved:true,assignment:await assignments.save(calendar.id,identity,assignment,input.assignmentVersion,checklistContext(input.context,calendar,input.token,identity))};
 });
 export const calendarSave = endpoint(async (uid,input) => {
   const assignment=input.event?.owner === undefined ? null : validateAssignment(input.event);
@@ -97,10 +103,10 @@ export const calendarSave = endpoint(async (uid,input) => {
   const body = writeEvent(input.event,existing?.data,`${input.requestId}@huberts.house`);
   await client.put(calendar,token,body,input.etag,!existing);
   if (assignment) {
-    try { await assignments.save(calendar.id,eventUID(body),assignment,input.assignmentVersion ?? 0); }
-    catch { return {saved:true,token,assignmentSaved:false,warning:'The event was saved to Apple Calendar, but its household assignment could not be saved. Refresh and reopen it to assign the owner.'}; }
+    try { await assignments.save(calendar.id,eventUID(body),assignment,input.assignmentVersion ?? 0,checklistContext({title:input.event.title,start:input.event.allDay ? input.event.startDate+'T00:00:00' : input.event.start,end:input.event.allDay ? input.event.endDate+'T00:00:00' : input.event.end,allDay:input.event.allDay},calendar,token,eventUID(body))); }
+    catch { return {saved:true,token,uid:eventUID(body),assignmentSaved:false,warning:'The event was saved to Apple Calendar. Your people and checklist changes are still in this editor; save again to finish them without creating another Apple event.'}; }
   }
-  return {saved:true,token};
+  return {saved:true,token,uid:eventUID(body)};
 });
 export const calendarDelete = endpoint(async (uid,input) => {
   const {data,client} = await connection(uid); const calendar = calendarFor(data,input.calendarId);

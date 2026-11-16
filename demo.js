@@ -19,6 +19,7 @@ export function demoStore() {
   return {
     subscribe(cb, status) { notify = cb; emit(); status('Sample data · changes last for this preview only'); },
     async add(item) { const result = { ...item, id: crypto.randomUUID(), version: 0 }; data.push(result); emit(); return result; },
+    async addMany(items) { data.push(...items.map(item=>({...item,id:crypto.randomUUID(),version:0})));emit(); },
     async update(item, patch) { const current = check(item); Object.assign(current, patch, { version: current.version + 1 }); emit(); return structuredClone(current); },
     async remove(item) { check(item); data = data.filter(x => x.id !== item.id); emit(); },
     async removeMany(list) { list.forEach(check); data = data.filter(x => !list.some(i => i.id === x.id)); emit(); }

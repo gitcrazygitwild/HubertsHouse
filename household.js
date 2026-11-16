@@ -1,9 +1,12 @@
 import { dateKey, dueLabel, completionPatch, validateItem, escapeHTML as esc, OWNERS, CATEGORIES, filterTaskItems } from './household-model.js';
 import { eventsOnDay, localDate, eventEnd } from './calendar-model.js';
 import { renderHTML } from './dom.js';
+import { eventChecklistGroups, eventChecklistKey } from './checklists.js';
 const $ = id => document.getElementById(id);
 let store, items = [], events = [], currentKind = 'chore', taskFocus = 'all', openEvent, newEvent, viewChanged, onData;
 let noticeTimer, wakeLock, displayMode = false, activeView = 'today', monitorFullscreen = false;
+let getEventRecords=()=>[],saveEventChecklist,editEventChecklist,taskSource='all';
+const pendingChecklists=new Set();
 const titles = { today: 'Today at home', calendar: 'Life, all together.', tasks: 'Chores & checklists', groceries: 'The grocery list', settings: 'Your house, your way' };
 export function showNotice(message, action) {
   const el = $('notice'); el.textContent = message; el.classList.remove('hidden');
@@ -17,7 +20,7 @@ export function showView(view) {
   document.querySelectorAll('[data-view]').forEach(el => { el.classList.toggle('active', el.dataset.view === view); if (el.dataset.view === view) el.setAttribute('aria-current', 'page'); else el.removeAttribute('aria-current'); });
   $('viewTitle').textContent = titles[view];
   history.replaceState(null, '', `${location.pathname}${location.search}#${view}`);
-  if (view === 'calendar' || view === 'today') requestAnimationFrame(() => viewChanged?.(view));
+  if (['calendar','today','tasks'].includes(view)) requestAnimationFrame(() => viewChanged?.(view));
 }
 async function setDisplayMode(on) {
   displayMode = on; document.body.classList.toggle('display-mode', on);
@@ -60,6 +63,7 @@ function tick() {
 }
 export function initHousehold(options) {
   onData = options.onData;
+  getEventRecords=options.getEventRecords || (()=>[]);saveEventChecklist=options.saveEventChecklist;editEventChecklist=options.editEventChecklist;
   store = options.store; openEvent = options.openEvent; newEvent = options.newEvent; viewChanged = options.viewChanged;
   store.subscribe(next => { items = next; render(); }, (message, error = false) => { $('houseDataStatus').textContent = message; if (error) showNotice(message); });
   document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
@@ -74,6 +78,18 @@ export function initHousehold(options) {
     taskFocus = button.dataset.taskFocus; render();
   }));
   $('taskSearch').addEventListener('input', render);
+  $('taskSource').addEventListener('change',()=>{taskSource=$('taskSource').value;render();});
+  $('newChecklist').addEventListener('click',()=>{$('standaloneChecklistForm').reset();$('standaloneChecklistError').textContent='';$('standaloneChecklistDialog').showModal();$('standaloneChecklistName').focus();});
+  $('cancelStandaloneChecklist').addEventListener('click',()=>$('standaloneChecklistDialog').close());
+  $('standaloneChecklistForm').addEventListener('submit',async event=>{
+    event.preventDefault();const button=$('saveStandaloneChecklist');button.disabled=true;$('standaloneChecklistError').textContent='';
+    try {
+      const list=$('standaloneChecklistName').value.trim(),lines=$('standaloneChecklistItems').value.split('\n').map(line=>line.trim()).filter(Boolean);
+      if(!list || !lines.length || lines.length>100)throw new Error('Name your checklist and add between 1 and 100 items, one per line.');
+      const records=lines.map(title=>validateItem({kind:'task',title,list,owner:$('standaloneChecklistOwner').value,due:$('standaloneChecklistDue').value,cadence:'none',quantity:'',category:'Other',completed:false}));
+      await store.addMany(records);taskSource='all';$('taskSource').value='all';$('standaloneChecklistDialog').close();render();showNotice('Checklist created for the household.');
+    } catch(error){$('standaloneChecklistError').textContent=friendlyError(error);} finally{button.disabled=false;}
+  });
   $('resetTaskFilters').addEventListener('click', () => { taskFocus = 'all'; $('taskSearch').value = ''; render(); });
   $('houseOwner').addEventListener('change', render); $('showCompleted').addEventListener('change', render);
   $('quickEvent').addEventListener('click', () => newEvent());
@@ -105,10 +121,21 @@ export function initHousehold(options) {
     try { await store.removeMany(bought); showNotice('Bought items cleared.'); } catch (e) { showNotice(friendlyError(e)); } finally { $('clearBought').disabled = false; }
   });
   document.querySelector('.house-main').addEventListener('click', e => {
+    const checklist=e.target.closest('[data-edit-event-checklist]');if(checklist)editEventChecklist?.(checklist.dataset.editEventChecklist);
     const edit = e.target.closest('[data-edit-item]'); if (edit) editItem(items.find(x => x.id === edit.dataset.editItem));
     const event = e.target.closest('[data-open-event]'); if (event) openEvent(event.dataset.openEvent, event.dataset.occ);
   });
   document.querySelector('.house-main').addEventListener('change', async e => {
+    const eventCheck=e.target.closest('[data-event-check]');
+    if(eventCheck) {
+      const record=getEventRecords().find(item=>item.id===eventCheck.dataset.eventCheck);if(!record)return;
+      const key=eventChecklistKey(record);if(pendingChecklists.has(key))return;
+      const original=structuredClone(record),checklist=structuredClone(record.checklist);checklist[Number(eventCheck.dataset.checkIndex)].done=eventCheck.checked;
+      pendingChecklists.add(key);eventCheck.closest('.event-checklist-group').querySelectorAll('input,button').forEach(el=>{el.disabled=true;});
+      try {await saveEventChecklist(original,checklist);showNotice(eventCheck.checked?'Checked off. Event updated too.':'Back on the event checklist.');}
+      catch(error){showNotice(friendlyError(error));}
+      finally{pendingChecklists.delete(key);render();}return;
+    }
     const checkbox = e.target.closest('[data-complete]'); if (!checkbox) return;
     const item = items.find(x => x.id === checkbox.dataset.complete); if (!item) return;
     checkbox.disabled = true;
@@ -164,6 +191,10 @@ function groupsHTML(list, key, sortKeys) {
   const keys = [...groups.keys()]; if (sortKeys) keys.sort((a,b) => sortKeys.indexOf(a) - sortKeys.indexOf(b));
   return keys.map(name => `<section class="list-group"><h3>${esc(name)}<span>${groups.get(name).length} item${groups.get(name).length === 1 ? '' : 's'}</span></h3>${groups.get(name).map(itemHTML).join('')}</section>`).join('');
 }
+function eventGroupHTML(group,visible) {
+  const record=group.record,done=record.checklist.filter(item=>item.done).length,disabled=pendingChecklists.has(group.key)?'disabled':'';
+  return `<section class="list-group event-checklist-group"><header><div><span class="eyebrow">${record.icloud?'APPLE EVENT':'HOUSEHOLD EVENT'}${record.recurring || (record.repeat && record.repeat!=='none')?' · SHARED SERIES LIST':''}</span><h3>${esc(group.title)}<span>${done}/${record.checklist.length} done</span></h3><p>${esc(localDate(group.due).toLocaleDateString([],{month:'short',day:'numeric',year:'numeric'}))} · ${esc(record.owner==='custom' ? record.ownerCustom || 'Other' : OWNERS[record.owner] || 'Both')}${record.withFrankie?' + Frankie':''}${record.checklistOnly?' · Saved event date':''}</p></div><button type="button" class="text-link" data-edit-event-checklist="${esc(record.id)}" ${disabled}>Edit checklist →</button></header><div class="list-progress" aria-hidden="true"><i style="width:${Math.round(done/record.checklist.length*100)}%"></i></div>${visible.map(item=>`<label class="item-row ${item.done?'done':''}"><input type="checkbox" class="item-check" data-event-check="${esc(record.id)}" data-check-index="${item.index}" ${item.done?'checked':''} ${disabled}/><span class="item-copy">${esc(item.text)}</span></label>`).join('')}</section>`;
+}
 function render() {
   if (!$('homeAgenda')) return;
   onData?.(events, items);
@@ -189,7 +220,18 @@ function render() {
   $('resetTaskFilters').hidden = taskFocus === 'all' && !$('taskSearch').value;
   const doneToday = allTasks.filter(x => x.lastCompletedAt && dateKey(new Date(x.lastCompletedAt)) === today).length;
   $('tasksProgress').textContent = `${doneToday} taken care of today · ${tasks.length} shown · ${allTasks.filter(x => !x.completed).length} still to do`;
-  renderHTML($('taskGroups'), tasks.length ? groupsHTML(tasks, x => x.completed ? 'Completed' : currentKind === 'task' ? x.list || 'Everyday checklist' : x.due && x.due < today ? 'Needs a little love' : x.due === today ? 'For today' : x.due ? 'Coming up' : 'Anytime') : taskFocus !== 'all' || $('taskSearch').value.trim() ? empty('No matches here.', 'Try a different timing filter or clear your search.') : empty('All clear here.', `Add ${currentKind === 'chore' ? 'a chore' : 'a checklist item'} to share the load.`));
+  const isChecklist=currentKind==='task';
+  $('newChecklist').hidden=!isChecklist;$('taskSourceWrap').hidden=!isChecklist;
+  $('taskGroups').hidden=isChecklist && taskSource==='events';
+  renderHTML($('taskGroups'), tasks.length ? groupsHTML(tasks, x => x.completed ? 'Completed' : isChecklist ? x.list || 'Everyday checklist' : x.due && x.due < today ? 'Needs a little love' : x.due === today ? 'For today' : x.due ? 'Coming up' : 'Anytime') : isChecklist ? empty('Your own little lists.', 'Create a checklist for cleaning the shower, packing, or anything else. No event needed.') : taskFocus !== 'all' || $('taskSearch').value.trim() ? empty('No matches here.', 'Try a different timing filter or clear your search.') : empty('All clear here.', 'Add a chore to share the load.'));
+  $('eventChecklistSection').hidden=!isChecklist || taskSource==='standalone';
+  if(isChecklist) {
+    const groups=eventChecklistGroups(getEventRecords()).filter(group=>owner==='all' || group.owner===owner || (['hanry','karena'].includes(owner) && group.owner==='both'));
+    let shown=0;
+    const markup=groups.map(group=>{const visible=filterTaskItems(group.items.filter(item=>completed || !item.done),{timing:taskFocus,text:$('taskSearch').value,today});shown+=visible.length;return visible.length?eventGroupHTML(group,visible):'';}).join('');
+    renderHTML($('eventChecklistGroups'),markup || empty('No event checklist items here yet.', 'Add items inside a household or Apple event. They’ll appear here automatically.'));
+    $('tasksProgress').textContent=`${taskSource==='events'?0:tasks.length} standalone items · ${taskSource==='standalone'?0:shown} event items shown`;
+  }
   $('groceryCount').textContent = `${groceries.filter(x => !x.completed).length} to pick up · ${groceries.filter(x => x.completed).length} in the basket`;
   $('clearBought').disabled = !groceries.some(x => x.completed);
   renderHTML($('groceryGroups'), groceries.length ? groupsHTML([...groceries].sort((a,b) => Number(a.completed) - Number(b.completed) || a.title.localeCompare(b.title)), x => x.completed ? 'In the basket' : x.category || 'Other', [...CATEGORIES, 'In the basket']) : empty('The list is ready when you are.', 'Add the first thing you need. It’ll be here on your next store run.'));

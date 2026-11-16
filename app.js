@@ -3,6 +3,7 @@ import { initCatCrew } from './cat-crew.js';
 import { initHuckleberry } from './baby.js';
 import { initEventDateEditor } from './event-editor.js';
 import { holidayEvents, holidaysEnabled } from './holidays.js';
+import { checklistKey, eventChecklistKey } from './checklists.js';
 // app.js — Hubert’s House
 // Household dashboard, authenticated Firebase sync and iCloud calendar integration.
 // Upcoming + Outstanding checklist panels + checklist-focused modal
@@ -318,7 +319,8 @@ import {
   orderBy,
   serverTimestamp,
   getDoc,
-  runTransaction
+  runTransaction,
+  writeBatch
 } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
 
 const firebaseConfig = config.firebase;
@@ -328,6 +330,7 @@ let calendar, calendarExperience, homeCalendar;
 
 // In-memory cache from Firestore
 let rawDocs = [];
+let cloudChecklistDocs = [], editingOriginal = null;
 let localDocs = [], cloudDocs = [];
 let eventRequestId = null;
 let savingEvent = false;
@@ -504,7 +507,8 @@ async function initApp() {
       });
       initHuckleberry(app);
       await initCloudCalendar(app,{
-        onEvents:records => { cloudDocs = records.map(e => ({...e,end:e.editEnd,cloudEnd:e.end,owner:e.owner || 'both',type:'general',checklist:[],repeat:'none'})); rebuildEvents(); },
+        onEvents:records => { cloudDocs = records.map(e => ({...e,end:e.editEnd,cloudEnd:e.end,owner:e.owner || 'both',type:'general',checklist:e.checklist || [],repeat:'none'})); rebuildEvents(); },
+        onChecklists:records => {cloudChecklistDocs=records;},
         onCalendars:connection => {
           const select = document.getElementById('evtCalendar'); const current = select.value;
           select.replaceChildren(new Option('Hubert’s House','household'));
@@ -530,9 +534,13 @@ function addEventOnDay(day, lastDay) {
 }
 function startHousehold(store) {
   initHousehold({ store, onData: (events, items) => { renderWeekBrief(events, items); homeCalendar?.render(); },
+    getEventRecords:()=>[...cloudChecklistDocs,...rawDocs],
+    editEventChecklist:(id)=>{const record=findEventRecord(id);if(record)openTaskModal(record,new Date(record.start));},
+    saveEventChecklist,
     openEvent:(id,occ) => openFromPanel(id,occ,false), newEvent:() => fab.click(), viewChanged: view => {
       calendar?.updateSize();
       if (!demo) {
+        if(view==='tasks')refreshCloud({force:false});
         const range = view === 'today' ? homeCalendar?.getRange() : view === 'calendar' ? { start: calendar.view.activeStart, end: calendar.view.activeEnd } : null;
         if (range) setCloudRange(range.start.toISOString(), range.end.toISOString());
       }
@@ -550,6 +558,9 @@ function firestoreStore() {
       },() => status('Could not sync household lists. Check your connection and household access.',true));
     },
     async add(data) { const ref = await addDoc(col,{...data,version:0,createdAt:serverTimestamp(),updatedAt:serverTimestamp()}); return { ...data,id:ref.id,version:0 }; },
+    async addMany(items) {
+      const batch=writeBatch(db);for(const item of items)batch.set(doc(col),{...item,version:0,createdAt:serverTimestamp(),updatedAt:serverTimestamp()});await batch.commit();
+    },
     async update(item,patch) {
       return runTransaction(db,async transaction => {
         const ref = doc(col,item.id); const snapshot = await transaction.get(ref); check(snapshot,item);
@@ -570,18 +581,33 @@ function rebuildEvents() {
   expandedEvents = [...expandRepeats(normalizeDocs(localDocs)),...cloudDocs.map(e => ({
     id:e.id,title:e.title,start:e.start,end:e.cloudEnd,allDay:e.allDay,
     backgroundColor:(OWNER_STYLE[e.owner] || OWNER_STYLE.both).bg,borderColor:(OWNER_STYLE[e.owner] || OWNER_STYLE.both).border,textColor:'#34432e',editable:!e.readOnlyReason,
-    extendedProps:{sourceId:e.id,owner:e.owner || 'both',ownerCustom:e.ownerCustom || '',withFrankie:!!e.withFrankie,type:'general',notes:e.notes,checklist:[],icloud:true,isRepeatOccurrence:!!e.recurring}
+    extendedProps:{sourceId:e.id,owner:e.owner || 'both',ownerCustom:e.ownerCustom || '',withFrankie:!!e.withFrankie,type:'general',notes:e.notes,checklist:e.checklist || [],icloud:true,isRepeatOccurrence:!!e.recurring}
   }))];
   renderCalendarFromCache(); renderPanels(); updateHouseholdEvents(expandedEvents);
   if (!backdrop?.classList.contains("hidden")) updateEventOverlap();
 }
-async function saveLocalEvent(id,payload) {
+function findEventRecord(id) { return rawDocs.find(record=>record.id===id) || cloudChecklistDocs.find(record=>record.id===id); }
+async function saveEventChecklist(original,checklist) {
+  if(original.icloud) {
+    const result=await saveCloudAssignment({owner:original.owner,ownerCustom:original.ownerCustom || '',withFrankie:!!original.withFrankie,checklist},original);
+    const metadata=result.assignment || {checklist};
+    for(const record of [...cloudDocs,...cloudChecklistDocs])if(eventChecklistKey(record)===eventChecklistKey(original))Object.assign(record,metadata);
+    rebuildEvents();return {...original,...metadata};
+  }
+  const check=current=>{if(!current || checklistKey(current.checklist)!==checklistKey(original.checklist))throw new Error('This checklist changed on another device. Reopen it before saving.');};
+  if(demo) {check(findEventRecord(original.id));await saveLocalEvent(original.id,{checklist});}
+  else await runTransaction(db,async transaction=>{const ref=doc(db,'events',original.id),snapshot=await transaction.get(ref);check(snapshot.exists()?snapshot.data():null);transaction.update(ref,{checklist,updatedAt:serverTimestamp()});});
+  return {...original,checklist};
+}
+async function saveLocalEvent(id,payload,expectedChecklist) {
+  const check=current=>{if(expectedChecklist!==undefined && checklistKey(current?.checklist)!==checklistKey(expectedChecklist))throw new Error('This event checklist changed. Reopen the event before saving.');};
   if (demo) {
-    if (id) { const item=localDocs.find(d => d.id === id); if (item) Object.assign(item,payload,{updatedAt:new Date()}); }
+    if (id) { const item=localDocs.find(d => d.id === id);check(item);if (item) Object.assign(item,payload,{updatedAt:new Date()}); }
     else localDocs.push({...payload,id:crypto.randomUUID(),createdAt:new Date(),updatedAt:new Date()});
     rebuildEvents(); return;
   }
-  if (id) await updateDoc(doc(db,'events',id),payload);
+  if (id && expectedChecklist!==undefined) await runTransaction(db,async transaction=>{const ref=doc(db,'events',id),snapshot=await transaction.get(ref);if(!snapshot.exists())throw new Error('This event was deleted.');check(snapshot.data());transaction.update(ref,payload);});
+  else if (id) await updateDoc(doc(db,'events',id),payload);
   else await addDoc(eventsCol,{...payload,createdAt:serverTimestamp()});
 }
 async function removeEvent(id) {
@@ -705,7 +731,7 @@ function initUIHooks() {
   });
 
   taskClose?.addEventListener("click", closeTaskModal);
-  taskDone?.addEventListener("click", closeTaskModal);
+  taskDone?.addEventListener("click", saveTaskModal);
   taskBackdrop?.addEventListener("click", (e) => {
     if (e.target === taskBackdrop) closeTaskModal();
   });
@@ -1272,6 +1298,7 @@ function openEventModal(payload) {
   eventRequestId = crypto.randomUUID();
   document.getElementById('evtError').textContent='';
   const original = rawDocs.find(d => d.id === editingDocId);
+  editingOriginal=original ? structuredClone(original) : null;
   const destination = document.getElementById('evtCalendar');
   destination.querySelectorAll('[data-view-only]').forEach(option=>option.remove());
   if(original?.icloud && ![...destination.options].some(option=>option.value===original.calendarId)) {
@@ -1291,7 +1318,7 @@ function openEventModal(payload) {
 
   const owner = normalizeOwner(payload.owner);
   if (evtOwner) evtOwner.value = owner;
-  document.getElementById("evtWithFrankie").checked = !!(original?.withFrankie ?? payload.withFrankie);
+  document.getElementById("evtWithFrankie").checked = !!(payload.withFrankie ?? original?.withFrankie);
   ownerCustomWrap?.classList.toggle("hidden", owner !== "custom");
   if (evtOwnerCustom) evtOwnerCustom.value = payload.ownerCustom || "";
 
@@ -1386,16 +1413,17 @@ for (const type of ['input', 'change']) document.getElementById('eventForm').add
 
 function updateDestinationUI() {
   const cloud = document.getElementById('evtCalendar').value !== 'household';
-  const original=rawDocs.find(record=>record.id===editingDocId),readOnly=!!original?.readOnlyReason;
-  document.getElementById('evtCalendarHint').textContent = cloud ? 'Event details save to Apple Calendar. Who’s coming is saved in Hubert’s House.' : 'Shared with everyone in Hubert’s House.';
-  document.getElementById('eventReadonly').textContent=readOnly ? `${original.readOnlyReason} You can still change who’s coming below.` : '';
+  const original=editingOriginal || rawDocs.find(record=>record.id===editingDocId),readOnly=!!original?.readOnlyReason;
+  document.getElementById('evtCalendarHint').textContent = cloud ? 'Event details save to Apple. People and checklists stay in Hubert’s House.' : 'Shared with everyone in Hubert’s House.';
+  document.getElementById('eventReadonly').textContent=readOnly ? `${original.readOnlyReason} People and checklists are still editable below.` : '';
   document.getElementById('eventReadonly').hidden=!readOnly;
   for (const id of ['evtTitle','evtStartDate','evtEndDate','evtStartTime','evtEndTime','evtAllDay','evtNotes']) document.getElementById(id).disabled=readOnly;
   document.querySelectorAll('[data-event-date],[data-event-duration]').forEach(button=>{button.disabled=readOnly;});
   deleteBtn.classList.toggle('hidden',!editingDocId || readOnly);
   document.getElementById('eventRepeatNote').hidden=cloud || evtRepeat.value==='none';
   evtRepeat.closest('.row').classList.toggle('hidden',cloud);
-  checklistEl.closest('.field').classList.toggle('hidden',cloud);
+  checklistEl.closest('.field').classList.remove('hidden');
+  document.getElementById('eventChecklistHint').textContent=cloud ? `Saved in Hubert’s House and shared with Chores & Lists.${original?.recurring ? ' One checklist for the whole series.' : ''}` : 'Also available in Chores & Lists. Repeating events share one checklist.';
   evtOwner.closest('.row').classList.remove('hidden');
   evtType.closest('.field').classList.toggle('hidden',cloud);
   const frankie = document.getElementById('evtWithFrankie');
@@ -1425,10 +1453,10 @@ async function saveEventValues() {
 
   const owner = normalizeOwner(evtOwner?.value || "both");
   const ownerCustom = owner === "custom" ? (evtOwnerCustom?.value || "").trim() : "";
-  const destination=document.getElementById('evtCalendar').value,original=rawDocs.find(d=>d.id===editingDocId);
-  const assignment={owner,ownerCustom,withFrankie:document.getElementById('evtWithFrankie').checked && ['hanry','karena','both'].includes(owner)};
+  const destination=document.getElementById('evtCalendar').value,original=editingOriginal;
+  const assignment={owner,ownerCustom,withFrankie:document.getElementById('evtWithFrankie').checked && ['hanry','karena','both'].includes(owner),checklist:readChecklistUI(checklistEl)};
   if(original?.icloud && cloudEventBaseline===cloudDraftKey()) {
-    await saveCloudAssignment(assignment,original);closeModal();showNotice('Who’s coming is saved in Hubert’s House.');await refreshCloud();return;
+    await saveCloudAssignment(assignment,original);closeModal();showNotice('People and checklist saved in Hubert’s House.');await refreshCloud();return;
   }
 
   const type = evtType?.value || "general";
@@ -1468,9 +1496,17 @@ async function saveEventValues() {
   if (destination !== 'household') {
     const result=await saveCloudEvent({title,notes,allDay,...assignment,start:start.toISOString(),end:(end || addHours(start,1)).toISOString(),
       startLocal:evtStart.value,endLocal:evtEnd.value || toInputValue(addHours(start,1),false),startDate:evtStart.value.slice(0,10),endDate:evtEnd.value.slice(0,10) || evtStart.value.slice(0,10),repeat:'none'},original,destination,eventRequestId);
+    if(result.assignmentSaved===false) {
+      // Apple succeeded. Keep the unsaved checklist visible and make the next
+      // Save metadata-only, even when this was a brand new Apple event.
+      editingDocId=original?.id || `pending:${result.token}`;
+      editingOriginal={...payload,id:editingDocId,icloud:true,calendarId:destination,token:result.token,uid:result.uid,assignmentVersion:original?.assignmentVersion || 0,readOnlyReason:'Apple has saved the event. Finish saving its people and checklist here.'};
+      document.getElementById('evtCalendar').disabled=true;cloudEventBaseline=cloudDraftKey();updateDestinationUI();
+      document.getElementById('evtError').textContent=result.warning;showNotice('Apple event saved. Your checklist is still here; save again to finish.');return;
+    }
     closeModal(); showNotice(result.warning || 'Saved. Apple event details and household assignments are up to date.'); await refreshCloud();
   } else {
-    await saveLocalEvent(editingDocId,payload); closeModal(); showNotice(demo ? 'Saved in this sample preview.' : 'Event saved for the household.');
+    await saveLocalEvent(editingDocId,payload,editingOriginal ? editingOriginal.checklist || [] : undefined); closeModal(); showNotice(demo ? 'Saved in this sample preview.' : 'Event saved for the household.');
   }
 }
 
@@ -1497,10 +1533,12 @@ async function persistMovedEvent(fcEvent) {
 }
 
 // ---------- Task modal ----------
-let taskDocId = null;
+let taskDocId = null, taskOriginal = null;
 
 function openTaskModal(docData, occurrenceStart) {
   taskDocId = docData.id;
+  taskOriginal=structuredClone(docData);
+  document.getElementById('taskError').textContent='';
 
   const when = formatWhenForPanel({
     start: occurrenceStart || (docData.start ? new Date(docData.start) : null),
@@ -1518,16 +1556,14 @@ function openTaskModal(docData, occurrenceStart) {
   taskBackdrop?.classList.remove("hidden");
   scrollToTopSafely(taskBackdrop?.querySelector(".modal-scroll"));
 
-  taskChecklist?.addEventListener("change", taskAutoSaveHandler, { once: true });
-  taskChecklist?.addEventListener("blur", taskAutoSaveHandler, { once: true, capture: true });
 }
 
-async function taskAutoSaveHandler() {
-  if (!taskDocId) return;
-  const checklist = readChecklistUI(taskChecklist);
-  try { await saveLocalEvent(taskDocId, { checklist, updatedAt: serverTimestamp() }); } catch (e) { showNotice(e.message); }
-  taskChecklist?.addEventListener("change", taskAutoSaveHandler, { once: true });
-  taskChecklist?.addEventListener("blur", taskAutoSaveHandler, { once: true, capture: true });
+async function saveTaskModal() {
+  if(!taskOriginal || taskDone.disabled)return;
+  taskDone.disabled=true;
+  try {await saveEventChecklist(taskOriginal,readChecklistUI(taskChecklist));closeTaskModal();showNotice('Checklist saved.');}
+  catch(error){document.getElementById('taskError').textContent=error.message;}
+  finally{taskDone.disabled=false;}
 }
 
 function closeTaskModal() {
@@ -1547,6 +1583,7 @@ function addChecklistItemUI(container, item, focus) {
   if (!container) return;
   const wrap = document.createElement("div");
   wrap.className = "checkitem";
+  wrap.dataset.itemId=item.id || crypto.randomUUID();
 
   const cb = document.createElement("input");
   cb.type = "checkbox";
@@ -1556,11 +1593,15 @@ function addChecklistItemUI(container, item, focus) {
   input.type = "text";
   input.value = item.text || "";
   input.placeholder = "Checklist item…";
+  input.maxLength=500;
+  input.setAttribute('aria-label','Checklist item');
+  cb.setAttribute('aria-label',`Complete ${item.text || 'checklist item'}`);
 
   const del = document.createElement("button");
   del.type = "button";
   del.className = "btn btn-ghost";
   del.textContent = "✕";
+  del.setAttribute('aria-label','Remove checklist item');
   del.style.width = "44px";
   del.style.padding = "10px 0";
 
@@ -1581,7 +1622,7 @@ function readChecklistUI(container) {
   return rows.map((row) => {
     const cb = row.querySelector('input[type="checkbox"]');
     const input = row.querySelector('input[type="text"]');
-    return { text: (input?.value || "").trim(), done: !!cb?.checked };
+    return { id:row.dataset.itemId, text: (input?.value || "").trim(), done: !!cb?.checked };
   }).filter(it => it.text.length > 0);
 }
 

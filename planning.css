@@ -37,3 +37,45 @@
   .event-shortcuts button { padding:7px 8px; font-size:10px; }.event-date-summary { font-size:11px; }
 }
 @media(prefers-reduced-motion:reduce) { .home-week-day { scroll-behavior:auto; } }
+
+/* Keep the calendar surface quieter than the plans on top of it. */
+.fc { --fc-today-bg-color:#fcf6e9; --fc-neutral-bg-color:#f7f6f2; }
+.fc .fc-timegrid-col.fc-day-today { background:#fcf6e9; }
+.fc .fc-col-header-cell,.fc .fc-day-sat:not(.fc-day-today),.fc .fc-day-sun:not(.fc-day-today) { background:#f8f7f3; }
+.fc .fc-event.owner-both,.home-week-event.owner-both { --event-bg:#d7e9e1; --event-ink:#2f5a49; --event-line:#608c78; }
+.calendar-assistance label { margin:0; padding:4px 0; font-size:11px; }
+.calendar-assistance input[type="checkbox"] { width:16px; height:16px; min-height:0; flex:0 0 16px; padding:0; margin:0; }
+.calendar-control-row { align-items:center; row-gap:12px; }
+.smart-event-meta { display:flex; align-items:center; flex-wrap:wrap; gap:3px 8px; margin-top:4px; }
+.smart-event-meta:empty { display:none; }
+.smart-event-people { display:inline-flex; align-items:center; gap:4px; font-size:10px; line-height:1.35; min-width:0; max-width:100%; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; opacity:.9; }
+.smart-event-people .person-dot { width:6px; height:6px; }
+.smart-event-meta .event-checklist-progress { margin:0; }
+.fc .fc-timegrid-event .smart-event-title { -webkit-line-clamp:2; }
+.fc .fc-timegrid-event-short .smart-event-meta { display:none; }
+.fc .fc-event-main,.fc .fc-timegrid-event .smart-event { height:100%; overflow:hidden; }
+.list-create-actions { display:flex; flex-wrap:wrap; gap:8px; }
+#taskSourceWrap { width:max-content; max-width:100%; margin:16px 0 0; }
+#taskSourceWrap[hidden],#newChecklist[hidden],#taskGroups[hidden],#eventChecklistSection[hidden] { display:none !important; }
+#eventChecklistSection { margin-top:28px; }
+.event-checklist-group header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding:18px 20px 12px; }
+.event-checklist-group header > div { flex:1; min-width:0; }
+.event-checklist-group header h3 { border:0; padding:5px 0; margin:0; display:flex; flex-wrap:wrap; gap:8px; }
+.event-checklist-group header p { color:var(--muted); font-size:11px; margin:3px 0; }
+.event-checklist-group .item-copy { font-size:13px; }
+.event-checklist-group .item-row { cursor:pointer; }
+.event-checklist-group .item-row.done .item-copy { text-decoration:line-through; opacity:.6; }
+.list-progress { height:3px; background:var(--soft); margin:0 20px 5px; border-radius:9px; overflow:hidden; }.list-progress i { display:block; height:100%; background:var(--accent); }
+#standaloneChecklistDialog { width:min(520px,calc(100vw - 24px)); }
+#standaloneChecklistDialog textarea { min-height:140px; }
+[data-theme="dark"] .fc { --fc-today-bg-color:#302f28; }
+[data-theme="dark"] .fc .fc-timegrid-col.fc-day-today { background:#302f28; }
+[data-theme="dark"] .fc .fc-event.owner-both,[data-theme="dark"] .home-week-event.owner-both { background-color:#29473e !important; --event-bg:#29473e; --event-ink:#b6e2cd; color:#b6e2cd !important; }
+[data-theme="dark"] .fc .fc-day-sat:not(.fc-day-today),[data-theme="dark"] .fc .fc-day-sun:not(.fc-day-today) { background:var(--card); }
+@media(max-width:650px) {
+  .fc .fc-daygrid-event .smart-event-people { font-size:7px; gap:3px; }
+  .fc .fc-daygrid-event .smart-event-people .person-dot { display:none; }
+  .smart-event-meta { gap:2px; margin-top:2px; }.smart-event-people { font-size:9px; }
+  .event-checklist-group header { padding:14px; flex-wrap:wrap; gap:8px; }
+  .list-create-actions .btn { font-size:11px; }
+}

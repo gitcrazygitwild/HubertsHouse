@@ -3,7 +3,7 @@ import { config } from './config.js';
 import { escapeHTML as esc } from './household-model.js';
 import { showNotice } from './household.js';
 const $ = id => document.getElementById(id);
-let functions, connection = {connected:false}, onEvents, onCalendars, demo = false, checkedAt, lastError = '', range;
+let functions, connection = {connected:false}, onEvents, onCalendars, onChecklists, demo = false, checkedAt, lastError = '', range;
 let inFlight = null, generation = 0, lastAttempt = 0, loadedRangeKey = '';
 const POLL_MS = 5 * 60000;
 const rangeKey = () => range ? `${range.start}/${range.end}` : '';
@@ -19,7 +19,7 @@ function status() {
   if (calendarStatus) calendarStatus.textContent = lastError || $('homeSyncStatus').textContent;
 }
 export async function initCloudCalendar(app, options) {
-  onEvents = options.onEvents; onCalendars = options.onCalendars; demo = !!options.demo;
+  onEvents = options.onEvents; onCalendars = options.onCalendars; onChecklists=options.onChecklists; demo = !!options.demo;
   functions = app ? getFunctions(app,config.functionsRegion) : null;
   render();
   if (demo || !config.calendarServiceEnabled) return;
@@ -56,7 +56,7 @@ export async function refreshCloud({force = true} = {}) {
       const results = await Promise.all(ranges.map(r => call('calendarEvents',r)));
       if (version !== generation) return;
       const records = new Map(); for (const result of results) for (const event of result.events) records.set(event.id,event);
-      loadedRangeKey = requestedRange; onEvents([...records.values()]); checkedAt = results[0].checkedAt; lastError = ''; status();
+      loadedRangeKey = requestedRange; onChecklists?.(results[0].checklists || []); onEvents([...records.values()]); checkedAt = results[0].checkedAt; lastError = ''; status();
       if ($('cloudError')) $('cloudError').textContent = '';
       if ($('cloudChecked')) $('cloudChecked').textContent = `Last checked ${new Date(checkedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}. Checks every five minutes while this page is open.`;
     } catch (e) { if (version !== generation) return; lastError = message(e); status(); if ($('cloudError')) $('cloudError').textContent = lastError; }
@@ -80,19 +80,19 @@ function render() {
     });
     return;
   }
-  panel.innerHTML = `<p>Choose up to six calendars to show. Only the calendars you select are loaded. Anyone using this signed-in device can see and edit your selected writable calendars.</p><form id="calendarChoices">${connection.calendars.map(c => `<label class="calendar-choice"><input type="checkbox" name="calendar" value="${esc(c.id)}" ${connection.selected.includes(c.id) ? 'checked' : ''} /><span>${esc(c.name)}${!c.writable ? ' · read-only' : ''}</span></label>`).join('')}<div class="connection-actions"><button class="btn btn-primary" type="submit">Save calendar selection</button><button type="button" class="btn" id="refreshCloud">Refresh now</button><button type="button" class="btn" id="disconnectCloud">Disconnect</button></div></form><p id="cloudChecked" class="tiny">${checkedAt ? `Last checked ${esc(new Date(checkedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}))}. ` : ''}Checks every five minutes while this page is open.</p><p class="tiny">Recurring events and invitations are displayed here. Manage them in Apple Calendar. Event checklists stay in Hubert’s House calendars.</p><p id="cloudError" class="form-error" role="alert">${esc(lastError)}</p>`;
+  panel.innerHTML = `<p>Choose up to six calendars to show. Only the calendars you select are loaded. Anyone using this signed-in device can see and edit your selected writable calendars.</p><form id="calendarChoices">${connection.calendars.map(c => `<label class="calendar-choice"><input type="checkbox" name="calendar" value="${esc(c.id)}" ${connection.selected.includes(c.id) ? 'checked' : ''} /><span>${esc(c.name)}${!c.writable ? ' · read-only' : ''}</span></label>`).join('')}<div class="connection-actions"><button class="btn btn-primary" type="submit">Save calendar selection</button><button type="button" class="btn" id="refreshCloud">Refresh now</button><button type="button" class="btn" id="disconnectCloud">Disconnect</button></div></form><p id="cloudChecked" class="tiny">${checkedAt ? `Last checked ${esc(new Date(checkedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}))}. ` : ''}Checks every five minutes while this page is open.</p><p class="tiny">Recurring events and invitations are displayed here. Manage them in Apple Calendar. Owners and checklists stay privately in Hubert’s House, including for read-only Apple events. Find all saved event checklists in Chores & Lists.</p><p id="cloudError" class="form-error" role="alert">${esc(lastError)}</p>`;
   $('calendarChoices').addEventListener('submit',async e => {
     e.preventDefault(); const selected = [...e.currentTarget.querySelectorAll('input:checked')].map(x => x.value);
     if (selected.length > 6) { $('cloudError').textContent = 'Choose up to six calendars.'; return; }
     const button = e.currentTarget.querySelector('[type=submit]'); button.disabled = true;
-    try { connection = await call('calendarSelect',{selected}); generation++; onEvents([]); onCalendars(connection); lastError = ''; render(); await refreshCloud(); showNotice('Calendar selection saved.'); }
+    try { connection = await call('calendarSelect',{selected}); generation++; onChecklists?.([]); onEvents([]); onCalendars(connection); lastError = ''; render(); await refreshCloud(); showNotice('Calendar selection saved.'); }
     catch (error) { $('cloudError').textContent = message(error); } finally { button.disabled = false; }
   });
   $('refreshCloud').addEventListener('click',async e => { e.target.disabled = true; try { await refreshCloud(); if (!lastError) showNotice('Calendars are up to date.'); } finally { e.target.disabled = false; } });
   $('disconnectCloud').addEventListener('click',async e => {
     if (!confirm('Disconnect iCloud from Hubert’s House? Your Apple Calendar events will stay in iCloud.')) return;
     e.target.disabled = true;
-    try { await call('calendarDisconnect'); generation++; connection = {connected:false}; checkedAt = null; lastError = ''; onEvents([]); onCalendars(connection); render(); showNotice('iCloud disconnected.'); }
+    try { await call('calendarDisconnect'); generation++; connection = {connected:false}; checkedAt = null; lastError = ''; onChecklists?.([]); onEvents([]); onCalendars(connection); render(); showNotice('iCloud disconnected.'); }
     catch (error) { $('cloudError').textContent = message(error); e.target.disabled = false; }
   });
 }
@@ -103,7 +103,7 @@ export async function saveCloudEvent(event,original,calendarId,requestId) {
 }
 export async function saveCloudAssignment(assignment,original) {
   if (!connection.connected) throw new Error('Connect iCloud in Settings first.');
-  return call('calendarAssign',{calendarId:original.calendarId,token:original.token,uid:original.uid,assignmentVersion:original.assignmentVersion || 0,assignment});
+  return call('calendarAssign',{calendarId:original.calendarId,token:original.token,uid:original.uid,assignmentVersion:original.assignmentVersion || 0,assignment,context:{title:original.title,start:original.start,end:original.end,allDay:!!original.allDay,recurring:!!original.recurring}});
 }
 export async function deleteCloudEvent(original) {
   if (original.readOnlyReason) throw new Error(original.readOnlyReason);
