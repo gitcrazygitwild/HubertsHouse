@@ -50,22 +50,10 @@ service cloud.firestore {
         && request.resource.data.sweetspot.loggedAt > resource.data.sweetspot.loggedAt;
       allow delete: if false;
     }
-    // Daily cat care: one document per local date, each task {by, at} or absent.
-    match /catCare/{day} {
-      function task(t) { return t is map && t.keys().hasOnly(['by','at']) && t.by in ['hanry','karena',''] && t.at is string && t.at.size() <= 40; }
-      function valid() {
-        let d = request.resource.data;
-        return day.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
-          && d.keys().hasOnly(['hubert_am','hubert_pm','mack_am','mack_pm','mia_am','mia_pm','litter','water','updatedAt'])
-          && (!('hubert_am' in d) || task(d.hubert_am)) && (!('hubert_pm' in d) || task(d.hubert_pm))
-          && (!('mack_am' in d) || task(d.mack_am)) && (!('mack_pm' in d) || task(d.mack_pm))
-          && (!('mia_am' in d) || task(d.mia_am)) && (!('mia_pm' in d) || task(d.mia_pm))
-          && (!('litter' in d) || task(d.litter)) && (!('water' in d) || task(d.water));
-      }
-      allow read: if member();
-      allow create, update: if member() && valid();
-      allow delete: if false;
-    }
+    // Newsletter preferences, the encrypted sending account and the send log are server-only.
+    match /newsletterPrefs/{uid} { allow read, write: if false; }
+    match /privateNewsletterSender/{doc} { allow read, write: if false; }
+    match /newsletterLog/{id} { allow read, write: if false; }
     // Calendar passwords are encrypted by the server and never readable by a client.
     match /privateCalendarConnections/{uid} { allow read, write: if false; }
     match /privateCalendarAssignments/{id} { allow read, write: if false; }

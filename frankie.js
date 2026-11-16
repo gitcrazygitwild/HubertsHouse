@@ -5,6 +5,7 @@ import { escapeHTML as esc } from './household-model.js';
 import { renderHTML } from './dom.js';
 import { dailySleep, dailyBottles, timelineRows, babySummary, dayStart } from './baby-history.js';
 import { MODELS, scorePredictions } from './prediction-log.js';
+import { frankieAwards } from './awards.js';
 
 const $ = id => document.getElementById(id);
 let range = 30;
@@ -100,7 +101,12 @@ function scoreboard(score, timezone) {
 
 export function renderFrankie({ snapshot, timezone, predictions = [], demo = false, connected = false }) {
   const root = $('frankieContent'); if (!root) return;
-  if (!snapshot) { renderHTML(root, `<div class="frankie-empty"><span class="baby-orbit" aria-hidden="true">☾</span><div><h3>Frankie’s trends will live here.</h3><p>${connected ? 'Choose a child profile in Settings, then refresh on Home.' : 'Connect Huckleberry in Settings to see sleep history, daily ounces and the nap prediction scoreboard.'}</p></div></div>`); return; }
+  // The placeholder lives beside the page content and is only shown/hidden, so
+  // the chart containers always exist when data arrives.
+  const empty = $('frankieEmpty'), ready = !!snapshot;
+  root.hidden = !ready; if (empty) empty.hidden = ready;
+  if (!ready) { if (empty) renderHTML(empty, `<span class="baby-orbit" aria-hidden="true">☾</span><div><h3>Frankie’s trends will live here.</h3><p>${connected ? 'Loading her history from Huckleberry… If this stays, choose a child profile in Settings and press Refresh on Home.' : 'Connect Huckleberry in Settings to see sleep history, daily ounces and the nap prediction scoreboard.'}</p></div>`); return; }
+  if (!['frankieStatus', 'frankieScore', 'frankieTimeline', 'frankieSleep', 'frankieBottles', 'frankieNote'].every(id => $(id))) return;
   const now = Date.now(), sleeps = snapshot.sleeps || [], bottles = snapshot.bottles || [];
   const summary = babySummary({ sleeps, bottles }, timezone, now), last = sleeps.at(-1), timer = snapshot.timer;
   const status = timer?.active ? `Asleep for ${ago(timer.start, now)}` : last ? `Awake for ${ago(last.end, now)}` : 'No sleep logged';
@@ -110,6 +116,11 @@ export function renderFrankie({ snapshot, timezone, predictions = [], demo = fal
     <div class="frankie-tile"><span>Sleep today</span><strong>${hm(summary.today.sleep?.total)}</strong><small>${summary.avgSleep ? `7-day avg ${hm(summary.avgSleep)} per day` : 'Building a weekly average'}</small></div>
     <div class="frankie-tile"><span>Bottles today</span><strong>${oz(summary.today.bottles?.ounces)}</strong><small>${summary.today.bottles?.count || 0} bottle${summary.today.bottles?.count === 1 ? '' : 's'}${lastBottle ? ` · last ${esc(ago(lastBottle.start, now))} ago` : ''}</small></div>
     <div class="frankie-tile"><span>Daily average</span><strong>${oz(summary.avgOunces)}</strong><small>${change == null ? 'last 7 full days' : change === 0 ? 'same as the week before' : `${change > 0 ? '▲' : '▼'} ${Math.abs(change)} oz vs the week before`}</small></div>`);
+  const week = frankieAwards({ sleeps, bottles }, timezone, now);
+  if ($('frankieAwards')) {
+    renderHTML($('frankieAwards'), week.awards.length ? week.awards.map(award => `<article class="award"><span class="award-icon" aria-hidden="true">${award.icon}</span><div><small>${esc(award.title)}</small><strong>${esc(award.value)}</strong><span>${esc(award.detail)}</span></div></article>`).join('') : '<p class="tiny muted">Awards appear after a few days of logs.</p>');
+    $('frankieAwardsRange').textContent = week.awards.length ? `${dayLabel(week.from, timezone)} – ${dayLabel(week.to, timezone)}` : '';
+  }
   const score = scorePredictions(predictions, sleeps, timer, timezone);
   renderHTML($('frankieScore'), scoreboard(score, timezone));
   const width = id => Math.max(280, Math.round($(id).clientWidth || 720));

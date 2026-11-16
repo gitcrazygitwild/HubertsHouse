@@ -1,5 +1,5 @@
-// Small "smart calendar" helpers shared by the Now & Next strip, weather flags
-// and the cat crew tracker. Pure functions; the UI lives in upgrades.js.
+// Small "smart calendar" helpers for the Now & Next line and weather flags.
+// Pure functions; the UI lives in upgrades.js.
 import { dateKey } from './household-model.js';
 
 const OUTDOOR = /\b(park|outside|outdoors?|walk|hike|hiking|picnic|zoo|beach|bbq|barbecue|cookout|market|farmers|garden|playground|pool|swim|golf|game|stadium|run|race|5k|bike|biking|fair|festival|patio|lake|river|camp|camping|parade|tailgate|pumpkin|apple picking|fresh air)\b/i;
@@ -37,15 +37,4 @@ export function untilText(minutes) {
   const hours = Math.floor(minutes / 60), rest = minutes % 60;
   if (hours < 24) return `in ${hours}h${rest ? ` ${rest}m` : ''}`;
   const days = Math.round(minutes / 1440); return `in ${days} day${days === 1 ? '' : 's'}`;
-}
-
-export const CATS = ['Hubert', 'Mack', 'Mia'];
-export const CAT_TASKS = [
-  ...CATS.flatMap(cat => [{ key:`${cat.toLowerCase()}_am`, cat, label:'Breakfast', short:'AM' }, { key:`${cat.toLowerCase()}_pm`, cat, label:'Dinner', short:'PM' }]),
-  { key:'litter', label:'Litter scooped', icon:'🧹' }, { key:'water', label:'Fresh water', icon:'💧' }
-];
-export function catCareStatus(record = {}, now = new Date()) {
-  const done = CAT_TASKS.filter(task => record[task.key]).length, hour = now.getHours();
-  const hungry = CATS.filter(cat => (hour >= 6 && !record[`${cat.toLowerCase()}_am`]) || (hour >= 17 && !record[`${cat.toLowerCase()}_pm`]));
-  return { done, total:CAT_TASKS.length, hungry, complete:done === CAT_TASKS.length };
 }

@@ -5,3 +5,5 @@ dist/
 .secret.local
 firebase-debug.log
 .firebase/
+functions/shared/
+dist-newsletter-sample.html

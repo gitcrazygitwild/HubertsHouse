@@ -24,7 +24,7 @@ function endpoint(handler) {
     catch (error) {
       if (error instanceof HttpsError) throw error;
       if(error instanceof HuckleberryError && error.details?.service==='huckleberry') warn('Huckleberry authentication rejected',{reason:error.details.reason,httpStatus:error.details.httpStatus});
-      if (error instanceof CalendarError || error instanceof HuckleberryError) throw new HttpsError(error.code,error.message,error instanceof HuckleberryError ? error.details : undefined);
+      if (error instanceof CalendarError || error instanceof HuckleberryError || error instanceof NewsletterError) throw new HttpsError(error.code,error.message,error instanceof HuckleberryError ? error.details : undefined);
       // Never log request bodies, credentials, calendar data, or raw provider errors.
       throw new HttpsError('unavailable','The connected service is temporarily unavailable. Try again shortly.');
     }
@@ -117,4 +117,103 @@ export const calendarDelete = endpoint(async (uid,input) => {
   canDelete(current.data); await client.remove(calendar,input.token,input.etag);
   try { await assignments.remove(calendar.id,eventUID(current.data)); } catch { /* Deletion at Apple already succeeded. */ }
   return {deleted:true};
+});
+
+// ---------- Morning newsletter ----------
+// A daily home-page digest emailed to each household member at 6:30am ET.
+// The sending Gmail account and its app password are entered once in Settings
+// and stored encrypted, like the iCloud and Huckleberry connections.
+import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { getAuth } from 'firebase-admin/auth';
+import nodemailer from 'nodemailer';
+import { buildDigest, composeEmail, validatePrefs, validateSender, NewsletterError, HOUSE_TZ } from './newsletter.js';
+import { selectForecast } from './shared/weather.js';
+const senderRef = () => db.doc('privateNewsletterSender/config');
+const prefsRef = uid => db.doc(`newsletterPrefs/${uid}`);
+const transport = sender => nodemailer.createTransport({ service:'gmail', auth:{ user:sender.email, pass:sender.password } });
+async function loadSender() {
+  const snap = await senderRef().get(); if (!snap.exists) return null;
+  return { email:snap.data().email, password:decryptCredential(snap.data().credential, encryptionKey.value(), 'newsletter-sender').password };
+}
+async function forecastNow() {
+  try {
+    const [blend, conditions] = await Promise.all(['blend_daily.json', 'conditions_daily.json'].map(async file => {
+      const response = await fetch(`https://gitcrazygitwild.github.io/Miateorology/data/${file}`, { signal:AbortSignal.timeout(10000) });
+      if (!response.ok) throw new Error('forecast'); return response.json();
+    }));
+    return selectForecast(blend, conditions);
+  } catch { return null; }
+}
+async function icloudEvents(uid, from, to) {
+  try {
+    const { data, client } = await connection(uid);
+    const grouped = await Promise.all(data.selected.map(async id => { const calendar = calendarFor(data, id); return (await client.events(calendar, from, to)).flatMap(object => readEvents(object, calendar, from, to)); }));
+    return assignments.apply(grouped.flat());
+  } catch { return []; } // Not connected or iCloud unavailable: household events still go out.
+}
+const huckleberryHandler = createHuckleberryHandler({ db, key:() => encryptionKey.value() });
+async function babySnapshot(uids) {
+  for (const uid of uids) {
+    try { const snap = await huckleberryHandler(uid, { action:'snapshot' }); if (snap?.sleeps) return snap; } catch { /* try the next member */ }
+  }
+  return null;
+}
+// Everything one member's email needs, gathered fresh.
+async function newsletterFor(uid, shared) {
+  const prefs = validatePrefs((await prefsRef(uid).get()).data() || {});
+  const now = new Date(), from = new Date(now); from.setHours(0, 0, 0, 0); const to = new Date(+from + 15 * 86400000);
+  const icloud = await icloudEvents(uid, from, to);
+  const digest = buildDigest({ name:prefs.name, now, household:shared.household, icloud, items:shared.items, forecast:shared.forecast, snapshot:shared.snapshot, predictions:shared.predictions, prefs });
+  return { prefs, email:composeEmail(digest) };
+}
+async function sharedNewsletterData(uids) {
+  const [events, items, forecast, snapshot, predictions] = await Promise.all([
+    db.collection('events').get(), db.collection('householdItems').get(), forecastNow(), babySnapshot(uids),
+    db.collection('babyPredictions').orderBy('lastWake', 'desc').limit(400).get()
+  ]);
+  return { household:events.docs.map(d => d.data()), items:items.docs.map(d => d.data()), forecast, snapshot, predictions:predictions.docs.map(d => ({ id:d.id, ...d.data() })) };
+}
+async function activeMembers() {
+  return (await db.collection('households/home/members').where('active', '==', true).get()).docs.map(d => d.id);
+}
+export const newsletter = endpoint(async (uid, input) => {
+  process.env.TZ = HOUSE_TZ; // dates in the digest are Richmond-local
+  const action = input.action;
+  if (action === 'status') {
+    const [sender, prefs] = await Promise.all([senderRef().get(), prefsRef(uid).get()]);
+    return { senderConfigured:sender.exists, senderEmail:sender.exists ? sender.data().email : '', prefs:validatePrefs(prefs.data() || {}) };
+  }
+  if (action === 'savePrefs') { const prefs = validatePrefs(input.prefs); await prefsRef(uid).set(prefs); return { prefs }; }
+  if (action === 'setSender') {
+    const sender = validateSender(input);
+    try { await transport(sender).verify(); } catch { throw new NewsletterError('failed-precondition', 'Gmail did not accept that address and app password. Check both and try again.'); }
+    await senderRef().set({ email:sender.email, credential:encryptCredential({ password:sender.password }, encryptionKey.value(), 'newsletter-sender'), updatedAt:FieldValue.serverTimestamp() });
+    return { senderConfigured:true, senderEmail:sender.email };
+  }
+  if (action === 'clearSender') { await senderRef().delete(); return { senderConfigured:false }; }
+  if (action === 'sendTest') {
+    const sender = await loadSender(); if (!sender) throw new NewsletterError('failed-precondition', 'Set up the sending Gmail account first.');
+    const to = (await getAuth().getUser(uid)).email; if (!to) throw new NewsletterError('failed-precondition', 'Your login has no email address.');
+    const { email } = await newsletterFor(uid, await sharedNewsletterData(await activeMembers()));
+    await transport(sender).sendMail({ from:`Hubert’s House <${sender.email}>`, to, subject:email.subject, html:email.html, text:email.text });
+    return { sent:true, to };
+  }
+  throw new NewsletterError('invalid-argument', 'Choose a newsletter action.');
+});
+export const morningNewsletter = onSchedule({ schedule:'30 6 * * *', timeZone:HOUSE_TZ, region:'us-central1', secrets:[encryptionKey], timeoutSeconds:300, memory:'256MiB', cpu:'gcf_gen1', maxInstances:1, retryCount:0 }, async () => {
+  process.env.TZ = HOUSE_TZ;
+  const sender = await loadSender(); if (!sender) { warn('Newsletter skipped: no sending account configured'); return; }
+  const uids = await activeMembers(), shared = await sharedNewsletterData(uids), mailer = transport(sender);
+  const day = new Date().toLocaleDateString('en-CA', { timeZone:HOUSE_TZ });
+  for (const uid of uids) {
+    const log = db.doc(`newsletterLog/${day}_${uid}`);
+    try {
+      await log.create({ startedAt:FieldValue.serverTimestamp() }); // once per member per day
+      const to = (await getAuth().getUser(uid)).email; if (!to) continue;
+      const { prefs, email } = await newsletterFor(uid, shared);
+      if (!prefs.enabled) { await log.set({ skipped:'disabled' }, { merge:true }); continue; }
+      await mailer.sendMail({ from:`Hubert’s House <${sender.email}>`, to, subject:email.subject, html:email.html, text:email.text });
+      await log.set({ sentAt:FieldValue.serverTimestamp() }, { merge:true });
+    } catch (error) { if (error?.code !== 6) warn('Newsletter not sent to one member', { reason:error?.code || 'send-failed' }); } // 6 = already sent today
+  }
 });
