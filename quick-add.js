@@ -101,7 +101,9 @@ function clockToDate(hour, minute, meridiem, now) {
   const hours = !meridiem && h >= 1 && h < 12 ? [h, h + 12] : [h];
   const limit = +now + 5 * 60000, candidates = [];
   for (const dayOffset of [0, -1]) for (const value of hours) { const date = new Date(now); date.setDate(date.getDate() + dayOffset); date.setHours(value, m, 0, 0); if (+date <= limit) candidates.push(date); }
-  return candidates.sort((x, y) => y - x)[0];
+  // A time a few minutes ahead (typed early, or a fast clock) means "now": saves reject future times.
+  const best = candidates.sort((x, y) => y - x)[0];
+  return +best > +now ? new Date(now) : best;
 }
 export function parseBabyLog(text, now = new Date()) {
   const raw = String(text || '');

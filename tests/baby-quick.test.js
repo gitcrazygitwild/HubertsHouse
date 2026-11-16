@@ -13,6 +13,10 @@ test('bottles: time, amount, units, milk type, and past-leaning times', () => {
   assert.equal(hm(parseBabyLog('frankie bottle 11pm', now).start), '15 23:00'); // later than now → last night
   const bare = parseBabyLog('frankie bottle', now); assert.equal(bare.amount, undefined); assert.equal(+bare.start, +now);
   assert.equal(parseBabyLog('fed frankie 5 oz 20 min ago', now).start.getMinutes(), 40);
+  // Typed a few minutes early: clamp to now (never a future time the save would reject).
+  const early = new Date(2026, 10, 16, 10, 26);
+  assert.equal(+parseBabyLog('frankie bottle 10:30am 4oz', early).start, +early);
+  assert.equal(hm(parseBabyLog('frankie bottle 10:40am 4oz', early).start), '15 10:40'); // well ahead: yesterday
 });
 
 test('diapers and sleep', () => {
