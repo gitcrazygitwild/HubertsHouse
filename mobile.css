@@ -1,0 +1,64 @@
+/* Phones: less repetition, less scrolling, swipe where a row of cards fits better.
+   Loaded last so these phone-only rules win. Desktop is unchanged. */
+@media (max-width: 650px) {
+  /* Header: the same block used to fill half of every first screen. */
+  .house-header { margin-bottom: 14px; align-items: flex-start; }
+  .house-header h1 { font-size: 26px; }
+  .palette-trigger .palette-trigger-text, .palette-trigger kbd { display: none; }
+  .palette-trigger { min-width: 42px; padding: 8px 12px; }
+  body[data-view]:not([data-view="today"]) .app-links,
+  body[data-view]:not([data-view="today"]) .now-next { display: none !important; }
+  .app-links { gap: 8px; }
+  .app-link { padding: 8px 10px; }
+  .app-link-name small { display: none; }
+  .nav-long { display: none; }
+
+  /* Today's week: tap a day heading (or ＋) to add, so the per-day boxes go. */
+  #homeWeek[data-calendar-mode="week"] .home-day-add,
+  #homeWeek[data-calendar-mode="week"] .home-day-empty { display: none; }
+  #homeWeek[data-calendar-mode="week"] .home-week-day { min-height: 0; padding-top: 10px; padding-bottom: 10px; }
+  #homeWeek[data-calendar-mode="week"] .home-week-day:not(:has(.home-week-event, .home-holiday)) .home-day-plans { display: none; }
+  #homeWeek[data-calendar-mode="week"] .home-week-day:not(:has(.home-week-event, .home-holiday))::after { content: 'Open day · tap the date to add'; grid-column: 2; align-self: center; font-size: 12px; color: var(--muted); }
+  #homeWeek[data-calendar-mode="week"] .home-day-weather { grid-column: 2; margin: 0; }
+
+  /* Rows of cards become swipeable strips. */
+  .baby-predictions, .score-grid, .world-markets {
+    display: flex !important; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain;
+    margin-inline: -17px; padding: 2px 17px 10px; scrollbar-width: none;
+  }
+  .baby-predictions::-webkit-scrollbar, .score-grid::-webkit-scrollbar, .world-markets::-webkit-scrollbar { display: none; }
+  .baby-predictions > *, .score-grid > * { flex: 0 0 84%; scroll-snap-align: center; }
+  .world-markets > * { flex: 0 0 42%; scroll-snap-align: start; }
+  .swipe-hint { display: block !important; }
+
+  /* Duplicates of the calendar and the week-ahead card. */
+  .home-stats, .home-columns > .home-card:first-child { display: none; }
+  .home-columns { grid-template-columns: 1fr; }
+
+  /* Wide tables scroll sideways instead of cutting off. */
+  .score-table-wrap, .chart-table { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .score-table { min-width: 520px; }
+
+  /* Comfortable tap targets. */
+  .baby-actions .btn, .item-row .item-check { min-height: 44px; }
+}
+.swipe-hint { display: none; font-size: 11px; color: var(--muted); margin: -2px 0 8px; }
+@media (max-width: 650px) {
+  /* One tidy row of header buttons: search, theme, add. */
+  .header-actions { flex-wrap: nowrap; gap: 6px; }
+  .header-actions .theme-toggle { width: 42px !important; min-width: 42px; height: 42px; min-height: 42px; padding: 0 !important; font-size: 0 !important; line-height: 0; display: inline-grid; place-items: center; overflow: hidden; }
+  .header-actions .theme-toggle::before { content: '☾'; font-size: 17px; line-height: 1; }
+  .header-actions .theme-toggle[aria-pressed="true"]::before { content: '☀'; }
+  .home-calendar-controls [data-go="calendar"] { display: none; }
+  #quickEvent { min-width: 42px; }
+  /* Calendar controls on one row; the colour key gets smaller. */
+  .home-calendar-heading { gap: 10px; }
+  .home-calendar-controls { display: flex; flex-wrap: nowrap; align-items: center; gap: 6px; width: 100%; }
+  .home-calendar-controls .home-view-toggle button { padding: 7px 11px; }
+  .home-calendar-controls .btn { min-height: 36px; padding: 6px 10px; }
+  .home-calendar-key .sync-pill { display: none; }
+  /* Quick add: the button sits beside the box. */
+  .smart-add { display: grid !important; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 8px; }
+  .smart-add .btn { width: auto !important; min-height: 40px; padding: 8px 14px; }
+  .smart-add-preview { grid-column: 1 / -1; }
+}

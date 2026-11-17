@@ -34,6 +34,30 @@ function initQuickAdd() {
     if (!draft) { update(); input.focus(); return; }
     ctx.openDraft(draftPayload(draft)); input.value = ''; update();
   });
+  initVoice(form, input, update);
+}
+// Speak instead of typing (where the browser offers speech recognition, e.g. Safari
+// and Chrome). The words land in the box with the usual preview; nothing is saved
+// until Add is pressed.
+export function initVoice(form, input, update, Recognition = globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition) {
+  if (!Recognition || form.querySelector('.smart-mic')) return null;
+  const mic = document.createElement('button');
+  mic.type = 'button'; mic.className = 'btn smart-mic'; mic.textContent = '🎤';
+  mic.setAttribute('aria-label', 'Say a plan or a Frankie log'); mic.title = 'Speak instead of typing';
+  form.querySelector('[type="submit"]').before(mic);
+  let listening = null;
+  mic.addEventListener('click', () => {
+    if (listening) { listening.stop(); return; }
+    input.dataset.placeholder ||= input.placeholder; // before it changes to “Listening…”
+    const rec = new Recognition(); listening = rec;
+    rec.lang = 'en-US'; rec.interimResults = true; rec.maxAlternatives = 1;
+    mic.classList.add('is-listening'); mic.setAttribute('aria-pressed', 'true'); input.placeholder = 'Listening…';
+    rec.onresult = event => { input.value = [...event.results].map(result => result[0].transcript).join(' ').trim(); update(); };
+    rec.onerror = () => {};
+    rec.onend = () => { listening = null; mic.classList.remove('is-listening'); mic.setAttribute('aria-pressed', 'false'); input.placeholder = input.dataset.placeholder || ''; input.focus(); };
+    try { rec.start(); } catch { rec.onend(); }
+  });
+  return mic;
 }
 
 // ---------- Command palette ----------
@@ -104,7 +128,7 @@ function renderNowNext() {
     const minutes = stamp => Math.max(0, Math.round((+now - Date.parse(stamp)) / 60000)), hm = m => m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`;
     const status = baby.timer?.active ? `asleep ${hm(minutes(baby.timer.start))}` : baby.lastWake ? `awake ${hm(minutes(baby.lastWake))}` : 'no sleep logged';
     const nap = !baby.timer?.active && baby.mia?.available ? ` · ${baby.mia.kind === 'bedtime' ? 'bedtime' : 'nap'} ~${clock(baby.mia.target)}` : '';
-    parts.push(`<span class="nn-item"><span aria-hidden="true">${baby.timer?.active ? '☾' : '☀'}</span><button type="button" class="nn-link" data-nn-view="frankie">${esc(baby.name)} <strong>${esc(status)}</strong></button><span class="nn-muted">${esc(nap)}${baby.lastBottle ? ` · bottle ${esc(hm(minutes(baby.lastBottle)))} ago` : ''}</span></span>`);
+    parts.push(`<span class="nn-item"><span aria-hidden="true">${baby.timer?.active ? '☾' : '☀'}</span><button type="button" class="nn-link" data-nn-view="frankie">${esc(baby.name)} <strong>${esc(status)}</strong></button><span class="nn-muted">${esc(nap)}${baby.lastBottle ? ` · bottle ${esc(hm(minutes(baby.lastBottle)))} ago` : ''}${baby.nextBottle?.available ? ` · next ~${esc(clock(baby.nextBottle.target))}` : ''}</span></span>`);
   }
   const flags = forecast ? weatherFlags(events, forecast.days, now) : [];
   if (flags.length) parts.push(`<span class="nn-item"><span aria-hidden="true">☔</span>${eventLink({ id:flags[0].id }, new Date(flags[0].start), `<strong>${esc(flags[0].title)}</strong>`)} <span class="nn-muted">${esc(dayName(flags[0].start))} · ${flags[0].rain == null ? esc(flags[0].label) : `${flags[0].rain}% rain`}</span></span>`);

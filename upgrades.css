@@ -106,3 +106,8 @@
 .shared-calendars { margin:8px 0 12px; padding-left:20px; font-size:13px; }
 .own-apple { margin-top:14px; font-size:13px; }
 .own-apple summary { cursor:pointer; color:var(--accent); font-weight:600; width:fit-content; }
+/* Quick add: speak instead of typing */
+.smart-mic { min-width: 42px; padding: 8px 10px; font-size: 16px; line-height: 1; }
+.smart-mic.is-listening { background: #f3d9cf; border-color: #d28b72; animation: mic-pulse 1.2s ease-in-out infinite; }
+@keyframes mic-pulse { 50% { box-shadow: 0 0 0 6px rgba(210,139,114,.18); } }
+@media (prefers-reduced-motion: reduce) { .smart-mic.is-listening { animation: none; } }
