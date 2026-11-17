@@ -3,12 +3,12 @@
 // with a shared tooltip; every chart also has a table view.
 import { escapeHTML as esc } from './household-model.js';
 import { renderHTML } from './dom.js';
-import { dailySleep, dailyBottles, timelineRows, babySummary, dayStart } from './baby-history.js';
+import { dailySleep, dailyBottles, timelineRows, babySummary, dayStart, dayStory, dayStoryText, localDay } from './baby-history.js';
 import { MODELS, scorePredictions } from './prediction-log.js';
 import { frankieAwards } from './awards.js';
 
 const $ = id => document.getElementById(id);
-let range = 30;
+let range = 30, shared = null; // the latest snapshot, for "Share her day"
 try { range = Number(localStorage.getItem('hh_frankie_range')) || 30; } catch { /* storage may be blocked */ }
 const hm = hours => { if (hours == null) return '—'; const total = Math.round(hours * 60); return `${Math.floor(total / 60)}h ${String(total % 60).padStart(2, '0')}m`; };
 const ago = (stamp, now) => { const minutes = Math.max(0, Math.round((now - Date.parse(stamp)) / 60000)); return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`; };
@@ -100,6 +100,8 @@ function scoreboard(score, timezone) {
 }
 
 export function renderFrankie({ snapshot, timezone, predictions = [], demo = false, connected = false }) {
+  shared = snapshot ? { snapshot, timezone, demo } : null;
+  const share = $('frankieShare'); if (share) share.disabled = !snapshot;
   const root = $('frankieContent'); if (!root) return;
   // The placeholder lives beside the page content and is only shown/hidden, so
   // the chart containers always exist when data arrives.
@@ -135,7 +137,28 @@ export function renderFrankie({ snapshot, timezone, predictions = [], demo = fal
   $('frankieNote').textContent = `${demo ? 'Sample data · ' : ''}${snapshot.historyComplete === false || snapshot.feedsComplete === false ? 'Some older history was too long to load in full. ' : ''}Up to ${snapshot.historyDays || 14} days from Huckleberry · ${timezone.replaceAll('_', ' ')}.`;
 }
 
+// "Share her day": yesterday and today so far, in plain sentences for a text to family.
+export function frankieDayText(snapshot, timezone, now = Date.now()) {
+  const name = snapshot.name || 'Frankie', summary = babySummary(snapshot, timezone, now), asleep = !!snapshot.timer?.active;
+  const yesterdayKey = localDay(now - 86400000, timezone), yesterdayRow = dailySleep(snapshot.sleeps || [], timezone, 2, now)[0];
+  const yesterday = dayStoryText(dayStory(snapshot, null, timezone, yesterdayKey, now), { name, timezone, label:'Yesterday', asleep:false, totalHours:yesterdayRow?.total, averageHours:summary.avgSleep });
+  const today = dayStoryText(dayStory(snapshot, null, timezone, localDay(now, timezone), now), { name, timezone, label:'So far today', asleep });
+  return [`${name}’s day 🐾`, yesterday, today, asleep ? `${name} is asleep right now.` : '', '— from Hubert’s House'].filter(Boolean).join('\n\n');
+}
+async function shareDay(button) {
+  if (!shared) return;
+  const text = frankieDayText(shared.snapshot, shared.timezone), note = $('frankieShareNote');
+  try {
+    if (navigator.share) { await navigator.share({ title:`${shared.snapshot.name || 'Frankie'}’s day`, text }); return; }
+    await navigator.clipboard.writeText(text); if (note) note.textContent = 'Copied. Paste it into a message.';
+  } catch (error) {
+    if (error?.name === 'AbortError') return; // closed the share sheet
+    if (note) { note.textContent = text; note.classList.add('is-fallback'); }
+  }
+  button.blur();
+}
 export function initFrankie(rerender) {
+  $('frankieShare')?.addEventListener('click', event => shareDay(event.currentTarget));
   document.querySelectorAll('[data-frankie-range]').forEach(button => button.addEventListener('click', () => {
     range = Number(button.dataset.frankieRange); try { localStorage.setItem('hh_frankie_range', String(range)); } catch { /* optional */ }
     rerender();

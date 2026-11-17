@@ -139,3 +139,25 @@ export function dayStory({ sleeps = [], bottles = [] } = {}, diapers, timezone, 
     diapers:dayDiapers && { count:dayDiapers.length, wet:dayDiapers.filter(item => ['pee', 'both'].includes(item.mode)).length, dirty:dayDiapers.filter(item => ['poo', 'both'].includes(item.mode)).length }
   };
 }
+
+// A few plain sentences about one day of Frankie's, shared by the newsletter and the
+// app's "Share Frankie's day" button. `label` opens the first sentence ("Yesterday").
+export function dayStoryText(s, { name = 'Frankie', timezone = 'America/New_York', label = 'Yesterday', asleep = false, totalHours = null, averageHours = null } = {}) {
+  if (!s) return '';
+  const clock = date => new Date(date).toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', timeZone:timezone });
+  const span = m => m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
+  const plural = (n, word) => `${n} ${n === 1 ? word : `${word}s`}`;
+  const day = [];
+  if (s.wake) day.push(`was up for the day at ${clock(s.wake)}`);
+  if (s.naps.count) day.push(`took ${plural(s.naps.count, 'nap')} (${span(s.naps.minutes)} in all${s.naps.count > 1 && s.naps.longest ? `; the longest, ${span(s.naps.longest.minutes)}, started at ${clock(s.naps.longest.start)}` : ''})`);
+  else day.push('had no naps logged');
+  if (s.bedtime) day.push(`went down for the night at ${clock(s.bedtime)}`);
+  const sentences = [`${label} ${name} ${day.length > 1 ? `${day.slice(0, -1).join(', ')} and ${day.at(-1)}` : day[0]}.`];
+  const feeds = [s.bottles.count ? `${plural(s.bottles.count, 'bottle')}, ${s.bottles.ounces} oz in all` : 'no bottles logged'];
+  if (s.diapers) feeds.push(s.diapers.count ? `${plural(s.diapers.count, 'diaper change')} (${s.diapers.wet} wet, ${s.diapers.dirty} dirty)` : 'no diaper changes logged');
+  sentences.push(`She had ${feeds.join(' and ')}.`);
+  if (s.overnight && !asleep) sentences.push(`Overnight she slept ${span(s.overnight.minutes)} and woke at ${clock(s.overnight.woke)}.`);
+  else if (s.bedtime && asleep) sentences.push(`She’s still asleep${s.overnight ? ` after ${span(s.overnight.minutes)} of logged night sleep` : ''}.`);
+  if (totalHours && averageHours && Math.abs(totalHours - averageHours) >= 0.25) sentences.push(`That’s ${span(Math.round(Math.abs(totalHours - averageHours) * 60))} ${totalHours > averageHours ? 'more' : 'less'} sleep than her 7-day average.`);
+  return sentences.join(' ');
+}

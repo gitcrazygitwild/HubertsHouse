@@ -2,7 +2,7 @@ import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/
 import { config } from './config.js';
 import { escapeHTML as esc } from './household-model.js';
 import { showNotice, showView } from './household.js';
-import { purrfectWindow, huckleberryPrediction, miaForecast } from './baby-model.js';
+import { purrfectWindow, huckleberryPrediction, miaForecast, bottleForecast } from './baby-model.js';
 import { sweetspotEntry, sweetspotPatch, previousSweetspot, scorePredictions } from './prediction-log.js';
 import { sampleHistory, samplePredictions } from './baby-sample.js';
 import { renderFrankie, initFrankie } from './frankie.js';
@@ -35,6 +35,8 @@ function home() {
   $('babyChecked').textContent = snapshot ? `${demo ? 'Sample preview · ' : ''}Checked ${when(snapshot.checkedAt)} · ${zone().replaceAll('_',' ')}. Checks every two minutes while Home or Settings is visible.` : 'Sleep, bottles, and diaper changes in one place.';
   const enabled = !!snapshot && !!connection.selected;
   document.querySelectorAll('[data-baby-log],#babySleep').forEach(button => { button.disabled = busy || !enabled; });
+  $('babyNight').disabled = !snapshot;
+  renderNight();
   $('babyRefresh').disabled = busy;
   $('babySleep').textContent = snapshot?.timer?.active ? '☀ Finish sleep' : '☾ Start sleep';
   if (!snapshot) {
@@ -43,7 +45,8 @@ function home() {
   }
   const huck = huckleberryPrediction(snapshot), own = purrfectWindow({sleeps:snapshot.sleeps,timer:snapshot.timer,timezone:zone(),complete:snapshot.historyComplete});
   const mia = miaForecast({sleeps:snapshot.sleeps,timer:snapshot.timer,timezone:zone(),complete:snapshot.historyComplete});
-  logPredictions(huck); glance(huck, own, mia);
+  const nextBottle = bottleForecast(snapshot.bottles || [], {timezone:zone()});
+  logPredictions(huck); glance(huck, own, mia, nextBottle);
   const score = scorePredictions(predictions, snapshot.sleeps, snapshot.timer, zone()), leader = score.summary.find(model => model.key === score.leader);
   const hmText = minutes => `${Math.floor(minutes / 60)}h ${minutes % 60}m`, signed = minutes => `${minutes > 0 ? '+' : '−'}${Math.abs(minutes)}m`;
   const miaWhy = !mia.available ? '' : mia.kind === 'bedtime'
@@ -65,7 +68,7 @@ function home() {
   renderHTML($('babyScore'), score.scoredNaps ? `<button type="button" class="baby-score" data-go="frankie"><span aria-hidden="true">🏆</span><span>${leader ? `<strong>${esc(leader.owner)}’s ${esc(leader.name)}</strong> is most accurate so far · ±${leader.mae} min across ${leader.n} naps` : `${score.scoredNaps} nap${score.scoredNaps === 1 ? '' : 's'} scored · a leader appears after three scored naps`}</span><span class="baby-score-link">Scoreboard →</span></button>` : '');
   const timer = snapshot.timer, elapsed = timer?.start ? Math.max(0,Math.floor(((timer.paused ? Date.parse(timer.end) : Date.now()) - Date.parse(timer.start)) / 60000)) : 0;
   const latest = snapshot.sleeps.at(-1), bottle = snapshot.lastBottle, diaper = snapshot.lastDiaper;
-  renderHTML($('babyStats'), `<div><span>☾ Sleep</span><strong>${timer?.active ? `${Math.floor(elapsed / 60)}h ${elapsed % 60}m${timer.paused ? ' · paused' : ' · asleep'}` : latest ? `Awake since ${esc(time(latest.end))}` : 'No sleep logged'}</strong><small>${timer?.active ? `Started ${esc(when(timer.start))}` : latest ? esc(when(latest.end)) : 'Start a timer or log a finished sleep'}</small></div><div><span>◒ Last bottle</span><strong>${bottle ? `${esc(bottle.amount ?? '—')} ${esc(bottle.units)} · ${esc(bottle.type)}` : 'No bottle logged'}</strong><small>${esc(when(bottle?.time))}</small></div><div><span>♡ Last diaper</span><strong>${diaper ? ({pee:'Wet',poo:'Dirty',both:'Wet + dirty',dry:'Dry'}[diaper.mode] || 'Diaper change') : 'No change logged'}</strong><small>${esc(when(diaper?.time))}</small></div>`);
+  renderHTML($('babyStats'), `<div><span>☾ Sleep</span><strong>${timer?.active ? `${Math.floor(elapsed / 60)}h ${elapsed % 60}m${timer.paused ? ' · paused' : ' · asleep'}` : latest ? `Awake since ${esc(time(latest.end))}` : 'No sleep logged'}</strong><small>${timer?.active ? `Started ${esc(when(timer.start))}` : latest ? esc(when(latest.end)) : 'Start a timer or log a finished sleep'}</small></div><div><span>◒ Last bottle</span><strong>${bottle ? `${esc(bottle.amount ?? '—')} ${esc(bottle.units)} · ${esc(bottle.type)}` : 'No bottle logged'}</strong><small>${esc(when(bottle?.time))}${nextBottle?.available ? ` · next ~${esc(time(nextBottle.target))}` : ''}</small></div><div><span>♡ Last diaper</span><strong>${diaper ? ({pee:'Wet',poo:'Dirty',both:'Wet + dirty',dry:'Dry'}[diaper.mode] || 'Diaper change') : 'No change logged'}</strong><small>${esc(when(diaper?.time))}</small></div>`);
   frankie();
 }
 function frankie() {
@@ -73,8 +76,8 @@ function frankie() {
   try { renderFrankie({snapshot,timezone:zone(),predictions,demo,connected:connection.connected}); } catch (e) { console.error('Frankie page could not render', e); }
 }
 // Shares a small live summary with the Now & Next strip.
-function glance(huck, own, mia) {
-  window.dispatchEvent(new CustomEvent('hh:baby',{detail:snapshot ? {name:snapshot.name,timer:snapshot.timer,lastWake:snapshot.sleeps.at(-1)?.end,lastBottle:snapshot.bottles?.at(-1)?.start || snapshot.lastBottle?.time,huck,purr:own,mia} : null}));
+function glance(huck, own, mia, nextBottle = null) {
+  window.dispatchEvent(new CustomEvent('hh:baby',{detail:snapshot ? {name:snapshot.name,timer:snapshot.timer,lastWake:snapshot.sleeps.at(-1)?.end,lastBottle:snapshot.bottles?.at(-1)?.start || snapshot.lastBottle?.time,huck,purr:own,mia,nextBottle} : null}));
 }
 // Save Huckleberry's latest SweetSpot for this wake-up while Frankie is awake.
 // Hubert's and Mia's guesses are replayed from history, so they need no saving.
@@ -181,6 +184,57 @@ export function logBabyFromText(log) {
   if (!snapshot) { showView('settings'); showNotice('Connect Huckleberry in Settings to log for Frankie.'); return false; }
   if (log.kind === 'sleep-start' || log.kind === 'sleep-stop') return toggleSleep(log.kind === 'sleep-start' || +log.start < Date.now() - 60000 ? log.start : null, log.kind);
   return openLog(log.kind, log);
+}
+// ---------- Night feed mode ----------
+// A dim, full-screen panel for 3 AM: the clock, time since the last bottle, the
+// bottle forecast, and three big buttons. Keeps the screen awake while open.
+let nightLock = null, nightTimer = null;
+const ago = value => { const m = Math.max(0, Math.round((Date.now() - Date.parse(value)) / 60000)); return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`; };
+function nightPanel() {
+  let panel = $('nightMode'); if (panel) return panel;
+  panel = document.createElement('div'); panel.id = 'nightMode'; panel.className = 'night-mode'; panel.hidden = true;
+  panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-modal', 'true'); panel.setAttribute('aria-label', 'Night feed mode');
+  document.body.append(panel);
+  panel.addEventListener('click', e => {
+    const action = e.target.closest('[data-night]')?.dataset.night;
+    if (action === 'close') closeNight();
+    else if (action === 'sleep') toggleSleep();
+    else if (action === 'bottle' || action === 'diaper') openLog(action);
+  });
+  panel.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('babyLogDialog').open) closeNight(); });
+  return panel;
+}
+function renderNight() {
+  const panel = $('nightMode'); if (!panel || panel.hidden || !snapshot) return;
+  const timer = snapshot.timer, lastBottle = snapshot.bottles?.at(-1) || (snapshot.lastBottle?.time ? { start:snapshot.lastBottle.time, amount:snapshot.lastBottle.amount, units:snapshot.lastBottle.units, type:snapshot.lastBottle.type } : null);
+  const next = bottleForecast(snapshot.bottles || [], { timezone:zone() }), wake = snapshot.sleeps.at(-1)?.end;
+  const clock = new Date().toLocaleTimeString([], { hour:'numeric', minute:'2-digit', timeZone:zone() });
+  renderHTML(panel, `<button type="button" class="night-close" data-night="close">Done</button>
+    <div class="night-clock" aria-live="off">${esc(clock)}</div>
+    <div class="night-stats">
+      <div><span>Last bottle</span><strong>${lastBottle ? `${esc(ago(lastBottle.start))} ago` : '—'}</strong><small>${lastBottle ? `${esc(lastBottle.amount ?? '')} ${esc(lastBottle.units || '')} ${esc((lastBottle.type || '').toLowerCase())} · ${esc(time(lastBottle.start))}` : 'No bottle logged'}</small></div>
+      <div><span>Next bottle</span><strong>${next.available ? `~${esc(time(next.target))}` : '—'}</strong><small>${next.available ? `usually every ${Math.floor(next.typicalMinutes / 60)}h ${next.typicalMinutes % 60}m${next.phase === 'overdue' ? ' · any time now' : ''}` : esc(next.reason)}</small></div>
+      <div><span>${timer?.active ? 'Asleep' : 'Awake'}</span><strong>${timer?.active ? esc(ago(timer.start)) : wake ? esc(ago(wake)) : '—'}</strong><small>${timer?.active ? `since ${esc(time(timer.start))}` : wake ? `since ${esc(time(wake))}` : ''}</small></div>
+    </div>
+    <div class="night-actions">
+      <button type="button" data-night="sleep"${busy ? ' disabled' : ''}>${timer?.active ? '☀ Finish sleep' : '☾ Start sleep'}</button>
+      <button type="button" data-night="bottle"${busy ? ' disabled' : ''}>🍼 Bottle</button>
+      <button type="button" data-night="diaper"${busy ? ' disabled' : ''}>♡ Diaper</button>
+    </div>
+    <p class="night-tip">${demo ? 'Sample data · ' : ''}Screen stays awake while this is open.</p>`);
+}
+async function openNight() {
+  if (!snapshot) return;
+  const panel = nightPanel(); panel.hidden = false; document.documentElement.classList.add('night-open');
+  renderNight(); panel.querySelector('[data-night="close"]')?.focus();
+  nightTimer = setInterval(renderNight, 30000);
+  try { nightLock = await navigator.wakeLock?.request('screen'); } catch { nightLock = null; }
+}
+function closeNight() {
+  const panel = $('nightMode'); if (panel) panel.hidden = true;
+  document.documentElement.classList.remove('night-open');
+  clearInterval(nightTimer); nightLock?.release?.().catch(() => {}); nightLock = null;
+  $('babyNight')?.focus();
 }
 // ---------- Recent logs: list, edit, delete ----------
 const LOG_FORM = {sleep:'sleep-log', bottle:'bottle', diaper:'diaper'};
@@ -323,6 +377,8 @@ export async function initHuckleberry(app, options = {}) {
   $('babyRefresh').addEventListener('click', async () => { if (busy) return; busy = true; home(); try { await refresh(true); } finally { busy = false; home(); } });
   document.querySelectorAll('[data-baby-log]').forEach(button => button.addEventListener('click', () => openLog(button.dataset.babyLog)));
   $('babySleep').addEventListener('click', () => toggleSleep());
+  $('babyNight').addEventListener('click', openNight);
+  document.addEventListener('visibilitychange', async () => { if (document.visibilityState === 'visible' && $('nightMode') && !$('nightMode').hidden && !nightLock) { try { nightLock = await navigator.wakeLock?.request('screen'); } catch {} } });
   $('babyLogCancel').addEventListener('click', () => { if (!busy) $('babyLogDialog').close(); });
   $('babyLogDialog').addEventListener('cancel', e => { if (busy) e.preventDefault(); });
   $('babyLogForm').addEventListener('input', () => { formId = crypto.randomUUID(); syncLogForm(); });

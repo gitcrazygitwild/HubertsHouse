@@ -238,3 +238,33 @@ export function miaForecast({ sleeps = [], timer = null, timezone = 'America/New
       phase:+now > end ? 'passed' : +now >= start ? 'within' : 'upcoming' };
   }
 }
+
+// Next bottle: the median gap between Frankie's recent bottles that started around
+// the same time of day (night feeds usually stretch longer), with the middle half
+// of those gaps as the window. Her own history only; not feeding advice.
+export function bottleForecast(bottles = [], { timezone = 'America/New_York', now = new Date() } = {}) {
+  const empty = reason => ({ available:false, reason });
+  const list = bottles.map(bottle => ({ t:stamp(bottle.start), amount:bottle.amount, units:bottle.units, type:bottle.type }))
+    .filter(bottle => Number.isFinite(bottle.t) && bottle.t <= +now && bottle.t >= +now - 7 * DAY).sort((a, b) => a.t - b.t);
+  if (list.length < 4) return empty('Learning: log a few more bottles for a forecast.');
+  const last = list.at(-1);
+  if (+now - last.t > 10 * 3600000) return empty('Log the latest bottle for a forecast.');
+  const minuteOfDay = t => { const { hour, minute } = localParts(t, timezone); return hour * 60 + minute; };
+  const apart = (a, b) => { const d = Math.abs(a - b) % 1440; return Math.min(d, 1440 - d); };
+  const gaps = [];
+  for (let i = 1; i < list.length; i++) {
+    const minutes = (list[i].t - list[i - 1].t) / MINUTE;
+    if (minutes >= 45 && minutes <= 8 * 60) gaps.push({ minutes, clock:minuteOfDay(list[i - 1].t), t:list[i].t }); // skip top-ups and missing logs
+  }
+  const at = minuteOfDay(last.t);
+  let pool = gaps.filter(gap => apart(gap.clock, at) <= 150), matchedTime = true;
+  if (pool.length < 4) { pool = gaps; matchedTime = false; }
+  pool = pool.sort((a, b) => b.t - a.t).slice(0, 20);
+  if (pool.length < 3) return empty('Learning: log a few more bottles for a forecast.');
+  const values = pool.map(gap => gap.minutes), median = quantile(values, .5);
+  const low = Math.min(quantile(values, .25), median - 20), high = Math.max(quantile(values, .75), median + 20);
+  const start = last.t + Math.max(30, low) * MINUTE, end = last.t + high * MINUTE;
+  return { available:true, start:new Date(start).toISOString(), end:new Date(end).toISOString(), target:new Date(last.t + median * MINUTE).toISOString(),
+    last:{ time:new Date(last.t).toISOString(), amount:last.amount, units:last.units, type:last.type }, typicalMinutes:Math.round(median), samples:values.length, matchedTime,
+    phase:+now > end ? 'overdue' : +now >= start ? 'due' : 'upcoming' };
+}

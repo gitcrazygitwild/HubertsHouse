@@ -4,7 +4,7 @@
 // The shared/ modules are copied from the app by scripts/share.mjs at build and
 // deploy time, so the email uses exactly the same logic as the home page.
 import { dailyContent } from './shared/daily-content.js';
-import { babySummary, dailySleep, dailyBottles, dayStory, localDay } from './shared/baby-history.js';
+import { babySummary, dailySleep, dailyBottles, dayStory, dayStoryText, localDay } from './shared/baby-history.js';
 import { marketValue, marketChange, marketDate, marketLine } from './shared/briefing-format.js';
 import { purrfectWindow, miaForecast, huckleberryPrediction } from './shared/baby-model.js';
 import { scorePredictions } from './shared/prediction-log.js';
@@ -113,22 +113,7 @@ const minutes = m => m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
 const plural = (n, word, words = `${word}s`) => `${n} ${n === 1 ? word : words}`;
 // A few plain sentences about Frankie's yesterday.
 export function storyText(b) {
-  const s = b.yesterday.story, name = b.name, tz = b.tz;
-  if (!s) return '';
-  const day = [];
-  if (s.wake) day.push(`was up for the day at ${clock(s.wake, tz)}`);
-  if (s.naps.count) day.push(`took ${plural(s.naps.count, 'nap')} (${minutes(s.naps.minutes)} in all${s.naps.count > 1 && s.naps.longest ? `; the longest, ${minutes(s.naps.longest.minutes)}, started at ${clock(s.naps.longest.start, tz)}` : ''})`);
-  else day.push('had no naps logged');
-  if (s.bedtime) day.push(`went down for the night at ${clock(s.bedtime, tz)}`);
-  const sentences = [`Yesterday ${name} ${day.length > 1 ? `${day.slice(0, -1).join(', ')} and ${day.at(-1)}` : day[0]}.`];
-  const feeds = [s.bottles.count ? `${plural(s.bottles.count, 'bottle')}, ${s.bottles.ounces} oz in all` : 'no bottles logged'];
-  if (s.diapers) feeds.push(s.diapers.count ? `${plural(s.diapers.count, 'diaper change')} (${s.diapers.wet} wet, ${s.diapers.dirty} dirty)` : 'no diaper changes logged');
-  sentences.push(`She had ${feeds.join(' and ')}.`);
-  if (s.overnight && !b.timer?.active) sentences.push(`Overnight she slept ${minutes(s.overnight.minutes)} and woke at ${clock(s.overnight.woke, tz)}.`);
-  else if (s.bedtime && b.timer?.active) sentences.push(`She’s still asleep${s.overnight ? ` after ${minutes(s.overnight.minutes)} of logged night sleep` : ''}.`);
-  const total = b.yesterday.sleep?.total, avg = b.summary.avgSleep;
-  if (total && avg && Math.abs(total - avg) >= 0.25) sentences.push(`That’s ${minutes(Math.round(Math.abs(total - avg) * 60))} ${total > avg ? 'more' : 'less'} sleep than her 7-day average.`);
-  return sentences.join(' ');
+  return dayStoryText(b.yesterday.story, { name:b.name, timezone:b.tz, asleep:!!b.timer?.active, totalHours:b.yesterday.sleep?.total, averageHours:b.summary.avgSleep });
 }
 function worldSection(world) {
   const tiles = world.markets.map(m => { const change = marketChange(m), color = change.tone === 'up' ? '#2f7d4f' : change.tone === 'down' ? '#b4232a' : C.muted;

@@ -1,4 +1,4 @@
-import { dateKey, dueLabel, completionPatch, validateItem, escapeHTML as esc, OWNERS, CATEGORIES, filterTaskItems } from './household-model.js';
+import { dateKey, dueLabel, completionPatch, validateItem, escapeHTML as esc, OWNERS, CATEGORIES, filterTaskItems, guessAisle } from './household-model.js';
 import { eventsOnDay, localDate, eventEnd } from './calendar-model.js';
 import { renderHTML } from './dom.js';
 import { eventChecklistGroups, eventChecklistKey } from './checklists.js';
@@ -16,6 +16,7 @@ export function showNotice(message, action) {
 export function showView(view) {
   if (!Object.hasOwn(titles, view)) view = 'today';
   activeView = view;
+  document.body.dataset.view = view; // phones hide repeated header pieces outside Today (mobile.css)
   document.querySelectorAll('.house-view').forEach(el => el.classList.toggle('hidden', el.id !== `view-${view}`));
   document.querySelectorAll('[data-view]').forEach(el => { el.classList.toggle('active', el.dataset.view === view); if (el.dataset.view === view) el.setAttribute('aria-current', 'page'); else el.removeAttribute('aria-current'); });
   $('viewTitle').textContent = titles[view];
@@ -111,7 +112,7 @@ export function initHousehold(options) {
   $('quickGroceryForm').addEventListener('submit', async e => {
     e.preventDefault(); const input = $('quickGrocery'); const title = input.value.trim(); if (!title) return;
     const button = e.currentTarget.querySelector('button'); button.disabled = true;
-    try { await store.add(validateItem({ kind: 'grocery', title, owner: 'both', due: '', cadence: 'none', category: 'Other', quantity: '', list: '', completed: false })); if (input.value.trim() === title) input.value = ''; showNotice('Added to the grocery list.'); }
+    try { await store.add(validateItem({ kind: 'grocery', title, owner: 'both', due: '', cadence: 'none', category: guessAisle(title), quantity: '', list: '', completed: false })); if (input.value.trim() === title) input.value = ''; showNotice('Added to the grocery list.'); }
     catch (error) { showNotice(friendlyError(error)); } finally { button.disabled = false; }
   });
   $('clearBought').addEventListener('click', async () => {
@@ -175,7 +176,7 @@ async function saveItem(e) {
     const data = validateItem({ kind, withFrankie:kind !== 'grocery' && $('itemWithFrankie').checked, title: $('itemTitle').value, owner: kind === 'grocery' ? 'both' : $('itemOwner').value,
       due: kind === 'grocery' ? '' : $('itemDue').value, cadence: kind === 'chore' ? $('itemCadence').value : 'none',
       list: kind === 'task' ? $('itemList').value.trim().slice(0, 80) : '', quantity: kind === 'grocery' ? $('itemQuantity').value.trim().slice(0, 60) : '',
-      category: kind === 'grocery' ? $('itemCategory').value : 'Other', completed: old?.completed || false });
+      category: kind === 'grocery' ? ($('itemCategory').value === 'Other' ? guessAisle($('itemTitle').value) : $('itemCategory').value) : 'Other', completed: old?.completed || false });
     if (old && old.due !== data.due) data.anchorDay = data.due ? Number(data.due.slice(-2)) : null;
     if (old) await store.update(old, data); else await store.add(data);
     $('itemDialog').close(); showNotice('Saved for the household.');
@@ -234,5 +235,5 @@ function render() {
   }
   $('groceryCount').textContent = `${groceries.filter(x => !x.completed).length} to pick up · ${groceries.filter(x => x.completed).length} in the basket`;
   $('clearBought').disabled = !groceries.some(x => x.completed);
-  renderHTML($('groceryGroups'), groceries.length ? groupsHTML([...groceries].sort((a,b) => Number(a.completed) - Number(b.completed) || a.title.localeCompare(b.title)), x => x.completed ? 'In the basket' : x.category || 'Other', [...CATEGORIES, 'In the basket']) : empty('The list is ready when you are.', 'Add the first thing you need. It’ll be here on your next store run.'));
+  renderHTML($('groceryGroups'), groceries.length ? groupsHTML([...groceries].sort((a,b) => Number(a.completed) - Number(b.completed) || a.title.localeCompare(b.title)), x => x.completed ? 'In the basket' : x.category && x.category !== 'Other' ? x.category : guessAisle(x.title), [...CATEGORIES, 'In the basket']) : empty('The list is ready when you are.', 'Add the first thing you need. It’ll be here on your next store run.'));
 }

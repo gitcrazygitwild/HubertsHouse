@@ -62,3 +62,20 @@ export function filterTaskItems(items, { timing = 'all', text = '', today = date
     return !needle || `${item.title} ${item.list || ''}`.toLocaleLowerCase().includes(needle);
   });
 }
+
+// Groceries added without an aisle get one guessed from the name ("oat milk" →
+// Dairy & eggs). First match wins, so specific phrases come before single words.
+const AISLES = [
+  ['Frozen', /\b(frozen|ice cream|popsicles?|ice pops?|waffles? \(frozen\))\b/],
+  ['Pantry', /\b(peanut butter|almond butter|coconut milk|cream of|baking (soda|powder)|bread ?crumbs|tomato (sauce|paste)|canned)\b/],
+  ['Household', /\b(paper towels?|toilet paper|tissues?|detergent|dish ?soap|soap|sponges?|trash bags?|bin bags?|foil|plastic wrap|zip ?locs?|wipes|diapers?|shampoo|conditioner|toothpaste|toothbrush|deodorant|batteries|light ?bulbs?|litter|cat food|dog food|cat treats|bleach|cleaner|lotion|formula)\b/],
+  ['Meat & fish', /\b(chicken|beef|pork|turkey|bacon|sausages?|salmon|tuna steaks?|fish|shrimp|prawns|steaks?|ham|lamb|ground meat|meatballs|hot dogs?|cod|tilapia)\b/],
+  ['Dairy & eggs', /\b(milk|eggs?|cheese|cheddar|mozzarella|parmesan|yogh?urt|butter|cream|sour cream|half and half|creamer|kefir|cottage cheese)\b/],
+  ['Bakery', /\b(bread|bagels?|buns?|rolls?|tortillas?|muffins?|croissants?|baguettes?|pitas?|naan|english muffins?|cake|cookies)\b/],
+  ['Produce', /\b(apples?|bananas?|berries|strawberr(y|ies)|blueberr(y|ies)|raspberr(y|ies)|grapes?|oranges?|lemons?|limes?|peach(es)?|pears?|melons?|watermelon|pineapple|mango(es)?|avocados?|tomato(es)?|lettuce|spinach|kale|arugula|salad|cucumbers?|peppers?|onions?|garlic|potato(es)?|sweet potato(es)?|carrots?|celery|broccoli|cauliflower|zucchini|squash|mushrooms?|herbs?|cilantro|basil|parsley|mint|ginger|corn|green beans|asparagus|fruit|veg(gies|etables)?)\b/],
+  ['Pantry', /\b(rice|pasta|noodles|spaghetti|cereal|oats?|oatmeal|granola|flour|sugar|coffee|tea|beans|lentils|chickpeas|sauce|salsa|oil|vinegar|spices?|salt|pepper|soup|broth|stock|peanuts?|nuts|almonds|snacks?|chips|crackers|pretzels|popcorn|honey|jam|jelly|syrup|ketchup|mustard|mayo|mayonnaise|dressing|chocolate|baby food|puffs|water|juice|soda|seltzer|wine|beer)\b/]
+];
+export function guessAisle(title = '') {
+  const text = String(title).toLowerCase();
+  return AISLES.find(([, pattern]) => pattern.test(text))?.[0] || 'Other';
+}
