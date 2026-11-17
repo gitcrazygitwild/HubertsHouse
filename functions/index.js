@@ -6,6 +6,7 @@ import { warn } from 'firebase-functions/logger';
 import { CalDAV, CalendarError, resourceToken, appleURL } from './caldav.js';
 import { readEvents, writeEvent, canDelete, eventUID } from './ical.js';
 import { createAssignmentStore, validateAssignment, assignmentKey } from './calendar-assignments.js';
+import { resolveCalendarConnection, sharedView, sharesWithHousehold } from './calendar-share.js';
 import { encryptCredential, decryptCredential } from './crypto.js';
 import { HuckleberryError } from './huckleberry-provider.js';
 import { createHuckleberryHandler } from './huckleberry-service.js';
@@ -32,11 +33,12 @@ function endpoint(handler) {
 }
 export const huckleberry = endpoint(createHuckleberryHandler({db,key:() => encryptionKey.value()}));
 const connectionRef = uid => db.doc(`privateCalendarConnections/${uid}`);
+// Your own Apple connection, or the one another member shares with the household.
 async function connection(uid) {
-  const snap = await connectionRef(uid).get(); if (!snap.exists) throw new CalendarError('failed-precondition','Connect your iCloud account first.');
-  const data = snap.data();
-  return { data, client:new CalDAV(decryptCredential(data.credential,encryptionKey.value(),uid)) };
+  const { ownerUid, data, shared } = await resolveCalendarConnection({ db, uid, members:activeMembers });
+  return { data, shared, client:new CalDAV(decryptCredential(data.credential,encryptionKey.value(),ownerUid)) };
 }
+const ownerOnly = () => new CalendarError('permission-denied','Only the household member who connected Apple Calendar can change it. Connect your own Apple account to manage one.');
 function calendarFor(data,id) {
   const calendar = data.calendars.find(c => c.id === id);
   if (!calendar || !data.selected.includes(id)) throw new CalendarError('permission-denied','Choose a connected calendar.');
@@ -48,9 +50,19 @@ function checklistContext(input,calendar,token,uid) {
   return {id:`icloud-checklist:${assignmentKey(calendar.id,uid)}`,title:input.title,start:input.start,end:input.end || null,allDay:!!input.allDay,recurring:!!input.recurring,calendarName:calendar.name || 'Apple Calendar',token};
 }
 export const calendarStatus = endpoint(async uid => {
-  const snap = await connectionRef(uid).get(); if (!snap.exists) return {connected:false};
+  const snap = await connectionRef(uid).get();
+  if (snap.exists) { const data = snap.data(); return {connected:true,calendars:publicCalendars(data.calendars),selected:data.selected,shareWithHousehold:sharesWithHousehold(data)}; }
+  try { const { data, shared } = await resolveCalendarConnection({ db, uid, members:activeMembers }); if (shared) return sharedView(data); }
+  catch (error) { if (!(error instanceof CalendarError)) throw error; if (/More than one/.test(error.message)) return {connected:false,note:error.message}; }
+  return {connected:false};
+});
+// The connecting member decides whether their selected calendars are shared.
+export const calendarShare = endpoint(async (uid,input) => {
+  if (typeof input.shareWithHousehold !== 'boolean') throw new CalendarError('invalid-argument','Choose whether to share your calendars.');
+  const snap = await connectionRef(uid).get(); if (!snap.exists) throw ownerOnly();
+  await connectionRef(uid).update({shareWithHousehold:input.shareWithHousehold});
   const data = snap.data();
-  return {connected:true,calendars:publicCalendars(data.calendars),selected:data.selected};
+  return {connected:true,calendars:publicCalendars(data.calendars),selected:data.selected,shareWithHousehold:input.shareWithHousehold};
 });
 export const calendarConnect = endpoint(async (uid,input) => {
   const username = String(input.email || '').trim(); const password = String(input.password || '').trim();
@@ -59,16 +71,20 @@ export const calendarConnect = endpoint(async (uid,input) => {
   const calendars = await client.discover();
   const previous = await connectionRef(uid).get();
   const selected = previous.exists ? (previous.data().selected || []).filter(id => calendars.some(c => c.id === id)).slice(0,6) : [];
-  await connectionRef(uid).set({credential:encryptCredential({username,password},encryptionKey.value(),uid),calendars,selected,updatedAt:FieldValue.serverTimestamp()});
-  return {connected:true,calendars:publicCalendars(calendars),selected};
+  const shareWithHousehold = previous.exists ? sharesWithHousehold(previous.data()) : true; // reconnecting keeps the sharing choice
+  await connectionRef(uid).set({credential:encryptCredential({username,password},encryptionKey.value(),uid),calendars,selected,shareWithHousehold,updatedAt:FieldValue.serverTimestamp()});
+  return {connected:true,calendars:publicCalendars(calendars),selected,shareWithHousehold};
 });
 export const calendarSelect = endpoint(async (uid,input) => {
-  const {data} = await connection(uid);
+  const {data,shared} = await connection(uid); if (shared) throw ownerOnly();
   if (!Array.isArray(input.selected) || input.selected.length > 6 || !input.selected.every(id => data.calendars.some(c => c.id === id))) throw new CalendarError('invalid-argument','Choose up to six calendars from this account.');
   const selected = [...new Set(input.selected)]; await connectionRef(uid).update({selected});
-  return {connected:true,calendars:publicCalendars(data.calendars),selected};
+  return {connected:true,calendars:publicCalendars(data.calendars),selected,shareWithHousehold:sharesWithHousehold(data)};
 });
-export const calendarDisconnect = endpoint(async uid => { await connectionRef(uid).delete(); return {connected:false}; });
+export const calendarDisconnect = endpoint(async uid => {
+  if (!(await connectionRef(uid).get()).exists) throw ownerOnly(); // a borrowing member can't disconnect someone else's Apple account
+  await connectionRef(uid).delete(); return {connected:false};
+});
 export const calendarEvents = endpoint(async (uid,input) => {
   const start = new Date(input.start), end = new Date(input.end);
   if (isNaN(start) || isNaN(end) || end <= start || end - start > 125 * 86400000) throw new CalendarError('invalid-argument','Choose a date range of up to four months.');

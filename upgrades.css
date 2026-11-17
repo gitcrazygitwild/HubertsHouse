@@ -101,3 +101,8 @@
 .siri-steps { padding-left:20px; line-height:1.6; }
 .siri-steps li { margin:6px 0; }
 .siri-steps ul { padding-left:18px; margin:4px 0; }
+.siri-steps > li > ul { list-style:disc; }
+.siri-steps code { font-size:11.5px; padding:1px 5px; border-radius:5px; background:var(--soft); }
+.shared-calendars { margin:8px 0 12px; padding-left:20px; font-size:13px; }
+.own-apple { margin-top:14px; font-size:13px; }
+.own-apple summary { cursor:pointer; color:var(--accent); font-weight:600; width:fit-content; }
