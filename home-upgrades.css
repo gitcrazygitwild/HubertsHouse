@@ -76,3 +76,10 @@
 .home-day-weather-icon { display:inline-grid; width:18px; height:18px; }
 .home-day-weather-icon svg { width:18px; height:18px; }
 #homeWeek[data-calendar-mode="month"] .home-day-weather { padding:1px 6px 1px 2px; font-size:10.5px; }
+
+/* Settings → install as an app */
+.install-device { margin:14px 0 4px !important; color:var(--text) !important; }
+.install-steps { margin:0 0 6px; padding-left:22px; font-size:14px; line-height:1.7; color:var(--text); }
+.install-glyph { display:inline-block; padding:0 4px; border:1px solid var(--border); border-radius:6px; font-size:12px; }
+.install-done { color:var(--accent) !important; font-weight:600; }
+.install-more { margin-top:12px; }
