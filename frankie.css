@@ -108,3 +108,27 @@ rect.is-hovered.mark-night,rect.is-hovered.mark-nap { stroke:var(--card); stroke
 .after-dark-body details summary { list-style:none; cursor:pointer; color:var(--muted); font-size:10px; margin-top:6px; }
 .after-dark-body details[open] summary { display:none; }
 .after-dark-body details p { margin-top:6px; font-weight:600; color:var(--accent); }
+
+/* Frankie page: Recent logs (edit or delete) */
+.frankie-logs summary { cursor:pointer; list-style:none; }
+.frankie-logs summary::-webkit-details-marker { display:none; }
+.frankie-logs summary h2::after { content:'›'; display:inline-block; margin-left:8px; color:var(--muted); transition:transform .15s; }
+.frankie-logs details[open] summary h2::after { transform:rotate(90deg); }
+.log-toolbar { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin:4px 0 10px; }
+.log-day h3 { margin:14px 0 6px; font-size:12px; font-weight:650; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+.log-list { list-style:none; margin:0; padding:0; border:1px solid var(--border); border-radius:14px; overflow:hidden; }
+.log-row { display:flex; align-items:center; gap:10px; padding:9px 12px; background:var(--card); }
+.log-row + .log-row { border-top:1px solid var(--border); }
+.log-icon { width:28px; height:28px; display:grid; place-items:center; flex:none; border-radius:50%; background:var(--soft); }
+.log-sleep .log-icon { color:var(--chart-night); }
+.log-bottle .log-icon { color:var(--chart-bottle); }
+.log-diaper .log-icon { color:var(--frankie-ink); }
+.log-text { display:flex; flex-direction:column; min-width:0; flex:1; }
+.log-text strong { font-weight:600; }
+.log-text span { font-size:12px; color:var(--muted); }
+.log-actions { display:flex; gap:6px; flex:none; }
+.log-actions .btn { padding:5px 10px; font-size:12px; }
+.log-delete { color:var(--danger,#b4232a); }
+.log-more { margin-top:12px; }
+.log-empty { margin:10px 0; }
+@media (max-width:520px) { .log-summary-hint { display:none; } .log-row { padding:8px 10px; gap:8px; } .log-actions { gap:4px; } .log-actions .btn { padding:4px 8px; } .log-text strong { font-size:13.5px; } }

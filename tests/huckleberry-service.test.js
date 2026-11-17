@@ -239,3 +239,18 @@ test('simultaneous first visits adopt exactly one shared connection',async()=>{
   assert.equal(docs.get('privateHuckleberryConnections/household-home').version,first.connectionVersion);
   assert.equal(counts().authenticated,0);
 });
+test('recent logs and changes go to the selected child only and clear the cached snapshot', async () => {
+  const {docs,handler,api} = fixture(), calls = [];
+  api.huckleberryRecent = async (_client,childId) => { calls.push(['recent',childId]); return {days:7,entries:[]}; };
+  api.changeHuckleberry = async (_client,childId,entry) => { calls.push(['change',childId,entry.change]); return {saved:true}; };
+  await handler('parent',{action:'connect',email:'test@example.com',password:'password',timezone:'America/New_York'});
+  await handler('parent',{action:'select',childId:'child-one',timezone:'America/New_York'});
+  await handler('parent',{action:'snapshot'}); assert.equal(docs.has('privateBabySnapshots/household-home'),true);
+  assert.deepEqual(await handler('parent',{action:'recent'}),{days:7,entries:[]});
+  const entry = {change:'delete',kind:'diaper',id:'d1',version:'1.000000001'};
+  await assert.rejects(handler('parent',{action:'change',childId:'child-two',entry}),e => e.code === 'aborted');
+  assert.deepEqual(await handler('another-parent',{action:'change',childId:'child-one',entry}),{saved:true});
+  assert.deepEqual(calls,[['recent','child-one'],['change','child-one','delete']]);
+  assert.equal(docs.has('privateBabySnapshots/household-home'),false,'The next refresh reloads history');
+  await assert.rejects(handler('outsider',{action:'recent'}),e => e.code === 'permission-denied');
+});
