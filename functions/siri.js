@@ -24,6 +24,22 @@ export function readKey(headers = {}, body = {}) {
   }
   return null;
 }
+// Shortcuts bodies vary with how the action was set up: JSON, a form, plain
+// text, or raw bytes; field names may be capitalized; "confirm" may be a
+// Boolean or the text "True". Read the words and the confirmation either way.
+export function readRequest(raw) {
+  let body = raw;
+  if (Buffer.isBuffer(body)) body = body.toString('utf8');
+  if (typeof body === 'string') { const text = body.trim(); try { body = JSON.parse(text); } catch { body = { text }; } }
+  if (!body || typeof body !== 'object') body = {};
+  const lower = Object.fromEntries(Object.entries(body).map(([key, value]) => [key.trim().toLowerCase(), value]));
+  let text = ['text', 'input', 'message', 'log', 'say'].map(key => lower[key]).find(value => typeof value === 'string' && value.trim());
+  // One unrecognized text field (e.g. a misnamed key): use it.
+  if (!text) { const strings = Object.entries(lower).filter(([key, value]) => !['key', 'confirm'].includes(key) && typeof value === 'string' && value.trim() && !/^hh_/.test(value.trim())); if (strings.length === 1) text = strings[0][1]; }
+  const confirm = lower.confirm === true || (typeof lower.confirm === 'string' && /^(true|yes|1)$/i.test(lower.confirm.trim()));
+  return { text:String(text || '').trim(), confirm, key:lower.key, fields:Object.keys(lower) };
+}
+export const EMPTY_TEXT_HINT = 'I got your request but no words. In Get Contents of URL, set the text field to Provided Input from Ask for Input, not Shortcut Input.';
 // Why no key was found, in words Siri can say.
 export function missingKeyHint(headers = {}, body = {}) {
   const auth = clean(headers.authorization || headers.Authorization || headers['x-siri-key'] || body?.key || '').trim();
@@ -92,7 +108,7 @@ export function createSiriHandler({ db, huckleberry, members, now = () => new Da
     const reply = (status, body) => response.status(status).json(body);
     try {
       if (request.method !== 'POST') return reply(405, { ok:false, speak:'Hubert only listens to the Ping Hubert shortcut.' });
-      const body = typeof request.body === 'object' && request.body ? request.body : {};
+      const body = readRequest(request.body);
       const key = readKey(request.headers, body);
       if (!key) return reply(401, { ok:false, speak:missingKeyHint(request.headers, body) });
       const keyHash = hashSiriKey(key), keyRef = db.doc(`siriKeys/${keyHash}`), record = await keyRef.get();
@@ -103,9 +119,10 @@ export function createSiriHandler({ db, huckleberry, members, now = () => new Da
       let snapshot;
       try { snapshot = await huckleberry(owner, { action:'snapshot' }); } catch { /* handled below */ }
       if (!snapshot?.childId) return reply(409, { ok:false, speak:'Hubert can’t reach Huckleberry right now. Check the connection in settings.' });
+      if (!body.text) return reply(200, { ok:false, speak:EMPTY_TEXT_HINT });
       const plan = planSiriLog({ text:body.text, snapshot, now:now(), keyHash });
       await keyRef.update({ lastUsedAt:now().toISOString() }).catch(() => {});
-      if (body.confirm !== true) return reply(200, { ok:true, needsConfirm:true, speak:plan.speak });
+      if (!body.confirm) return reply(200, { ok:true, needsConfirm:true, speak:plan.speak });
       await huckleberry(owner, { action:'write', childId:snapshot.childId, connectionVersion:snapshot.connection?.connectionVersion, entry:plan.entry });
       return reply(200, { ok:true, saved:true, speak:plan.done });
     } catch (error) {

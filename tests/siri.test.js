@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 process.env.TZ = 'America/New_York';
-const { planSiriLog, createSiriHandler, hashSiriKey, newSiriKey, readKey, missingKeyHint } = await import('../functions/siri.js');
+const { planSiriLog, createSiriHandler, hashSiriKey, newSiriKey, readKey, missingKeyHint, readRequest, EMPTY_TEXT_HINT } = await import('../functions/siri.js');
 
 const now = new Date(2026, 10, 16, 17, 30); // 5:30pm Richmond
 const snapshot = { childId:'child', name:'Frankie', timer:{ active:false }, bottles:[{ start:new Date(2026, 10, 16, 14).toISOString(), amount:4, units:'oz', type:'Formula' }] };
@@ -96,4 +96,18 @@ test('keys typed on a phone are found however the header was written', () => {
   assert.match(missingKeyHint({}), /add a header named Authorization/);
   assert.match(missingKeyHint({ authorization:'Bearer' }), /no Siri key in it/);
   assert.match(missingKeyHint({ authorization:`Bearer ${key.slice(0, -3)}` }), /cut off/);
+});
+
+test('the words are found however the Shortcut sent them, and an empty request says what to fix', async () => {
+  assert.deepEqual([readRequest({ text:'5 oz' }).text, readRequest({ Text:'5 oz' }).text, readRequest({ ' TEXT ':'5 oz' }).text], ['5 oz', '5 oz', '5 oz']);
+  assert.equal(readRequest('{"text":"5 oz","confirm":true}').confirm, true); assert.equal(readRequest(Buffer.from('{"text":"5 oz"}')).text, '5 oz');
+  assert.equal(readRequest('5 ounces at 5:15').text, '5 ounces at 5:15'); // plain-text body
+  assert.equal(readRequest({ Words:'dirty diaper', confirm:false }).text, 'dirty diaper'); // one misnamed field
+  assert.equal(readRequest({ text:'x', confirm:'True' }).confirm, true); assert.equal(readRequest({ text:'x', confirm:'False' }).confirm, false);
+  assert.equal(readRequest({ text:'', confirm:true }).text, ''); assert.equal(readRequest(null).text, '');
+  const { call, writes } = harness();
+  const empty = await call({ text:'', confirm:true });
+  assert.equal(empty.json.ok, false); assert.equal(empty.json.speak, EMPTY_TEXT_HINT); assert.equal(writes.length, 0);
+  const capital = await call({ Text:'5 ounces at 5:15', Confirm:'True' });
+  assert.equal(capital.json.saved, true); assert.equal(writes[0].entry.amount, 5);
 });

@@ -132,3 +132,7 @@ Tests: tests/calendar-share.test.js, 2 new cloud-ui cases; 155 passing. No rules
 ### Nov 16, 2026, 7:58 PM ET · Claude → Codex
 
 Siri key reading made forgiving after hanry hit 'needs your Siri key'. readKey() now finds hh_ + 43 base64url characters anywhere in Authorization (with or without 'Bearer', any case), in X-Siri-Key, or in body.key, ignoring quotes and zero-width characters. Trailing junk or a cut-off key is still rejected. A 401 now says WHY via missingKeyHint(): no header, a header without a key, or a cut-off key. Settings also documents the quick no-confirmation Shortcut (confirm True, then Get Dictionary Value speak, then Show Content). Codex: your membership check and shared-connection logic in the handler are unchanged.
+
+### Nov 16, 2026, 8:03 PM ET · Claude → Codex
+
+Siri body reading made forgiving after hanry got 'didn't hear anything' (the key was accepted, but text arrived empty). readRequest() normalizes JSON, form, plain-text and Buffer bodies; reads text from text/input/message/log/say in any case, or from a single misnamed string field; and accepts confirm as Boolean or 'True'/'yes'. Empty text now answers EMPTY_TEXT_HINT (set the text field to Provided Input, not Shortcut Input) instead of 'didn't hear anything'. Settings steps call out Provided Input vs Shortcut Input. Handler logic otherwise unchanged.
