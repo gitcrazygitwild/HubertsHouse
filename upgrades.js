@@ -103,7 +103,7 @@ function renderNowNext() {
   if (baby) {
     const minutes = stamp => Math.max(0, Math.round((+now - Date.parse(stamp)) / 60000)), hm = m => m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`;
     const status = baby.timer?.active ? `asleep ${hm(minutes(baby.timer.start))}` : baby.lastWake ? `awake ${hm(minutes(baby.lastWake))}` : 'no sleep logged';
-    const nap = !baby.timer?.active && baby.mia?.available ? ` · nap ~${clock(baby.mia.target)}` : '';
+    const nap = !baby.timer?.active && baby.mia?.available ? ` · ${baby.mia.kind === 'bedtime' ? 'bedtime' : 'nap'} ~${clock(baby.mia.target)}` : '';
     parts.push(`<span class="nn-item"><span aria-hidden="true">${baby.timer?.active ? '☾' : '☀'}</span><button type="button" class="nn-link" data-nn-view="frankie">${esc(baby.name)} <strong>${esc(status)}</strong></button><span class="nn-muted">${esc(nap)}${baby.lastBottle ? ` · bottle ${esc(hm(minutes(baby.lastBottle)))} ago` : ''}</span></span>`);
   }
   const flags = forecast ? weatherFlags(events, forecast.days, now) : [];

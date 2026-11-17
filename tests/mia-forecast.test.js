@@ -58,3 +58,53 @@ test('Mia stays quiet while asleep, overnight, without history, and uses a diffe
   assert.equal(mia.available, true); assert.equal(purr.available, true);
   assert.notEqual(mia.target, purr.target);
 });
+
+test('Mia forecasts bedtime after the day’s usual last nap', () => {
+  // Three naps a day, bed at 19:00 every night (the next day's night starts then).
+  const history = []; for (let d = 1; d <= 7; d++) history.push(...day(d,[90,120,150],[60,60,45]));
+  const sleeps = iso([...history, ...day(0,[90,120,150],[60,60,45])]); // nap 3 ended 15:45
+  const mia = miaForecast({sleeps, timezone:zone}, new Date(today + 16 * H));
+  assert.equal(mia.available, true); assert.equal(mia.kind, 'bedtime'); assert.equal(mia.usualNaps, 3);
+  assert.equal(Date.parse(mia.target), today + 19 * H); // 3h15 after nap 3, which is also 7:00 PM
+  const {bedtimes} = indexedWakeWindows(sleeps, zone, new Date(today + 16 * H));
+  assert.ok(bedtimes.length >= 6 && bedtimes.every(b => b.minutes === 195 && b.naps === 3));
+  // Earlier in the day it is still a nap forecast.
+  const midday = miaForecast({sleeps:iso([...history, ...day(0,[90,120],[60,60])]), timezone:zone}, new Date(today + 13 * H));
+  assert.equal(midday.kind, 'nap'); assert.equal(midday.napNumber, 3);
+});
+
+test('bedtime leans on the clock when bedtime is a steady routine', () => {
+  // Last nap ends at different times, but bed is always 19:00: the clock is steadier.
+  const history = []; for (let d = 1; d <= 8; d++) history.push(...day(d,[90,120 + (d % 3) * 30],[60,60]));
+  const sleeps = iso([...history, ...day(0,[90,180],[60,60])]); // nap 2 ended 13:30, later than usual
+  const mia = miaForecast({sleeps, timezone:zone}, new Date(today + 14 * H));
+  assert.equal(mia.kind, 'bedtime');
+  assert.ok(mia.clockShare > 50, `clock share ${mia.clockShare}`);
+  assert.ok(Math.abs(Date.parse(mia.target) - (today + 19 * H)) <= 20 * M, new Date(mia.target).toISOString());
+});
+
+test('a short night shortens the first wake window when the history shows that pattern', () => {
+  // Learn: after an 11h night the first window was 120m; after a 9h night, 90m.
+  const history = [];
+  for (let d = 1; d <= 8; d++) { const long = d % 2 === 1, s = day(d,[long ? 120 : 90],[60]); s[0].start = s[0].end - (long ? 11 : 9) * H; history.push(...s); }
+  const shortNight = day(0,[],[]); shortNight[0].start = shortNight[0].end - 9 * H;
+  const longNight = day(0,[],[]); longNight[0].start = longNight[0].end - 11 * H;
+  const now = new Date(today + 7.25 * H);
+  const short = miaForecast({sleeps:iso([...history, ...shortNight]), timezone:zone}, now);
+  const long = miaForecast({sleeps:iso([...history, ...longNight]), timezone:zone}, now);
+  assert.equal(short.napNumber, 1); assert.equal(short.kind, 'nap');
+  assert.equal(short.lastNight, 540); assert.equal(long.lastNight, 660);
+  assert.ok(short.nightMinutes < 0, `short night effect ${short.nightMinutes}`);
+  assert.ok(long.nightMinutes > 0, `long night effect ${long.nightMinutes}`);
+  assert.ok(Date.parse(short.target) < Date.parse(long.target));
+});
+
+test('night segments with a waking add up to one night', () => {
+  const base = today, sleeps = iso([
+    {start:base - 5 * H, end:base + 1 * H}, {start:base + 1.5 * H, end:base + 6.5 * H}, // 19:00–01:00, 01:30–06:30
+    {start:base + 8 * H, end:base + 9 * H}]);
+  const {byDay, samples} = indexedWakeWindows(sleeps, zone, new Date(base + 10 * H));
+  const entry = byDay.get('2026-11-16');
+  assert.equal(entry.night, 660); assert.equal(entry.wake, base + 6.5 * H);
+  assert.equal(samples[0].minutes, 90); assert.equal(samples[0].lastNight, 660);
+});
