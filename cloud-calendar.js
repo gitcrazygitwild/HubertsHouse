@@ -63,14 +63,9 @@ export async function refreshCloud({force = true} = {}) {
   })();
   try { await inFlight; } finally { inFlight = null; }
 }
-function render() {
-  status(); const panel = $('icloudPanel');
-  if (demo || !config.calendarServiceEnabled) {
-    panel.innerHTML = `<div class="connection-note"><strong>${demo ? 'Explore the house first.' : 'One-time setup needed'}</strong><p>${demo ? 'This preview uses sample events. Your Apple Account is never connected in preview mode.' : 'Your private calendar service needs to be activated before connecting iCloud. After setup, you can choose calendars and use an Apple app-specific password here.'}</p></div><p class="tiny">iCloud updates appear here on refresh and every five minutes while open. Regular events can be created, edited, and deleted. Recurring events and invitations appear here; manage those in Apple Calendar.</p>`;
-    return;
-  }
-  if (!connection.connected) {
-    panel.innerHTML = `<form id="icloudForm" class="connection-form"><label class="field"><span>Apple Account email</span><input id="appleEmail" type="email" autocomplete="username" required /></label><label class="field"><span>App-specific password</span><input id="applePassword" type="password" autocomplete="new-password" placeholder="xxxx-xxxx-xxxx-xxxx" required /></label><p class="tiny">Create one at <a href="https://account.apple.com/" target="_blank" rel="noopener noreferrer">account.apple.com ↗</a> under Sign-In and Security → App-Specific Passwords. Give it the name “Hubert’s House.”</p><button class="btn btn-primary" type="submit">Connect iCloud</button><p id="cloudError" class="form-error" role="alert">${esc(lastError)}</p></form>`;
+// The Apple sign-in form (used when not connected, or to replace a shared connection).
+function connectForm(container) {
+    container.innerHTML = `<form id="icloudForm" class="connection-form"><label class="field"><span>Apple Account email</span><input id="appleEmail" type="email" autocomplete="username" required /></label><label class="field"><span>App-specific password</span><input id="applePassword" type="password" autocomplete="new-password" placeholder="xxxx-xxxx-xxxx-xxxx" required /></label><p class="tiny">Create one at <a href="https://account.apple.com/" target="_blank" rel="noopener noreferrer">account.apple.com ↗</a> under Sign-In and Security → App-Specific Passwords. Give it the name “Hubert’s House.”</p><button class="btn btn-primary" type="submit">Connect iCloud</button><p id="cloudError" class="form-error" role="alert">${esc(lastError)}</p></form>`;
     $('icloudForm').addEventListener('submit',async e => {
       e.preventDefault(); const button = e.currentTarget.querySelector('button'); button.disabled = true; $('cloudError').textContent = '';
       const email = $('appleEmail').value; const passwordInput = $('applePassword');
@@ -78,15 +73,36 @@ function render() {
       catch (error) { lastError = message(error); $('cloudError').textContent = lastError; status(); }
       finally { passwordInput.value = ''; button.disabled = false; }
     });
+}
+function render() {
+  status(); const panel = $('icloudPanel');
+  if (demo || !config.calendarServiceEnabled) {
+    panel.innerHTML = `<div class="connection-note"><strong>${demo ? 'Explore the house first.' : 'One-time setup needed'}</strong><p>${demo ? 'This preview uses sample events. Your Apple Account is never connected in preview mode.' : 'Your private calendar service needs to be activated before connecting iCloud. After setup, you can choose calendars and use an Apple app-specific password here.'}</p></div><p class="tiny">iCloud updates appear here on refresh and every five minutes while open. Regular events can be created, edited, and deleted. Recurring events and invitations appear here; manage those in Apple Calendar.</p>`;
     return;
   }
-  panel.innerHTML = `<p>Choose up to six calendars to show. Only the calendars you select are loaded. Anyone using this signed-in device can see and edit your selected writable calendars.</p><form id="calendarChoices">${connection.calendars.map(c => `<label class="calendar-choice"><input type="checkbox" name="calendar" value="${esc(c.id)}" ${connection.selected.includes(c.id) ? 'checked' : ''} /><span>${esc(c.name)}${!c.writable ? ' · read-only' : ''}</span></label>`).join('')}<div class="connection-actions"><button class="btn btn-primary" type="submit">Save calendar selection</button><button type="button" class="btn" id="refreshCloud">Refresh now</button><button type="button" class="btn" id="disconnectCloud">Disconnect</button></div></form><p id="cloudChecked" class="tiny">${checkedAt ? `Last checked ${esc(new Date(checkedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}))}. ` : ''}Checks every five minutes while this page is open.</p><p class="tiny">Recurring events and invitations are displayed here. Manage them in Apple Calendar. Owners and checklists stay privately in Hubert’s House, including for read-only Apple events. Find all saved event checklists in Chores & Lists.</p><p id="cloudError" class="form-error" role="alert">${esc(lastError)}</p>`;
+  if (connection.shared) {
+    panel.innerHTML = `<div class="connection-note"><strong>Shared by your household</strong><p>You’re seeing the Apple calendars another household member chose to share, with view and edit access. Owners, Frankie labels and checklists are shared too. Only they can change which calendars are shared or disconnect Apple.</p></div><ul class="shared-calendars">${connection.calendars.map(c => `<li>${esc(c.name)}${!c.writable ? ' · read-only' : ''}</li>`).join('') || '<li>No calendars are shared right now.</li>'}</ul><div class="connection-actions"><button type="button" class="btn" id="refreshCloud">Refresh now</button></div><details class="own-apple"><summary>Use your own Apple account instead</summary><p class="tiny">Connecting your own account replaces the shared calendars on your login with the ones you choose.</p><div id="ownAppleForm"></div></details>`;
+    $('refreshCloud').addEventListener('click',async e => { e.target.disabled = true; try { await refreshCloud(); if (!lastError) showNotice('Calendars are up to date.'); } finally { e.target.disabled = false; } });
+    connectForm($('ownAppleForm'));
+    return;
+  }
+  if (!connection.connected) {
+    panel.innerHTML = `${connection.note ? `<div class="connection-note"><p>${esc(connection.note)}</p></div>` : ''}<div id="ownAppleForm"></div>`;
+    connectForm($('ownAppleForm'));
+    return;
+  }
+  panel.innerHTML = `<p>Choose up to six calendars to show. Only the calendars you select are loaded.</p><label class="inline-field shortcut-setting"><input id="shareCalendars" type="checkbox" ${connection.shareWithHousehold !== false ? 'checked' : ''} /> Share these calendars with the household (view and edit)</label><p class="tiny muted">Household members without their own Apple connection see and edit your selected calendars, including owners, Frankie labels and checklists. Unselected calendars stay private, and only you can change the selection or disconnect.</p><form id="calendarChoices">${connection.calendars.map(c => `<label class="calendar-choice"><input type="checkbox" name="calendar" value="${esc(c.id)}" ${connection.selected.includes(c.id) ? 'checked' : ''} /><span>${esc(c.name)}${!c.writable ? ' · read-only' : ''}</span></label>`).join('')}<div class="connection-actions"><button class="btn btn-primary" type="submit">Save calendar selection</button><button type="button" class="btn" id="refreshCloud">Refresh now</button><button type="button" class="btn" id="disconnectCloud">Disconnect</button></div></form><p id="cloudChecked" class="tiny">${checkedAt ? `Last checked ${esc(new Date(checkedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}))}. ` : ''}Checks every five minutes while this page is open.</p><p class="tiny">Recurring events and invitations are displayed here. Manage them in Apple Calendar. Owners and checklists stay privately in Hubert’s House, including for read-only Apple events. Find all saved event checklists in Chores & Lists.</p><p id="cloudError" class="form-error" role="alert">${esc(lastError)}</p>`;
   $('calendarChoices').addEventListener('submit',async e => {
     e.preventDefault(); const selected = [...e.currentTarget.querySelectorAll('input:checked')].map(x => x.value);
     if (selected.length > 6) { $('cloudError').textContent = 'Choose up to six calendars.'; return; }
     const button = e.currentTarget.querySelector('[type=submit]'); button.disabled = true;
     try { connection = await call('calendarSelect',{selected}); generation++; onChecklists?.([]); onEvents([]); onCalendars(connection); lastError = ''; render(); await refreshCloud(); showNotice('Calendar selection saved.'); }
     catch (error) { $('cloudError').textContent = message(error); } finally { button.disabled = false; }
+  });
+  $('shareCalendars').addEventListener('change',async e => {
+    const input = e.currentTarget, wanted = input.checked; input.disabled = true;
+    try { connection = await call('calendarShare',{shareWithHousehold:wanted}); showNotice(wanted ? 'Your selected calendars are shared with the household.' : 'Your calendars are private to your login again.'); }
+    catch (error) { input.checked = !wanted; $('cloudError').textContent = message(error); } finally { input.disabled = false; }
   });
   $('refreshCloud').addEventListener('click',async e => { e.target.disabled = true; try { await refreshCloud(); if (!lastError) showNotice('Calendars are up to date.'); } finally { e.target.disabled = false; } });
   $('disconnectCloud').addEventListener('click',async e => {

@@ -171,3 +171,7 @@ The `siri` HTTPS function (`functions/siri.js`) accepts `POST {text, confirm}` w
 3. Say “Hey Siri, Ping Hubert”, then for example “5 ounces at 5:15”, then “Yes”.
 
 Treat the key like a password: anyone who has it can log entries for Frankie. Revoke it from Settings if a phone is lost.
+
+### Shared Apple Calendar
+
+`functions/calendar-share.js` lets a member without their own Apple connection use the one connection another active member shares (`shareWithHousehold`, default on; reconnecting keeps the choice). Every calendar endpoint resolves the connection through it. A borrowing member sees only the owner's selected calendars (no Apple URLs or credentials) and can read, create, edit and delete events and household assignments on them; `calendarSelect`, `calendarDisconnect` and `calendarShare` are owner-only. The Apple credential stays encrypted to its owner. If two members share connections, nothing is guessed: the member is asked to connect their own account. Turn sharing off in **Settings → Apple Calendar**.

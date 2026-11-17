@@ -12,18 +12,21 @@ const when = value => value ? new Date(value).toLocaleString([], { month:'short'
 const copyRow = (id, label, value, secret) => `<label class="field siri-copy"><span>${label}</span><span class="siri-copy-row"><input id="${id}" readonly value="${esc(value)}" ${secret ? 'class="siri-secret"' : ''} /><button type="button" class="btn" data-copy="${id}">Copy</button></span></label>`;
 
 export function shortcutSteps(url, keyHint = 'your key') {
-  return `<ol class="siri-steps">
-    <li><strong>Open Shortcuts</strong> on your iPhone, tap <b>＋</b>, then tap the name at the top and call it <b>Ping Hubert</b>. That name is what you say to Siri.</li>
-    <li>Add <b>Ask for Input</b>. Type: <i>Text</i>. Prompt: <i>What should I log?</i></li>
-    <li>Add <b>Get Contents of URL</b> and paste the address above. Tap <b>Show More</b>:
-      <ul><li>Method: <b>POST</b></li><li>Headers: add <b>Authorization</b> with the value <b>Bearer ${esc(keyHint)}</b> (the word Bearer, a space, then your key)</li>
-      <li>Request Body: <b>JSON</b>. Add a <i>Text</i> field <b>text</b> set to <i>Provided Input</i>, and a <i>Boolean</i> field <b>confirm</b> set to <i>False</i>.</li></ul></li>
-    <li>Add <b>Get Dictionary Value</b>: get <i>Value</i> for key <b>speak</b> in <i>Contents of URL</i>.</li>
-    <li>Add <b>Choose from Menu</b>. Prompt: the <i>Dictionary Value</i>. Options: <b>Yes</b> and <b>No</b>.</li>
-    <li>Under <b>Yes</b>: long-press step 3 → <b>Duplicate</b>, drag the copy under Yes, and change <b>confirm</b> to <i>True</i>. Then add <b>Get Dictionary Value</b> (key <b>speak</b>) and <b>Show Result</b> with that value.</li>
-    <li>Under <b>No</b>: add <b>Show Result</b> with the text <i>Okay, nothing logged.</i></li>
-    <li>Done. Say <b>“Hey Siri, Ping Hubert”</b>. Siri asks what to log. Say <i>“5 ounces at 5:15”</i>, then <i>“Yes”</i>. It works from your Apple Watch too.</li>
+  const step = (title, items) => `<li><strong>${title}</strong>${items.length ? `<ul>${items.map(item => `<li>${item}</li>`).join('')}</ul>` : ''}</li>`;
+  return `<p class="tiny">Do this on your iPhone. Keep this page open — you’ll copy the <b>Shortcut address</b> and <b>your key</b> from it (your clipboard holds one at a time, so you’ll switch back once).</p>
+  <ol class="siri-steps">
+    ${step('Create the shortcut', ['Open the <b>Shortcuts</b> app and tap <b>＋</b> (top right).', 'Tap the name at the top → <b>Rename</b> → type <b>Ping Hubert</b> → Done. That name is what you say to Siri.'])}
+    ${step('Ask what to log', ['Tap the search bar at the bottom, type <b>Ask for Input</b>, tap it.', 'Tap <b>Prompt</b> and type <i>What should I log?</i> (leave the type as Text).'])}
+    ${step('Send it to Hubert (preview)', ['Search <b>Get Contents of URL</b> and tap it.', 'Copy the <b>Shortcut address</b> here, then tap <b>URL</b> and paste.', 'Tap the small <b>›</b> on that action to expand it:',
+      'Method: change <b>GET</b> to <b>POST</b>.', `Headers: <b>Add new header</b>. Key: <code>Authorization</code>. Value: <code>Bearer </code> (the word Bearer and a space), then paste ${esc(keyHint)}.`,
+      'Request Body: <b>JSON</b>. <b>Add new field → Text</b>: key <code>text</code>; for the value, pick <b>Provided Input</b> from the suggestions above the keyboard.', '<b>Add new field → Boolean</b>: key <code>confirm</code>, leave it <b>False</b>.'])}
+    ${step('Read back what Hubert understood', ['Search <b>Get Dictionary Value</b>, tap it, tap <b>Key</b> and type <code>speak</code>. It should read “Get Value for speak in Contents of URL”.', 'Search <b>Choose from Menu</b>. Tap <b>Prompt</b> and pick <b>Dictionary Value</b>. Rename the options <b>One → Yes</b> and <b>Two → No</b>.'])}
+    ${step('If you say “Yes”, save it', ['<b>Long-press</b> the Get Contents of URL action → <b>Duplicate</b>, and drag the copy <b>directly under “Yes”</b>.', 'Expand the copy (<b>›</b>) and change <b>confirm</b> to <b>True</b>.',
+      'Right under it (still in Yes): <b>Get Dictionary Value</b> with key <code>speak</code>. Tap its blue <b>Contents of URL</b> to check it highlights the copy under Yes, not the first one.', 'Right under that: <b>Show Content</b> (older iPhones: <b>Show Result</b>) set to <b>Dictionary Value</b>.'])}
+    ${step('If you say “No”', ['Under <b>No</b>: <b>Show Content</b> with the text <i>Okay, nothing logged.</i>', 'Tap <b>Done</b>.'])}
+    ${step('Try it', ['Say <b>“Hey Siri, Ping Hubert”</b> → <i>“5 ounces at 5:15”</i> → <i>“Yes”</i>.', 'The first time, allow the shortcut to connect (choose <b>Always Allow</b>).', 'Apple Watch: open the shortcut, tap <b>ⓘ</b>, turn on <b>Show on Apple Watch</b>.'])}
   </ol>
+  <p class="tiny muted"><b>Not working?</b> Both URL actions must be <b>POST</b>; the header is exactly <code>Authorization</code> with <code>Bearer</code>, a space, then your key; fields are lowercase <code>text</code> and <code>confirm</code> (False in the first, True in the copy). If Siri repeats the question after “Yes”, the last Get Dictionary Value is reading the first URL action.</p>
   <p class="tiny muted">Things you can say: “5 ounces at 5:15”, “4 ounces breast milk”, “a bottle” (same as last time), “dirty diaper”, “wet and dirty diaper at 3”, “nap from 1 to 2:30”, “napped 45 minutes”, “fell asleep at 2:40”, “woke up”. Times are Richmond time; a time later than now means earlier today or last night.</p>`;
 }
 function render() {
