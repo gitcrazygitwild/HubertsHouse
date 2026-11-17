@@ -168,6 +168,10 @@ async function icloudEvents(uid, from, to) {
   } catch { return []; } // Not connected or iCloud unavailable: household events still go out.
 }
 const huckleberryHandler = createHuckleberryHandler({ db, key:() => encryptionKey.value() });
+// ---------- "The world, briefly": headlines, markets and rates ----------
+import { createBriefingService } from './briefing.js';
+const briefingService = createBriefingService({ db });
+export const briefing = endpoint(async () => briefingService());
 async function babySnapshot(uids) {
   if (!uids.length) return null;
   try { return await huckleberryHandler(uids[0], { action:'snapshot' }); }
@@ -178,15 +182,20 @@ async function newsletterFor(uid, shared) {
   const prefs = validatePrefs((await prefsRef(uid).get()).data() || {});
   const now = new Date(), from = new Date(now); from.setHours(0, 0, 0, 0); const to = new Date(+from + 15 * 86400000);
   const icloud = await icloudEvents(uid, from, to);
-  const digest = buildDigest({ name:prefs.name, now, household:shared.household, icloud, items:shared.items, forecast:shared.forecast, snapshot:shared.snapshot, predictions:shared.predictions, prefs });
+  const digest = buildDigest({ name:prefs.name, now, household:shared.household, icloud, items:shared.items, forecast:shared.forecast, snapshot:shared.snapshot, predictions:shared.predictions, recent:shared.recent, briefing:shared.briefing, prefs });
   return { prefs, email:composeEmail(digest) };
 }
+// Diapers aren't in the snapshot's history; the recent-logs list has them.
+async function babyRecent(uids) {
+  if (!uids.length) return null;
+  try { return (await huckleberryHandler(uids[0], { action:'recent' })).entries; } catch { return null; }
+}
 async function sharedNewsletterData(uids) {
-  const [events, items, forecast, snapshot, predictions] = await Promise.all([
+  const [events, items, forecast, snapshot, predictions, recent, world] = await Promise.all([
     db.collection('events').get(), db.collection('householdItems').get(), forecastNow(), babySnapshot(uids),
-    db.collection('babyPredictions').orderBy('lastWake', 'desc').limit(400).get()
+    db.collection('babyPredictions').orderBy('lastWake', 'desc').limit(400).get(), babyRecent(uids), briefingService().catch(() => null)
   ]);
-  return { household:events.docs.map(d => d.data()), items:items.docs.map(d => d.data()), forecast, snapshot, predictions:predictions.docs.map(d => ({ id:d.id, ...d.data() })) };
+  return { household:events.docs.map(d => d.data()), items:items.docs.map(d => d.data()), forecast, snapshot, predictions:predictions.docs.map(d => ({ id:d.id, ...d.data() })), recent, briefing:world };
 }
 async function activeMembers() {
   return (await db.collection('households/home/members').where('active', '==', true).get()).docs.map(d => d.id);

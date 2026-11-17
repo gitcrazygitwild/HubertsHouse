@@ -114,3 +114,28 @@ export function babySummary({ sleeps = [], bottles = [] }, timezone, now = Date.
   return { today, avgSleep:average(week.map(d => d.total)), avgNight:average(week.map(d => d.night)), avgNaps:average(week.map(d => d.naps)),
     avgOunces:average(weekOz.map(d => d.ounces)), priorOunces:average(priorOz.map(d => d.ounces)), priorSleep:average(prior.map(d => d.total)) };
 }
+
+// One local day of Frankie, for the newsletter's "yesterday" story: when she got up,
+// her naps, bedtime, the night after, bottles and (when known) diapers.
+export function dayStory({ sleeps = [], bottles = [] } = {}, diapers, timezone, key, now = Date.now()) {
+  const from = dayStart(key, timezone), to = dayStart(localDay(from + DAY * 1.5, timezone), timezone), H = 3600000;
+  const line = nightLine(sleeps, timezone, now);
+  const list = intervals(sleeps).filter(sleep => sleep.end <= +now).map(sleep => ({ ...sleep, kind:sleepKind(sleep, timezone, line) }));
+  const nights = list.filter(sleep => sleep.kind === 'night');
+  const wake = nights.filter(sleep => sleep.end >= from + 2 * H && sleep.end < from + 12 * H).at(-1)?.end ?? null;
+  const naps = list.filter(sleep => sleep.kind === 'nap' && sleep.start >= from && sleep.start < to);
+  const longest = [...naps].sort((a, b) => (b.end - b.start) - (a.end - a.start))[0] || null;
+  const bed = nights.find(sleep => sleep.start >= from + 12 * H && sleep.start < to + 5 * H)?.start ?? null;
+  const night = bed == null ? [] : nights.filter(sleep => sleep.start >= bed && sleep.end < to + 12 * H);
+  const dayBottles = bottles.map(bottle => ({ ...bottle, at:Date.parse(bottle.start) })).filter(bottle => bottle.at >= from && bottle.at < to);
+  const ounces = dayBottles.map(bottle => toOunces(bottle.amount, bottle.units));
+  const dayDiapers = Array.isArray(diapers) ? diapers.filter(item => { const at = Date.parse(item.start); return at >= from && at < to; }) : null;
+  const minutes = (a, b) => Math.round((b - a) / MINUTE);
+  return {
+    key, wake:wake && new Date(wake).toISOString(), bedtime:bed && new Date(bed).toISOString(),
+    naps:{ count:naps.length, minutes:naps.reduce((sum, nap) => sum + minutes(nap.start, nap.end), 0), longest:longest && { minutes:minutes(longest.start, longest.end), start:new Date(longest.start).toISOString() } },
+    overnight:night.length ? { minutes:night.reduce((sum, sleep) => sum + minutes(sleep.start, sleep.end), 0), woke:new Date(night.at(-1).end).toISOString() } : null,
+    bottles:{ count:dayBottles.length, ounces:Math.round(ounces.reduce((a, b) => a + b, 0) * 10) / 10, largest:ounces.length ? Math.round(Math.max(...ounces) * 10) / 10 : 0 },
+    diapers:dayDiapers && { count:dayDiapers.length, wet:dayDiapers.filter(item => ['pee', 'both'].includes(item.mode)).length, dirty:dayDiapers.filter(item => ['poo', 'both'].includes(item.mode)).length }
+  };
+}
