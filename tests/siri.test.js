@@ -40,15 +40,15 @@ test('keys: random, only hashes stored, Bearer or body', () => {
   assert.equal(readKey({}, { key }), key); assert.equal(readKey({ authorization:'Bearer nope' }), null);
 });
 
-function harness({ connected = ['owner'], timer } = {}) {
-  const key = newSiriKey(), docs = new Map([[`siriKeys/${hashSiriKey(key)}`, { uid:'owner' }]]), writes = [];
+function harness({ connected = ['owner','partner'], timer, owner = 'owner', active = ['owner','partner'] } = {}) {
+  const key = newSiriKey(), docs = new Map([[`siriKeys/${hashSiriKey(key)}`, { uid:owner }]]), writes = [];
   const db = { doc:path => ({ get:async () => ({ exists:docs.has(path), data:() => docs.get(path) }), update:async patch => docs.set(path, { ...docs.get(path), ...patch }) }) };
   const huckleberry = async (uid, input) => {
     if (!connected.includes(uid)) throw Object.assign(new Error('not connected'), { code:'failed-precondition' });
-    if (input.action === 'snapshot') return { ...snapshot, timer:timer || snapshot.timer };
+    if (input.action === 'snapshot') return { ...snapshot, timer:timer || snapshot.timer, connection:{connectionVersion:'shared-version'} };
     writes.push({ uid, ...input }); return { saved:true };
   };
-  const handler = createSiriHandler({ db, huckleberry, members:async () => ['owner', 'partner'], now:() => now });
+  const handler = createSiriHandler({ db, huckleberry, members:async () => active, now:() => now });
   const call = async (body, headers = { authorization:`Bearer ${key}` }, method = 'POST') => {
     let status, json; await handler({ method, headers, body }, { status(code) { status = code; return this; }, json(value) { json = value; } });
     return { status, json };
@@ -56,7 +56,7 @@ function harness({ connected = ['owner'], timer } = {}) {
   return { call, writes, docs, key };
 }
 
-test('the endpoint previews first, saves only on confirm, and uses a connected member', async () => {
+test('the endpoint previews first and saves through the shared connection as the key’s owner', async () => {
   const { call, writes, docs, key } = harness();
   const preview = await call({ text:'5 ounces at 5:15' });
   assert.equal(preview.status, 200); assert.equal(preview.json.needsConfirm, true); assert.match(preview.json.speak, /5-ounce formula bottle/); assert.equal(writes.length, 0);
@@ -65,8 +65,9 @@ test('the endpoint previews first, saves only on confirm, and uses a connected m
   assert.equal(writes.length, 1); assert.equal(writes[0].action, 'write'); assert.equal(writes[0].childId, 'child'); assert.equal(writes[0].entry.amount, 5);
   assert.ok(docs.get(`siriKeys/${hashSiriKey(key)}`).lastUsedAt);
   // Karena's key works even if only hanry connected Huckleberry.
-  const other = harness({ connected:['partner'] }); await other.call({ text:'wet diaper', confirm:true });
+  const other = harness({ owner:'partner' }); await other.call({ text:'wet diaper', confirm:true });
   assert.equal(other.writes[0].uid, 'partner');
+  assert.equal(other.writes[0].connectionVersion,'shared-version');
 });
 
 test('the endpoint refuses missing or revoked keys and non-POST requests, and never saves an unclear request', async () => {
@@ -77,4 +78,11 @@ test('the endpoint refuses missing or revoked keys and non-POST requests, and ne
   const unclear = await call({ text:'hello there', confirm:true });
   assert.equal(unclear.json.ok, false); assert.match(unclear.json.speak, /didn’t catch that/); assert.equal(writes.length, 0);
   const nobody = harness({ connected:[] }); assert.equal((await nobody.call({ text:'5 oz' })).status, 409);
+});
+
+
+test('a removed member’s Siri key cannot borrow another adult’s access',async()=>{
+  const removed=harness({owner:'removed',active:['owner','partner']});
+  const response=await removed.call({text:'wet diaper',confirm:true});
+  assert.equal(response.status,403);assert.equal(removed.writes.length,0);
 });

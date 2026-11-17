@@ -153,10 +153,9 @@ async function icloudEvents(uid, from, to) {
 }
 const huckleberryHandler = createHuckleberryHandler({ db, key:() => encryptionKey.value() });
 async function babySnapshot(uids) {
-  for (const uid of uids) {
-    try { const snap = await huckleberryHandler(uid, { action:'snapshot' }); if (snap?.sleeps) return snap; } catch { /* try the next member */ }
-  }
-  return null;
+  if (!uids.length) return null;
+  try { return await huckleberryHandler(uids[0], { action:'snapshot' }); }
+  catch { return null; } // One shared connection; retrying each member repeats the same request.
 }
 // Everything one member's email needs, gathered fresh.
 async function newsletterFor(uid, shared) {
