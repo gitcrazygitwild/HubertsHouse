@@ -171,7 +171,10 @@ const huckleberryHandler = createHuckleberryHandler({ db, key:() => encryptionKe
 // ---------- "The world, briefly": headlines, markets and rates ----------
 import { createBriefingService } from './briefing.js';
 const briefingService = createBriefingService({ db });
-export const briefing = endpoint(async () => briefingService());
+export const briefing = endpoint(async (_uid, input) => {
+  try { return await briefingService(input?.history !== undefined ? { history:String(input.history) } : {}); }
+  catch (error) { if (error.code === 'invalid-argument') throw new HttpsError('invalid-argument', error.message); throw error; }
+});
 async function babySnapshot(uids) {
   if (!uids.length) return null;
   try { return await huckleberryHandler(uids[0], { action:'snapshot' }); }

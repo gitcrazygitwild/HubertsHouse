@@ -1,46 +1,67 @@
-// Today → "The world, briefly": top headlines and a few big market and interest-rate
-// numbers, from the server's half-hourly cache (functions/briefing.js).
+// Today → "The world, briefly": top headlines, one good-news story, and a few big
+// market and interest-rate numbers from the server's half-hourly cache
+// (functions/briefing.js). Tap a number for its chart: 1W, 1M, 1Y, 5Y or All.
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js';
 import { config } from './config.js';
-import { escapeHTML as esc } from './household-model.js';
 import { renderHTML } from './dom.js';
-import { marketValue, marketChange, marketDate } from './briefing-format.js';
+import { briefingHTML, sampleBriefing, sampleMarketHistory, rangePoints, chartPanelHTML, dateLabel, fullValue } from './world-view.js';
 
 const $ = id => document.getElementById(id);
 const REFRESH = 30 * 60000;
-const ago = (value, now) => { const minutes = Math.max(0, Math.round((now - Date.parse(value)) / 60000)); return minutes < 1 ? 'just now' : minutes < 60 ? `${minutes} min ago` : `${Math.floor(minutes / 60)}h ago`; };
-
-export function briefingHTML(briefing, { now = Date.now(), sample = false } = {}) {
-  const markets = briefing.markets || [], headlines = briefing.headlines || [];
-  const tiles = markets.map(market => {
-    const change = marketChange(market);
-    return `<div class="world-market"><span>${esc(market.name)}</span><strong>${esc(marketValue(market))}</strong><small class="move-${change.tone}">${esc(change.text || ' ')}</small><small class="world-asof">${esc(marketDate(market.date))}</small></div>`;
-  }).join('');
-  const list = headlines.map(item => `<li><a href="${esc(item.link)}" target="_blank" rel="noopener noreferrer">${esc(item.title)}</a><span>${esc(item.source)}</span></li>`).join('');
-  return `${tiles ? `<div class="world-markets" aria-label="Markets and rates">${tiles}</div>` : ''}
-    ${list ? `<ol class="world-headlines">${list}</ol>` : '<p class="tiny muted">Headlines are unavailable right now.</p>'}
-    <p class="tiny muted world-footer">${sample ? 'Sample headlines and numbers in this preview · ' : ''}Headlines from NPR and BBC World · markets and rates from FRED (St. Louis Fed), as of each date shown${briefing.fetchedAt ? ` · updated ${esc(ago(briefing.fetchedAt, now))}` : ''}${briefing.stale ? ' · couldn’t refresh, showing the last update' : ''}.</p>`;
-}
-export function sampleBriefing(now = Date.now()) {
-  const day = new Date(now - 86400000).toISOString().slice(0, 10);
-  const headline = (title, source, n) => ({ title, link:`https://example.com/sample-${n}`, source, published:new Date(now - n * 3600000).toISOString() });
-  return { fetchedAt:new Date(now - 6 * 60000).toISOString(), headlines:[
-    headline('Sample headline: city council approves new park downtown', 'NPR', 1), headline('Sample headline: leaders meet for climate talks', 'BBC World', 2),
-    headline('Sample headline: storm expected to bring heavy rain this weekend', 'NPR', 3), headline('Sample headline: new trade agreement signed', 'BBC World', 4),
-    headline('Sample headline: researchers report progress on vaccine', 'NPR', 5), headline('Sample headline: election results due later today', 'BBC World', 6)],
-  markets:[{ id:'SP500', name:'S&P 500', kind:'index', value:6012.45, change:24.1, changePct:0.4, date:day }, { id:'DJIA', name:'Dow', kind:'index', value:44210.3, change:-88.2, changePct:-0.2, date:day },
-    { id:'NASDAQCOM', name:'Nasdaq', kind:'index', value:19480.12, change:140.6, changePct:0.73, date:day }, { id:'DGS10', name:'10-yr Treasury', kind:'rate', value:4.21, change:-0.03, changePct:null, date:day },
-    { id:'DFF', name:'Fed funds', kind:'rate', value:4.33, change:0, changePct:null, date:day }, { id:'MORTGAGE30US', name:'30-yr mortgage', kind:'rate', value:6.84, change:0.05, changePct:null, date:day }] };
-}
 export async function initWorldBriefing(app, { demo = false } = {}) {
   const root = $('worldBriefing'); if (!root) return;
-  if (demo || !app) { renderHTML(root, briefingHTML(sampleBriefing(), { sample:true })); return; }
-  const call = httpsCallable(getFunctions(app, config.functionsRegion), 'briefing', { timeout:60000 });
-  let last = 0;
+  const call = demo || !app ? null : httpsCallable(getFunctions(app, config.functionsRegion), 'briefing', { timeout:60000 });
+  const histories = new Map(); let current = null, open = null, range = '1Y', last = 0;
+  const draw = () => {
+    const panel = $('worldChart'); if (!panel || !open) return;
+    const history = histories.get(open); if (!history) return;
+    const points = rangePoints(history, range), width = Math.max(300, Math.round(panel.clientWidth || 640));
+    panel.innerHTML = chartPanelHTML(history, range, points, width); panel.hidden = false;
+    const svg = panel.querySelector('svg'), dot = svg.querySelector('.world-crosshair'), readout = panel.querySelector('.world-chart-readout');
+    const [x0, w] = [Number(svg.dataset.x0), Number(svg.dataset.w)], t0 = points[0].t, t1 = points.at(-1).t;
+    const geometry = svg.querySelector('.world-chart-line').getAttribute('d').split(/[ML]/).filter(Boolean).map(pair => pair.split(',').map(Number));
+    const show = index => {
+      const point = points[index], [px, py] = geometry[index];
+      dot.setAttribute('visibility', 'visible'); dot.querySelector('line').setAttribute('x1', px); dot.querySelector('line').setAttribute('x2', px);
+      dot.querySelector('circle').setAttribute('cx', px); dot.querySelector('circle').setAttribute('cy', py);
+      readout.textContent = `${dateLabel(point, true)} · ${fullValue(point.v, history.kind)}`; svg.dataset.index = index;
+    };
+    const nearest = clientX => {
+      const box = svg.getBoundingClientRect(), scale = box.width ? width / box.width : 1, t = t0 + ((clientX - box.left) * scale - x0) / w * (t1 - t0);
+      let best = 0; points.forEach((point, i) => { if (Math.abs(point.t - t) < Math.abs(points[best].t - t)) best = i; }); return best;
+    };
+    svg.addEventListener('pointermove', e => show(nearest(e.clientX)));
+    svg.addEventListener('pointerleave', () => { dot.setAttribute('visibility', 'hidden'); readout.textContent = `${dateLabel(points.at(-1), true)} · ${fullValue(points.at(-1).v, history.kind)}`; });
+    svg.addEventListener('keydown', e => { if (!['ArrowLeft', 'ArrowRight'].includes(e.key)) return; e.preventDefault(); const i = Number(svg.dataset.index ?? points.length - 1) + (e.key === 'ArrowLeft' ? -1 : 1); show(Math.max(0, Math.min(points.length - 1, i))); });
+  };
+  const openChart = async id => {
+    const panel = $('worldChart'); if (!panel) return;
+    root.querySelectorAll('[data-market]').forEach(tile => tile.setAttribute('aria-expanded', String(tile.dataset.market === id)));
+    if (open === id) { open = null; panel.hidden = true; root.querySelectorAll('[data-market]').forEach(tile => tile.setAttribute('aria-expanded', 'false')); return; }
+    open = id; panel.hidden = false;
+    if (!histories.has(id)) {
+      panel.innerHTML = '<p class="tiny muted">Loading the chart…</p>';
+      try { histories.set(id, call ? (await call({ history:id })).data : sampleMarketHistory(current.markets.find(market => market.id === id))); }
+      catch { if (open === id) panel.innerHTML = '<p class="tiny muted">That chart couldn’t load. Try again in a minute.</p>'; return; }
+    }
+    if (open === id) draw();
+  };
+  root.addEventListener('click', e => {
+    const tile = e.target.closest('[data-market]'), pick = e.target.closest('[data-range]');
+    if (tile) openChart(tile.dataset.market);
+    else if (pick) { range = pick.dataset.range; draw(); }
+    else if (e.target.closest('[data-chart-close]')) openChart(open);
+  });
+  let resize; window.addEventListener('resize', () => { clearTimeout(resize); resize = setTimeout(draw, 150); });
+  const render = (briefing, options) => {
+    current = briefing; renderHTML(root, briefingHTML(briefing, options));
+    if (open) { root.querySelectorAll('[data-market]').forEach(tile => tile.setAttribute('aria-expanded', String(tile.dataset.market === open))); draw(); }
+  };
+  if (!call) { render(sampleBriefing(), { sample:true }); return; }
   const load = async () => {
     if (document.visibilityState !== 'visible' || Date.now() - last < REFRESH) return;
     last = Date.now();
-    try { renderHTML(root, briefingHTML((await call()).data)); }
+    try { render((await call()).data); }
     catch { if (!root.querySelector('.world-headlines')) renderHTML(root, '<p class="tiny muted">The news and markets briefing couldn’t load. It will try again shortly.</p>'); last = Date.now() - REFRESH + 5 * 60000; }
   };
   await load();

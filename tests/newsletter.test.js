@@ -78,13 +78,14 @@ test('the newsletter tells Frankie’s yesterday in words and adds headlines and
   assert.deepEqual(story.bottles, { count:6, ounces:25, largest:5 });
   assert.deepEqual(story.diapers, { count:3, wet:2, dirty:2 });
 
-  const briefing = { fetchedAt:now.toISOString(), headlines:[{ title:'Storm closes schools & roads', link:'https://www.npr.org/a', source:'NPR' }],
+  const briefing = { fetchedAt:now.toISOString(), headlines:[{ title:'Storm closes schools & roads', link:'https://www.npr.org/a', source:'NPR' }], goodNews:{ title:'Climbers rescue a seal pup', link:'https://www.goodnewsnetwork.org/seal', source:'Good News Network' },
     markets:[{ id:'SP500', name:'S&P 500', kind:'index', value:7416.59, change:-145.08, changePct:-1.92, date:'2026-11-13' }, { id:'DGS10', name:'10-yr Treasury', kind:'rate', value:5.15, change:0.05, changePct:null, date:'2026-11-13' }] };
   const snapshot = { name:'Frankie', timezone:'America/New_York', sleeps, bottles, timer:{ active:false } };
   const email = composeEmail(buildDigest({ now, household, icloud, items, forecast, snapshot, recent:diapers, briefing }));
   assert.match(email.html, /Yesterday Frankie was up for the day at 6:45 AM, took 3 naps \(3h 0m in all; the longest, 1h 20m, started at 12:30 PM\) and went down for the night at 9:40 PM\./);
   assert.match(email.html, /She had 6 bottles, 25 oz in all and 3 diaper changes \(2 wet, 2 dirty\)\./);
   assert.match(email.html, /Overnight she slept 8h 10m and woke at 6:10 AM\./);
+  assert.match(email.html, /☀ Good news/); assert.match(email.html, /Climbers rescue a seal pup/); assert.match(email.text, /Good news: Climbers rescue a seal pup https:\/\/www\.goodnewsnetwork\.org\/seal/);
   assert.match(email.html, /The world, briefly/); assert.match(email.html, /Storm closes schools &amp; roads/); assert.match(email.html, /7,416\.59/); assert.match(email.html, /▼ 1\.92%/); assert.match(email.html, /▲ 0\.05 pt/);
   assert.match(email.text, /Yesterday Frankie was up/); assert.match(email.text, /• Storm closes schools & roads \(NPR\) https:\/\/www\.npr\.org\/a/); assert.match(email.text, /Markets: S&P 500 7,416\.59 ▼ 1\.92%/);
   // No briefing, no diapers: those parts are simply left out.

@@ -16,45 +16,64 @@ function quantile(values, q) {
   const low = Math.floor(position), weight = position - low;
   return sorted[low] * (1 - weight) + sorted[Math.ceil(position)] * weight;
 }
+// Hubert's Purrfect Window: "what usually happens after waking at this time of day?"
+// Daytime: the median of recent wake windows that started around the same clock time,
+// with the middle half as the window. Evening: when most wake-ups around this time
+// were followed by the night's sleep, the same method forecasts bedtime. Overnight,
+// while the sleep timer runs, it forecasts the next wake-up from her night stretches
+// that started around the same time of night.
 export function purrfectWindow({ sleeps = [], timer = null, timezone = 'America/New_York', complete = true } = {}, now = new Date()) {
   const empty = reason => ({ available:false, reason });
   if (!complete) return empty('Sleep history is incomplete. Refresh before estimating.');
-  if (timer?.active) return empty('Sleeping now. A new window will appear after wake-up.');
-  const intervals = sleeps.map(sleep => ({start:stamp(sleep.start),end:stamp(sleep.end)}))
-    .filter(sleep => Number.isFinite(sleep.start) && Number.isFinite(sleep.end) && sleep.end > sleep.start && sleep.end <= +now && sleep.start >= +now - 14 * DAY)
-    .sort((a,b) => a.start - b.start);
-  const merged = [];
-  for (const interval of intervals) {
-    const previous = merged.at(-1);
-    if (previous && interval.start <= previous.end) previous.end = Math.max(previous.end, interval.end);
-    else merged.push({...interval});
+  const merged = mergeSleeps(sleeps, now, 14), line = nightLine(merged, timezone, now, 14);
+  const isNight = sleep => sleepKind(sleep, timezone, line) === 'night';
+  const nightsOf = list => new Set(list.map(sample => sample.day)).size;
+  const finish = (kind, anchor, selected, matchedTime, extra = {}) => {
+    const values = selected.map(sample => sample.minutes), median = quantile(values, .5);
+    const low = Math.min(quantile(values, .25), median - 10), high = Math.max(quantile(values, .75), median + 10);
+    const start = anchor + Math.max(1, low) * MINUTE, end = anchor + high * MINUTE;
+    return { available:true, kind, start:new Date(start).toISOString(), end:new Date(end).toISOString(), target:new Date(anchor + median * MINUTE).toISOString(),
+      ...extra, samples:values.length, days:nightsOf(selected), matchedTime, typicalMinutes:Math.round(median),
+      pattern:high - low > 60 ? 'Varied pattern' : values.length < 7 ? 'Early pattern' : 'Personal pattern',
+      phase:+now > end ? 'passed' : +now >= start ? 'within' : 'upcoming' };
+  };
+  if (timer?.active) {
+    const began = stamp(timer.start);
+    if (timer.paused || !Number.isFinite(began) || !isNight({start:began, end:began + MINUTE})) return empty('Sleeping now. A new window will appear after wake-up.');
+    // Night stretches, keyed by the evening they belong to (a 1 AM stretch counts toward the night before).
+    const at = clockOf(began, timezone);
+    const stretches = merged.filter(isNight).map(sleep => ({minutes:(sleep.end - sleep.start) / MINUTE, clock:clockOf(sleep.start, timezone), day:localParts(sleep.start - 6 * 3600000, timezone).day, end:sleep.end}))
+      .filter(sample => sample.minutes >= 20 && sample.minutes <= 16 * 60);
+    let selected = stretches.filter(sample => Math.abs(sample.clock - at) <= 90), matchedTime = true;
+    if (selected.length < 3 || nightsOf(selected) < 2) selected = stretches.filter(sample => Math.abs(sample.clock - at) <= 180);
+    if (selected.length < 3 || nightsOf(selected) < 2) { selected = stretches; matchedTime = false; }
+    selected = selected.sort((a, b) => b.end - a.end).slice(0, 20);
+    if (selected.length < 3 || nightsOf(selected) < 2) return empty('Learning her nights: Hubert needs at least three logged night stretches across two nights.');
+    return finish('wake', began, selected, matchedTime, {sleepStart:new Date(began).toISOString()});
   }
-  const lastWake = merged.at(-1)?.end;
+  const last = merged.at(-1), lastWake = last?.end;
   if (!lastWake || +now - lastWake > 8 * 3600000) return empty('Log a recent sleep and wake-up to find the next window.');
-  const current = localParts(+now, timezone), wake = localParts(lastWake, timezone);
-  if (current.hour < 6 || current.hour >= 22 || wake.hour < 5) return empty('Overnight wake-ups are outside this model’s daytime estimate.');
+  const current = localParts(+now, timezone), wake = localParts(lastWake, timezone), lastNight = isNight(last);
+  if ((current.hour >= 1 && current.hour < 5) || wake.hour < 5 || (lastNight && wake.hour >= 12)) return empty('Awake in the night. Hubert forecasts her next wake-up once she’s back asleep (start the sleep timer).');
   const samples = [];
   for (let index = 1; index < merged.length; index++) {
-    const start = merged[index - 1].end, end = merged[index].start;
-    const from = localParts(start, timezone), to = localParts(end, timezone);
-    const minutes = (end - start) / MINUTE;
-    // Exclude overnight gaps and obvious missing-log gaps; thresholds are data
-    // quality checks, not recommended wake-window lengths.
-    if (from.day !== to.day || from.hour < 5 || to.hour >= 22 || minutes < 10 || minutes > 360) continue;
-    samples.push({ minutes, hour:from.hour, day:from.day, end });
+    const before = merged[index - 1], after = merged[index], start = before.end, end = after.start, minutes = (end - start) / MINUTE;
+    const from = localParts(start, timezone), bed = isNight(after);
+    // Only wake-ups that start a stretch of day: not night wakings. Thresholds are data
+    // quality checks (missing logs), not recommended wake-window lengths.
+    if (from.hour < 5 || (isNight(before) && from.hour >= 12)) continue;
+    if (bed ? minutes < 10 || minutes > 420 : from.day !== localParts(end, timezone).day || minutes < 10 || minutes > 360) continue;
+    samples.push({ minutes, hour:from.hour, clock:clockOf(start, timezone), day:from.day, end, bed });
   }
-  let selected = samples.filter(sample => Math.abs(sample.hour - wake.hour) <= 3);
-  let matchedTime = true;
-  if (selected.length < 3 || new Set(selected.map(sample => sample.day)).size < 2) { selected = samples; matchedTime = false; }
-  selected = selected.sort((a,b) => b.end - a.end).slice(0, 20);
-  if (selected.length < 3 || new Set(selected.map(sample => sample.day)).size < 2) return empty('Learning your rhythm: log at least three daytime wake windows across two days.');
-  const values = selected.map(sample => sample.minutes), median = quantile(values, .5);
-  const low = Math.min(quantile(values, .25), median - 10), high = Math.max(quantile(values, .75), median + 10);
-  const start = lastWake + Math.max(1, low) * MINUTE, end = lastWake + high * MINUTE;
-  return { available:true, start:new Date(start).toISOString(), end:new Date(end).toISOString(), target:new Date(lastWake + median * MINUTE).toISOString(),
-    lastWake:new Date(lastWake).toISOString(), samples:values.length, days:new Set(selected.map(sample => sample.day)).size,
-    matchedTime, pattern:high - low > 60 ? 'Varied pattern' : values.length < 7 ? 'Early pattern' : 'Personal pattern',
-    phase:+now > end ? 'passed' : +now >= start ? 'within' : 'upcoming' };
+  // What usually followed a wake-up within 90 minutes of this time of day?
+  const wakeClock = clockOf(lastWake, timezone), near = samples.filter(sample => Math.abs(sample.clock - wakeClock) <= 90);
+  const beds = near.filter(sample => sample.bed).length, bedtime = !lastNight && beds >= 2 && beds > near.length / 2;
+  const pool = samples.filter(sample => sample.bed === bedtime);
+  let selected = pool.filter(sample => Math.abs(sample.hour - wake.hour) <= 3), matchedTime = true;
+  if (selected.length < 3 || nightsOf(selected) < 2) { selected = pool; matchedTime = false; }
+  selected = selected.sort((a, b) => b.end - a.end).slice(0, 20);
+  if (selected.length < 3 || nightsOf(selected) < 2) return empty(bedtime ? 'Learning her evenings: Hubert needs bedtimes on at least two days.' : 'Learning your rhythm: log at least three daytime wake windows across two days.');
+  return finish(bedtime ? 'bedtime' : 'nap', lastWake, selected, matchedTime, {lastWake:new Date(lastWake).toISOString()});
 }
 
 export function huckleberryPrediction(snapshot, now = new Date()) {

@@ -67,7 +67,7 @@ export function buildDigest({ name = '', now = new Date(), household = [], iclou
     rain:weatherFlags(events.map(e => ({ ...e, start:e.start.toISOString(), end:e.end.toISOString() })), fc, now),
     today:onDay(events, today), tomorrow:onDay(events, tomorrow), week:{ plans:week.reduce((sum, d) => sum + d.count, 0), busiest:busiest?.count ? busiest : null },
     freeNights:freeEvenings(events, now, 14, 3).map(n => n.date), chores, groceries, baby:null,
-    world:briefing && (briefing.headlines?.length || briefing.markets?.length) ? { headlines:(briefing.headlines || []).slice(0, 6), markets:briefing.markets || [] } : null
+    world:briefing && (briefing.headlines?.length || briefing.markets?.length) ? { headlines:(briefing.headlines || []).slice(0, 6), goodNews:briefing.goodNews || null, markets:briefing.markets || [] } : null
   };
   if (snapshot?.sleeps) {
     const tz = snapshot.timezone || HOUSE_TZ, summary = babySummary(snapshot, tz, +now);
@@ -125,9 +125,10 @@ function worldSection(world) {
     return `<td style="width:33%;padding:8px 8px 8px 0;vertical-align:top"><div style="font:11px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.muted}">${esc(m.name)}</div><div style="font:600 16px/1.3 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.ink}">${esc(marketValue(m))}</div><div style="font:11px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${color}">${esc(change.text)} <span style="color:${C.muted}">${esc(marketDate(m.date))}</span></div></td>`; });
   const rows = []; for (let i = 0; i < tiles.length; i += 3) rows.push(`<tr>${tiles.slice(i, i + 3).join('')}</tr>`);
   const news = world.headlines.map(h => `<li style="margin:0 0 6px"><a href="${esc(h.link)}" style="color:${C.ink};text-decoration:none;font-weight:600">${esc(h.title)}</a> <span style="color:${C.muted};font-size:12px">${esc(h.source)}</span></li>`).join('');
-  return section('The world, briefly', 'Top headlines & markets', (news ? `<ol style="margin:0 0 10px;padding-left:20px;font:14px/1.45 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.ink}">${news}</ol>` : '')
+  const good = world.goodNews ? `<div style="margin:0 0 12px;padding:10px 12px;border-radius:12px;background:#fbf3df">${p(`<span style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#8a6a1f">☀ Good news</span><br><a href="${esc(world.goodNews.link)}" style="color:${C.ink};font-weight:600;text-decoration:none">${esc(world.goodNews.title)}</a> ${small(esc(world.goodNews.source))}`, 'margin:0;font-size:14px')}</div>` : '';
+  return section('The world, briefly', 'Top headlines & markets', good + (news ? `<ol style="margin:0 0 10px;padding-left:20px;font:14px/1.45 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.ink}">${news}</ol>` : '')
     + (rows.length ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0">${rows.join('')}</table>` : '')
-    + p(small('Headlines: NPR and BBC World. Markets and rates: FRED (St. Louis Fed), last close shown.'), 'margin:8px 0 0'));
+    + p(small('Headlines: NPR and BBC World. Good news: Good News Network. Markets and rates: FRED (St. Louis Fed), last close shown.'), 'margin:8px 0 0'));
 }
 function planRows(events) {
   return events.map(e => `<tr><td style="padding:7px 12px 7px 0;width:92px;vertical-align:top;font:600 12px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.accent};white-space:nowrap">${e.allDay ? 'All day' : esc(clock(e.start))}</td><td style="padding:7px 0;border-bottom:1px solid ${C.line};font:14px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.ink}">${esc(e.title)} ${small(esc([WHO[e.owner] ?? '', e.withFrankie ? '+ Frankie' : ''].filter(Boolean).join(' ')))}</td></tr>`).join('');
@@ -151,7 +152,7 @@ export function composeEmail(d) {
   if (d.baby) {
     const b = d.baby, now = d.now, y = b.yesterday;
     const status = b.timer?.active ? `asleep for ${ago(b.timer.start, now)}` : b.lastWake ? `awake for ${ago(b.lastWake, now)}` : 'no sleep logged yet';
-    const nap = [b.predictions.huck?.available && !b.predictions.huck.expired ? `SweetSpot ${clock(b.predictions.huck.time, b.tz)}` : '', b.predictions.purr?.available ? `Hubert ${clock(b.predictions.purr.start, b.tz)}–${clock(b.predictions.purr.end, b.tz)}` : '', b.predictions.mia?.available ? `Mia${b.predictions.mia.kind === 'bedtime' ? ' (bedtime)' : ''} ${clock(b.predictions.mia.start, b.tz)}–${clock(b.predictions.mia.end, b.tz)}` : ''].filter(Boolean);
+    const nap = [b.predictions.huck?.available && !b.predictions.huck.expired ? `SweetSpot ${clock(b.predictions.huck.time, b.tz)}` : '', b.predictions.purr?.available ? `Hubert${b.predictions.purr.kind === 'bedtime' ? ' (bedtime)' : b.predictions.purr.kind === 'wake' ? ' (next wake-up)' : ''} ${clock(b.predictions.purr.start, b.tz)}–${clock(b.predictions.purr.end, b.tz)}` : '', b.predictions.mia?.available ? `Mia${b.predictions.mia.kind === 'bedtime' ? ' (bedtime)' : ''} ${clock(b.predictions.mia.start, b.tz)}–${clock(b.predictions.mia.end, b.tz)}` : ''].filter(Boolean);
     const stats = [['Slept yesterday', hm(y.sleep?.total), y.sleep ? `${hm(y.sleep.night)} night · ${y.sleep.naps} nap${y.sleep.naps === 1 ? '' : 's'}` : ''], ['Bottles yesterday', y.bottles?.count ? `${y.bottles.ounces} oz` : '—', y.bottles?.count ? `${y.bottles.count} bottles` : ''], ['7-day average', b.summary.avgOunces ? `${Math.round(b.summary.avgOunces * 10) / 10} oz` : '—', b.summary.avgSleep ? `${hm(b.summary.avgSleep)} sleep/day` : '']];
     const tiles = `<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>${stats.map(([label, value, note]) => `<td style="width:33%;padding:10px 8px 10px 0;vertical-align:top"><div style="font:11px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.muted}">${esc(label)}</div><div style="font:400 20px/1.3 Georgia,serif;color:${C.ink}">${esc(value)}</div><div style="font:11px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.muted}">${esc(note)}</div></td>`).join('')}</tr></table>`;
     const awards = b.awards.length ? `<div style="margin-top:10px;padding:10px 12px;border-radius:12px;background:#fbf3df">${p(`<strong>🏆 Last week’s awards:</strong> ${b.awards.map(a => `${a.icon} ${esc(a.title)} <strong>${esc(a.value)}</strong>`).join(' · ')}`, 'margin:0;font-size:13px')}</div>` : '';
@@ -189,6 +190,7 @@ ${sections.join('\n')}
     `Today: ${d.today.length ? d.today.map(e => `${e.allDay ? 'All day' : clock(e.start)} ${e.title}`).join('; ') : 'nothing planned'}`,
     d.baby ? (storyText(d.baby) || `${d.baby.name}: yesterday ${hm(d.baby.yesterday.sleep?.total)} sleep, ${d.baby.yesterday.bottles?.ounces ?? 0} oz`) : '',
     d.world?.headlines.length ? `Top headlines:\n${d.world.headlines.map(h => `• ${h.title} (${h.source}) ${h.link}`).join('\n')}` : '',
+    d.world?.goodNews ? `Good news: ${d.world.goodNews.title} ${d.world.goodNews.link}` : '',
     d.world?.markets.length ? `Markets: ${d.world.markets.map(marketLine).join(' · ')}` : '',
     `Dad joke: ${c.joke.setup} — ${c.joke.punchline}`, APP_URL].filter(Boolean).join('\n\n');
   return { subject, html, text };

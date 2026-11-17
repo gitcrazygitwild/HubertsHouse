@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseRSS, parseFredCSV, marketPoint, topHeadlines, buildBriefing, createBriefingService, decode, SERIES } from '../functions/briefing.js';
+import { parseRSS, parseFredCSV, marketPoint, topHeadlines, buildBriefing, createBriefingService, decode, SERIES, pickGoodNews, thinHistory, buildHistory } from '../functions/briefing.js';
+import { rangePoints, rangeChange, chartSVG, chartPanelHTML, briefingHTML, sampleBriefing } from '../world-view.js';
 
 const npr = `<?xml version="1.0"?><rss><channel><title>NPR</title>
   <item><title>Storm closes schools &amp; roads</title><link>https://www.npr.org/a</link><pubDate>Mon, 16 Nov 2026 17:06:22 -0500</pubDate></item>
@@ -74,4 +75,55 @@ test('market numbers read the same on the Today card and in the newsletter', asy
   assert.deepEqual(marketChange(rate), {text:'▼ 0.07 pt', direction:'down', tone:'flat'});
   assert.equal(marketChange({...rate, change:0}).text, 'unchanged');
   assert.equal(marketLine(rate), '30-yr mortgage 7.11% ▼ 0.07 pt');
+});
+
+test('one good-news story a day, skipping the recurring history column', async () => {
+  const good = `<rss><channel><item><title>Good News in History, November 16</title><link>https://www.goodnewsnetwork.org/h</link></item>
+    <item><title>Climbers rescue an orphaned seal pup</title><link>https://www.goodnewsnetwork.org/seal</link></item></channel></rss>`;
+  assert.equal(pickGoodNews(parseRSS(good, 'Good News Network')).title, 'Climbers rescue an orphaned seal pup');
+  assert.equal(pickGoodNews([]), null);
+  const fetch = async url => url.includes('goodnews') ? {ok:true, text:async () => good} : url.includes('npr') ? {ok:true, text:async () => npr} : url.includes('bbc') ? {ok:true, text:async () => bbc} : {ok:true, text:async () => csv('X', [['2026-11-13', '1'], ['2026-11-16', '2']])};
+  const briefing = await buildBriefing({fetch});
+  assert.equal(briefing.goodNews.link, 'https://www.goodnewsnetwork.org/seal');
+  // The good-news feed failing never breaks the rest.
+  const without = await buildBriefing({fetch:async url => url.includes('goodnews') ? {ok:false, status:500, text:async () => ''} : fetch(url)});
+  assert.equal(without.goodNews, null); assert.ok(without.headlines.length);
+  assert.match(briefingHTML(briefing), /☀ Good news<\/span><strong>Climbers rescue an orphaned seal pup/);
+});
+
+test('market history is thinned to daily, weekly and monthly closes and cached for six hours', async () => {
+  const rows = []; for (let t = Date.parse('2019-01-01T12:00:00Z'); t <= Date.parse('2026-11-16T12:00:00Z'); t += 86400000) { const d = new Date(t); if (d.getUTCDay() % 6) rows.push({date:d.toISOString().slice(0, 10), value:t / 1e10}); }
+  const now = new Date('2026-11-17T12:00:00Z'), thin = thinHistory(rows, now);
+  assert.equal(thin.first, '2019-01-01'); assert.equal(thin.daily[0].d >= '2025-10-13', true); assert.equal(thin.daily.at(-1).d, '2026-11-16');
+  assert.ok(thin.weekly.length > 300 && thin.weekly.length < 320); assert.equal(thin.weekly.at(-1).d, '2026-11-16');
+  assert.equal(thin.monthly.length, 95); assert.equal(thin.monthly[0].d, '2019-01-31');
+  let fetches = 0; const fetch = async url => { fetches++; assert.match(url, /id=DGS10&cosd=1900-01-01/); return {ok:true, text:async () => csv('DGS10', rows.map(row => [row.date, row.value.toFixed(2)]))}; };
+  const history = await buildHistory('DGS10', {fetch, now});
+  assert.equal(history.name, '10-yr Treasury'); assert.equal(history.kind, 'rate');
+  await assert.rejects(buildHistory('NOPE', {fetch}), {code:'invalid-argument'});
+  const docs = new Map(), db = {doc:path => ({get:async () => ({data:() => docs.get(path)}), set:async value => docs.set(path, value)})};
+  let clock = +now; const service = createBriefingService({db, fetch, now:() => new Date(clock)});
+  await service({history:'DGS10'}); await service({history:'DGS10'}); assert.equal(fetches, 2, 'second call served from cache');
+  assert.ok(docs.has('privateBriefing/history-DGS10'));
+  clock += 7 * 3600000; await service({history:'DGS10'}); assert.equal(fetches, 3);
+  await assert.rejects(service({history:'../x'}), {code:'invalid-argument'});
+});
+
+test('chart ranges pick the right points and always end on the latest close', () => {
+  const daily = [], weekly = [], monthly = [];
+  for (let i = 0; i < 400; i++) daily.push({d:new Date(Date.parse('2025-10-13T12:00:00Z') + i * 86400000).toISOString().slice(0, 10), v:100 + i});
+  for (let i = 0; i < 300; i++) weekly.push({d:new Date(Date.parse('2021-01-04T12:00:00Z') + i * 7 * 86400000).toISOString().slice(0, 10), v:50 + i});
+  for (let i = 0; i < 120; i++) monthly.push({d:`${2016 + Math.floor(i / 12)}-${String(i % 12 + 1).padStart(2, '0')}-28`, v:10 + i});
+  const history = {name:'S&P 500', kind:'index', first:'2016-01-04', daily, weekly, monthly};
+  assert.equal(rangePoints(history, '1W').length, 8); assert.equal(rangePoints(history, '1M').length, 32); assert.equal(rangePoints(history, '1Y').length, 367);
+  const five = rangePoints(history, '5Y'), all = rangePoints(history, 'All');
+  assert.equal(five.at(-1).d, daily.at(-1).d); assert.equal(all[0].d, '2016-01-28'); assert.equal(all.at(-1).d, daily.at(-1).d);
+  // A weekly series still gets two points in 1W.
+  assert.equal(rangePoints({kind:'rate', daily:[{d:'2026-11-05', v:7.18}, {d:'2026-11-12', v:7.11}], weekly:[], monthly:[]}, '1W').length, 2);
+  assert.deepEqual(rangeChange([{v:100}, {v:110}], 'index'), {text:'▲ 10.00%', tone:'up'});
+  assert.deepEqual(rangeChange([{v:7.18}, {v:7.11}], 'rate'), {text:'▼ 0.07 pt', tone:'flat'});
+  const svg = chartSVG(rangePoints(history, '1M'), 'index', 600);
+  assert.match(svg, /class="world-chart-line"/); assert.match(svg, /world-crosshair/); assert.match(svg, /role="img"/);
+  const panel = chartPanelHTML(history, 'All', all, 600);
+  assert.match(panel, /since Jan 2016/); assert.match(panel, /aria-pressed="true" title="All history">All/); assert.match(panel, /Show as a table/);
 });
