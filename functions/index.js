@@ -16,8 +16,8 @@ const assignments = createAssignmentStore(db);
 const encryptionKey = defineSecret('CALENDAR_ENCRYPTION_KEY');
 const options = { region:'us-central1', secrets:[encryptionKey], timeoutSeconds:120, memory:'256MiB', cpu:'gcf_gen1', concurrency:1, minInstances:0, maxInstances:1, cors:true };
 const publicCalendars = calendars => calendars.map(({url,...calendar}) => calendar);
-function endpoint(handler) {
-  return onCall(options, async request => {
+function endpoint(handler, extra = {}) {
+  return onCall({ ...options, ...extra }, async request => {
     if (!request.auth) throw new HttpsError('unauthenticated','Sign in to your household first.');
     const member = await db.doc(`households/home/members/${request.auth.uid}`).get();
     if (!member.exists || member.data().active !== true) throw new HttpsError('permission-denied','This account is not a member of the household.');
@@ -194,9 +194,12 @@ async function babyRecent(uids) {
   try { return (await huckleberryHandler(uids[0], { action:'recent' })).entries; } catch { return null; }
 }
 async function sharedNewsletterData(uids) {
-  const [events, items, forecast, snapshot, predictions, recent, world] = await Promise.all([
-    db.collection('events').get(), db.collection('householdItems').get(), forecastNow(), babySnapshot(uids),
-    db.collection('babyPredictions').orderBy('lastWake', 'desc').limit(400).get(), babyRecent(uids), briefingService().catch(() => null)
+  // Huckleberry calls run one after the other: each opens its own provider client,
+  // and two at once on a small instance ran out of memory.
+  const baby = (async () => { const snapshot = await babySnapshot(uids); return { snapshot, recent:snapshot ? await babyRecent(uids) : null }; })();
+  const [events, items, forecast, { snapshot, recent }, predictions, world] = await Promise.all([
+    db.collection('events').get(), db.collection('householdItems').get(), forecastNow(), baby,
+    db.collection('babyPredictions').orderBy('lastWake', 'desc').limit(400).get(), briefingService().catch(() => null)
   ]);
   return { household:events.docs.map(d => d.data()), items:items.docs.map(d => d.data()), forecast, snapshot, predictions:predictions.docs.map(d => ({ id:d.id, ...d.data() })), recent, briefing:world };
 }
@@ -226,8 +229,8 @@ export const newsletter = endpoint(async (uid, input) => {
     return { sent:true, to };
   }
   throw new NewsletterError('invalid-argument', 'Choose a newsletter action.');
-});
-export const morningNewsletter = onSchedule({ schedule:'30 6 * * *', timeZone:HOUSE_TZ, region:'us-central1', secrets:[encryptionKey], timeoutSeconds:300, memory:'256MiB', cpu:'gcf_gen1', maxInstances:1, retryCount:0 }, async () => {
+}, { memory:'512MiB', timeoutSeconds:300 });
+export const morningNewsletter = onSchedule({ schedule:'30 6 * * *', timeZone:HOUSE_TZ, region:'us-central1', secrets:[encryptionKey], timeoutSeconds:300, memory:'512MiB', cpu:'gcf_gen1', maxInstances:1, retryCount:0 }, async () => {
   process.env.TZ = HOUSE_TZ;
   const sender = await loadSender(); if (!sender) { warn('Newsletter skipped: no sending account configured'); return; }
   const uids = await activeMembers(), shared = await sharedNewsletterData(uids), mailer = transport(sender);
