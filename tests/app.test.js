@@ -58,6 +58,7 @@ async function fixture(options = {}) {
   await module('briefing-format.js',['marketValue','marketChange','marketDate','marketLine']);
   await module('world-view.js',['RANGES','briefingHTML','rangePoints','rangeChange','shortValue','fullValue','dateLabel','chartSVG','chartPanelHTML','sampleMarketHistory','sampleBriefing'],'const esc=escapeHTML;');
   await module('world-briefing.js',['initWorldBriefing']);
+  await module('install-app.js',['detectDevice','STEPS','weblocFile','installHTML','initInstall'],'const esc=escapeHTML;');
   w.eval(clean(await read('app.js')) + ';window.__testApp={getDocs:()=>rawDocs,setCloudDocs:(records)=>{cloudDocs=records;rebuildEvents();},persistMovedEvent,redraw:()=>updateHouseholdEvents(expandedEvents)};'); await settle();
   return {dom,w,doc:w.document,errors};
 }

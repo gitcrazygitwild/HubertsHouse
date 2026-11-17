@@ -24,7 +24,7 @@ Two AI assistants work on this repository: **Codex** and **Claude**. They never 
 ## Things that bite
 
 - **Don't upgrade `google-auth-library` in `functions/` past 9.x.** Firestore’s gRPC layer (google-gax) needs v9. v10 silently dropped the Huckleberry token (`tests/huckleberry-provider.test.js` guards this).
-- **New public files must be listed in `scripts/build.mjs`** and new JS in the `check` script in `package.json`. The jsdom UI tests load modules by hand, so register new modules in `tests/app.test.js` (and `tests/frankie-ui.test.js` / `tests/baby-ui.test.js` where relevant).
+- **New public files must be listed in `scripts/build.mjs`** (images and other binary files go in its `binary` list, which is copied byte for byte) and new JS in the `check` script in `package.json`. The jsdom UI tests load modules by hand, so register new modules in `tests/app.test.js` (and `tests/frankie-ui.test.js` / `tests/baby-ui.test.js` where relevant).
 - **`functions/shared/` is generated** by `scripts/share.mjs` (copies app modules the newsletter reuses). Don't edit or commit it; edit the root module instead.
 - **The live calendar stays the first thing on Today** (a test enforces it; the household asked for it).
 - **Never let a placeholder replace containers that later code fills.** The Frankie page once crashed that way. Toggle `hidden` instead. A global `[hidden] { display:none !important }` rule exists because components set `display:flex`.
