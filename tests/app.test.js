@@ -53,7 +53,7 @@ async function fixture(options = {}) {
   await module('free-nights.js',['freeEvenings','dateNightDraft']);
   await module('sky.js',['skyState','skyArt']);
   await module('upgrades.js',['initUpgrades'],'const esc=escapeHTML;');
-  await module('newsletter-settings.js',['initNewsletterSettings'],'const esc=escapeHTML;');
+  await module('newsletter-settings.js',['initNewsletterSettings','lastTestNote'],'const esc=escapeHTML;');
   await module('siri-settings.js',['initSiriSettings','shortcutSteps'],'const esc=escapeHTML;');
   await module('briefing-format.js',['marketValue','marketChange','marketDate','marketLine']);
   await module('world-view.js',['RANGES','briefingHTML','rangePoints','rangeChange','shortValue','fullValue','dateLabel','chartSVG','chartPanelHTML','sampleMarketHistory','sampleBriefing'],'const esc=escapeHTML;');
@@ -401,4 +401,14 @@ test('Settings explains the "Frankie log" shortcut, and the preview creates no k
   assert.match(panel.textContent, /Frankie log/); assert.match(panel.textContent, /Get Contents of URL/); assert.match(panel.textContent, /Bearer/);
   assert.equal(doc.getElementById('siriCreate'), null);
   assert.deepEqual(errors, []);
+});
+
+test('a failed newsletter test names the step it stopped at', async t => {
+  const {dom,w}=await fixture(); t.after(() => dom.window.close());
+  const at = '2026-11-17T15:00:00.000Z';
+  assert.match(w.lastTestNote({ step:'reading Frankie’s Huckleberry data', updatedAt:at, ms:62000, finished:false }), /stopped while reading Frankie’s Huckleberry data \(after 62s\)/);
+  assert.match(w.lastTestNote({ step:'handing the email to Gmail', updatedAt:at, ms:9000, finished:true, ok:false, error:'Gmail didn’t answer in time.' }), /Gmail didn’t answer in time\./);
+  assert.match(w.lastTestNote({ step:'sent', updatedAt:at, ms:31000, finished:true, ok:true }), /Last test sent .*\(31s\)/);
+  assert.match(w.lastTestNote(null), /hidden/);
+  assert.doesNotMatch(w.lastTestNote({ step:'<img src=x onerror=alert(1)>', updatedAt:at, finished:false }), /<img/);
 });

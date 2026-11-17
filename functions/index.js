@@ -195,16 +195,21 @@ export const briefing = endpoint(async (_uid, input) => {
 // app saved most recently (privateBabySnapshots) so her section still goes out.
 async function babySnapshot(uids) {
   if (!uids.length) return { snapshot:null, fresh:false };
-  const live = await withinTime(huckleberryHandler(uids[0], { action:'snapshot' }), BUDGET.snapshot);
+  // A light snapshot: the history the app last saved (it reloads it every 15 minutes
+  // while open) plus Huckleberry's live latest sleep, bottle, diaper and timer. A full
+  // reload pulls every archived batch document and ran the instance out of memory.
+  const live = await withinTime(huckleberryHandler(uids[0], { action:'snapshot', light:true }), BUDGET.snapshot);
   if (live.value?.sleeps) return { snapshot:live.value, fresh:true };
   const saved = (await db.doc('privateBabySnapshots/household-home').get().catch(() => null))?.data();
   return { snapshot:saved?.sleeps ? saved : null, fresh:false, late:live.late };
 }
 // Everything one member's email needs, gathered fresh.
-async function newsletterFor(uid, shared) {
+async function newsletterFor(uid, shared, progress = () => {}) {
   const prefs = validatePrefs((await prefsRef(uid).get()).data() || {});
   const now = new Date(), from = new Date(now); from.setHours(0, 0, 0, 0); const to = new Date(+from + 15 * 86400000);
+  progress('reading Apple Calendar');
   const icloud = await icloudEvents(uid, from, to);
+  progress('writing the email');
   const skipped = [...shared.skipped, ...(icloud.late ? ['icloud'] : [])];
   const digest = buildDigest({ name:prefs.name, now, household:shared.household, icloud:icloud.events, items:shared.items, forecast:shared.forecast, snapshot:shared.snapshot, predictions:shared.predictions, recent:shared.recent, briefing:shared.briefing, prefs, skipped });
   return { prefs, email:composeEmail(digest), skipped };
@@ -215,13 +220,14 @@ async function babyRecent(uids) {
   const result = await withinTime(huckleberryHandler(uids[0], { action:'recent' }), BUDGET.recent);
   return { entries:result.value?.entries || null, late:result.late };
 }
-async function sharedNewsletterData(uids) {
+async function sharedNewsletterData(uids, progress = () => {}) {
   // Huckleberry calls run one after the other: each opens its own provider client,
   // and two at once on a small instance ran out of memory.
   // Every outside service has a time budget; anything late is left out and named.
   const started = Date.now(), took = {};
   const timed = (name, work) => Promise.resolve(work).finally(() => { took[name] = Date.now() - started; });
   const baby = (async () => {
+    progress('reading Frankie’s Huckleberry data');
     const live = await babySnapshot(uids);
     const recent = live.fresh ? await babyRecent(uids) : { entries:null }; // no fresh connection, no second wait
     return { ...live, recent };
@@ -241,12 +247,13 @@ async function sharedNewsletterData(uids) {
 async function activeMembers() {
   return (await db.collection('households/home/members').where('active', '==', true).get()).docs.map(d => d.id);
 }
+const testTrail = uid => db.doc(`newsletterLog/test_${uid}`);
 export const newsletter = endpoint(async (uid, input) => {
   process.env.TZ = HOUSE_TZ; // dates in the digest are Richmond-local
   const action = input.action;
   if (action === 'status') {
-    const [sender, prefs] = await Promise.all([senderRef().get(), prefsRef(uid).get()]);
-    return { senderConfigured:sender.exists, senderEmail:sender.exists ? sender.data().email : '', prefs:validatePrefs(prefs.data() || {}) };
+    const [sender, prefs, lastTest] = await Promise.all([senderRef().get(), prefsRef(uid).get(), testTrail(uid).get()]);
+    return { senderConfigured:sender.exists, senderEmail:sender.exists ? sender.data().email : '', prefs:validatePrefs(prefs.data() || {}), lastTest:lastTest.exists ? lastTest.data() : null };
   }
   if (action === 'savePrefs') { const prefs = validatePrefs(input.prefs); await prefsRef(uid).set(prefs); return { prefs }; }
   if (action === 'setSender') {
@@ -257,15 +264,30 @@ export const newsletter = endpoint(async (uid, input) => {
   }
   if (action === 'clearSender') { await senderRef().delete(); return { senderConfigured:false }; }
   if (action === 'sendTest') {
-    const sender = await loadSender(); if (!sender) throw new NewsletterError('failed-precondition', 'Set up the sending Gmail account first.');
-    const to = (await getAuth().getUser(uid)).email; if (!to) throw new NewsletterError('failed-precondition', 'Your login has no email address.');
-    const { email, skipped } = await newsletterFor(uid, await sharedNewsletterData(await activeMembers()));
-    await sendMail(transport(sender), { from:`Hubert’s House <${sender.email}>`, to, subject:email.subject, html:email.html, text:email.text });
-    return { sent:true, to, skipped };
+    // A progress trail in Firestore: if the instance is killed mid-send, the next
+    // Settings visit shows the step it stopped at (no secrets, just step names).
+    const trail = testTrail(uid), started = Date.now(); let step = 'starting';
+    const progress = next => { step = next; trail.set({ step, startedAt:new Date(started).toISOString(), updatedAt:new Date().toISOString(), ms:Date.now() - started, finished:false }, { merge:true }).catch(() => {}); };
+    try {
+      progress('checking the sending account');
+      const sender = await loadSender(); if (!sender) throw new NewsletterError('failed-precondition', 'Set up the sending Gmail account first.');
+      const to = (await getAuth().getUser(uid)).email; if (!to) throw new NewsletterError('failed-precondition', 'Your login has no email address.');
+      progress('gathering the household’s plans, weather and news');
+      const { email, skipped } = await newsletterFor(uid, await sharedNewsletterData(await activeMembers(), progress), progress);
+      progress('handing the email to Gmail');
+      await sendMail(transport(sender), { from:`Hubert’s House <${sender.email}>`, to, subject:email.subject, html:email.html, text:email.text });
+      await trail.set({ step:'sent', finished:true, ok:true, ms:Date.now() - started, updatedAt:new Date().toISOString(), skipped, error:null }, { merge:true }).catch(() => {});
+      return { sent:true, to, skipped };
+    } catch (error) {
+      const failure = error instanceof NewsletterError ? error : new NewsletterError('unavailable', `Something went wrong while ${step} (${String(error?.code || error?.name || 'error').slice(0, 40)}). Try again in a minute.`);
+      await trail.set({ finished:true, ok:false, ms:Date.now() - started, updatedAt:new Date().toISOString(), error:failure.message.slice(0, 200) }, { merge:true }).catch(() => {});
+      if (!(error instanceof NewsletterError)) warn('Newsletter test failed', { step, reason:error?.code || error?.name || 'error' });
+      throw failure;
+    }
   }
   throw new NewsletterError('invalid-argument', 'Choose a newsletter action.');
-}, { memory:'512MiB', timeoutSeconds:300 });
-export const morningNewsletter = onSchedule({ schedule:'30 6 * * *', timeZone:HOUSE_TZ, region:'us-central1', secrets:[encryptionKey], timeoutSeconds:300, memory:'512MiB', cpu:'gcf_gen1', maxInstances:1, retryCount:0 }, async () => {
+}, { memory:'1GiB', timeoutSeconds:300 });
+export const morningNewsletter = onSchedule({ schedule:'30 6 * * *', timeZone:HOUSE_TZ, region:'us-central1', secrets:[encryptionKey], timeoutSeconds:300, memory:'1GiB', cpu:'gcf_gen1', maxInstances:1, retryCount:0 }, async () => {
   process.env.TZ = HOUSE_TZ;
   const sender = await loadSender(); if (!sender) { warn('Newsletter skipped: no sending account configured'); return; }
   const uids = await activeMembers(), shared = await sharedNewsletterData(uids), mailer = transport(sender);

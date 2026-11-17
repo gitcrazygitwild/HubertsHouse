@@ -31,8 +31,10 @@ function render() {
         <label class="field"><span>Google app password</span><input id="nlSenderPassword" type="password" autocomplete="new-password" required placeholder="16 characters" /></label>
         <div class="connection-actions"><button class="btn" type="submit">Save sending account</button>${state.senderConfigured ? '<button class="btn" type="button" id="nlRemoveSender">Remove</button>' : ''}</div>
       </form></div>
+    ${lastTestNote(state.lastTest)}
     <p id="newsletterError" class="form-error" role="alert"></p>`;
-  const fail = e => { $('newsletterError').textContent = message(e); };
+  // After a failed test, reload the progress trail so the step it stopped at shows.
+  const fail = async e => { $('newsletterError').textContent = message(e); try { state = { ...state, ...(await call({ action:'status' })).data }; const note = $('newsletterLastTest'); if (note) note.outerHTML = lastTestNote(state.lastTest); } catch { /* keep the message */ } };
   const run = async (button, fn) => { if (busy) return; busy = true; if (button) button.disabled = true; $('newsletterError').textContent = ''; try { await fn(); } catch (e) { fail(e); } finally { busy = false; if (button?.isConnected) button.disabled = false; } };
   $('newsletterPrefsForm').addEventListener('submit', event => { event.preventDefault(); run(event.submitter, async () => {
     state.prefs = (await call({ action:'savePrefs', prefs:{ enabled:$('nlEnabled').checked, name:$('nlName').value, afterDark:$('nlAfterDark').checked } })).data.prefs; showNotice('Newsletter settings saved.'); render();
@@ -42,6 +44,15 @@ function render() {
   $('nlRemoveSender')?.addEventListener('click', event => { if (confirm('Stop sending the newsletter for everyone?')) run(event.currentTarget, async () => { await call({ action:'clearSender' }); state.senderConfigured = false; state.senderEmail = ''; render(); }); });
   $('newsletterSenderForm').addEventListener('submit', event => { event.preventDefault(); const password = $('nlSenderPassword').value; $('nlSenderPassword').value = '';
     run(event.submitter, async () => { const result = (await call({ action:'setSender', email:$('nlSenderEmail').value, password })).data; Object.assign(state, result); showNotice('Sending account saved.'); render(); }); });
+}
+// The last "Send me one now": where it got to, so a failure names its step.
+export function lastTestNote(test) {
+  if (!test?.updatedAt) return '<p id="newsletterLastTest" class="tiny muted" hidden></p>';
+  const when = new Date(test.updatedAt).toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }), seconds = Math.round((test.ms || 0) / 1000);
+  const text = test.ok ? `Last test sent ${when} (${seconds}s).`
+    : test.finished ? `Last test ${when}: ${test.error || 'it didn’t finish'}`
+    : `Last test ${when} stopped while ${test.step} (after ${seconds}s). That step is where to look.`;
+  return `<p id="newsletterLastTest" class="tiny ${test.ok ? 'muted' : 'newsletter-last-fail'}">${esc(text)}</p>`;
 }
 export async function initNewsletterSettings(app) {
   call = app ? httpsCallable(getFunctions(app, config.functionsRegion), 'newsletter', { timeout:300000 }) : null;
