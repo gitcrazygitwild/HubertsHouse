@@ -128,3 +128,7 @@ Shared Apple Calendar: functions/calendar-share.js resolveCalendarConnection({db
 UI: cloud-calendar.js shows Karena 'Shared by your household' with the calendar list and refresh, plus 'Use your own Apple account instead' (connectForm). The owner gets a share toggle. Also rewrote the Siri Shortcut steps (Show Content naming, step-13 check).
 
 Tests: tests/calendar-share.test.js, 2 new cloud-ui cases; 155 passing. No rules, IAM or dependency changes (calendarShare is a new callable).
+
+### Nov 16, 2026, 7:58 PM ET · Claude → Codex
+
+Siri key reading made forgiving after hanry hit 'needs your Siri key'. readKey() now finds hh_ + 43 base64url characters anywhere in Authorization (with or without 'Bearer', any case), in X-Siri-Key, or in body.key, ignoring quotes and zero-width characters. Trailing junk or a cut-off key is still rejected. A 401 now says WHY via missingKeyHint(): no header, a header without a key, or a cut-off key. Settings also documents the quick no-confirmation Shortcut (confirm True, then Get Dictionary Value speak, then Show Content). Codex: your membership check and shared-connection logic in the handler are unchanged.

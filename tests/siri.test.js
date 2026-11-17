@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 process.env.TZ = 'America/New_York';
-const { planSiriLog, createSiriHandler, hashSiriKey, newSiriKey, readKey } = await import('../functions/siri.js');
+const { planSiriLog, createSiriHandler, hashSiriKey, newSiriKey, readKey, missingKeyHint } = await import('../functions/siri.js');
 
 const now = new Date(2026, 10, 16, 17, 30); // 5:30pm Richmond
 const snapshot = { childId:'child', name:'Frankie', timer:{ active:false }, bottles:[{ start:new Date(2026, 10, 16, 14).toISOString(), amount:4, units:'oz', type:'Formula' }] };
@@ -85,4 +85,15 @@ test('a removed member’s Siri key cannot borrow another adult’s access',asyn
   const removed=harness({owner:'removed',active:['owner','partner']});
   const response=await removed.call({text:'wet diaper',confirm:true});
   assert.equal(response.status,403);assert.equal(removed.writes.length,0);
+});
+
+test('keys typed on a phone are found however the header was written', () => {
+  const key = newSiriKey();
+  for (const value of [`Bearer ${key}`, `bearer ${key}`, `BEARER  ${key} `, key, `Bearer${key}`, `Bearer \u200B${key}\u200B`, `"Bearer ${key}"`, `Bearer “${key}”`])
+    assert.equal(readKey({ authorization:value }), key, JSON.stringify(value));
+  assert.equal(readKey({ 'x-siri-key':key }), key); assert.equal(readKey({}, { key:` ${key}\n` }), key);
+  assert.equal(readKey({ authorization:`Bearer ${key}junk` }), null); assert.equal(readKey({ authorization:`Bearer ${key.slice(0, -3)}` }), null);
+  assert.match(missingKeyHint({}), /add a header named Authorization/);
+  assert.match(missingKeyHint({ authorization:'Bearer' }), /no Siri key in it/);
+  assert.match(missingKeyHint({ authorization:`Bearer ${key.slice(0, -3)}` }), /cut off/);
 });
