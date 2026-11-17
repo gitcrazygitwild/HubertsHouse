@@ -111,3 +111,4 @@
 .smart-mic.is-listening { background: #f3d9cf; border-color: #d28b72; animation: mic-pulse 1.2s ease-in-out infinite; }
 @keyframes mic-pulse { 50% { box-shadow: 0 0 0 6px rgba(210,139,114,.18); } }
 @media (prefers-reduced-motion: reduce) { .smart-mic.is-listening { animation: none; } }
+.newsletter-last-fail { color: #a54f39 !important; }
