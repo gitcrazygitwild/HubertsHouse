@@ -2,6 +2,18 @@ import { dateKey, escapeHTML as esc } from './household-model.js';
 import { localDate, startOfDay, nextDay, eventEnd, eventsOnDay, checklistProgress } from './calendar-model.js';
 import { renderHTML } from './dom.js';
 import { holidaysInRange, holidaysEnabled } from './holidays.js';
+import { weatherIcon } from './weather-shared.js';
+
+// Each day's Richmond forecast (from weather.js), linked to Miateorology.
+export const WEATHER_URL = 'https://gitcrazygitwild.github.io/Miateorology/';
+export function dayWeather(forecast, key, units = 'F') {
+  const day = forecast?.days?.find(item => item.date === key);
+  if (!day || (day.high == null && day.low == null)) return '';
+  const degree = value => value == null ? '—' : `${Math.round(units === 'C' ? (value - 32) * 5 / 9 : value)}°`;
+  const rain = day.rain != null && day.rain >= 30 ? ` · ${Math.round(day.rain)}%` : '';
+  const title = `${day.label || 'Forecast'} · high ${degree(day.high)}, low ${degree(day.low)}${day.rain != null ? ` · ${Math.round(day.rain)}% rain` : ''}. Open Miateorology`;
+  return `<a class="home-day-weather weather-${esc(day.kind || 'unknown')}" href="${WEATHER_URL}" target="_blank" rel="noopener noreferrer" title="${esc(title)}" aria-label="${esc(title)}"><span class="home-day-weather-icon" aria-hidden="true">${weatherIcon(day.kind)}</span><span>${degree(day.high)} <small>${degree(day.low)}</small>${rain ? `<small class="home-day-rain">${esc(rain)}</small>` : ''}</span></a>`;
+}
 
 const owners = { hanry: 'hanry', karena: 'Karena', both: 'Together', custom: 'Other' };
 const time = date => date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -55,7 +67,9 @@ function eventCard(event, day, now) {
 export function initHomeCalendar({ getEvents, openEvent, addEvent, onRangeChange = () => {}, now = () => new Date() }) {
   const $ = id => document.getElementById(id);
   const text = (id, value) => { if ($(id).textContent !== value) $(id).textContent = value; };
-  let anchor = startOfDay(now()), followingToday = true, lastRange = '', view = 'week', selection=null, suppressClickUntil=0;
+  let anchor = startOfDay(now()), followingToday = true, lastRange = '', view = 'week', selection=null, suppressClickUntil=0, forecast = globalThis.hhForecast || null;
+  const units = () => { try { return localStorage.getItem('hh_weather_units') === 'C' ? 'C' : 'F'; } catch { return 'F'; } };
+  globalThis.addEventListener?.('hh:forecast', event => { forecast = event.detail; render(); });
   try { const saved = localStorage.getItem('hh_home_calendar_view'); if (['day','week','month'].includes(saved)) view = saved; } catch {}
   const getRange = () => { const { start, end } = homeCalendarRange([], anchor, view); return { start, end }; };
   function render() {
@@ -80,7 +94,7 @@ export function initHomeCalendar({ getEvents, openEvent, addEvent, onRangeChange
       const longDate = date.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
       const shown = view === 'month' ? events.slice(0, 3) : events;
       return `<section class="home-week-day${isToday ? ' is-today' : ''}${view === 'month' && date.getMonth() !== anchor.getMonth() ? ' outside-month' : ''}" data-home-date="${key}" aria-label="${esc(longDate)}">
-        <button type="button" class="home-day-heading" data-home-add="${key}" aria-label="Add a plan on ${esc(longDate)}"${isToday ? ' aria-current="date"' : ''}><span>${esc(name)}${isToday ? '<small>Today</small>' : ''}</span><strong>${date.getDate()}</strong></button>
+        <button type="button" class="home-day-heading" data-home-add="${key}" aria-label="Add a plan on ${esc(longDate)}"${isToday ? ' aria-current="date"' : ''}><span>${esc(name)}${isToday ? '<small>Today</small>' : ''}</span><strong>${date.getDate()}</strong></button>${dayWeather(forecast, key, units())}
         <div class="home-day-plans">${holidays.filter(holiday=>holiday.date===key).map(holiday=>`<span class="home-holiday" title="${esc(holiday.name)} · ${holiday.federal?'U.S. federal holiday':'Observance'}">✦ ${esc(holiday.name)}</span>`).join('')}${events.length ? shown.map(event => eventCard(event, date, current)).join('') : view === 'month' ? '' : '<p class="home-day-empty">A little breathing room.</p>'}${events.length > shown.length ? `<button type="button" class="home-more" data-week-day="${key}">+ ${events.length - shown.length} more</button>` : ''}</div>
         <button type="button" class="home-day-add" data-home-add="${key}" aria-label="Add a plan on ${esc(longDate)}"><span aria-hidden="true">＋</span> Add a plan</button>
       </section>`;

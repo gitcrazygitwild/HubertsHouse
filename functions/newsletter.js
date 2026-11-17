@@ -63,7 +63,7 @@ export function buildDigest({ name = '', now = new Date(), household = [], iclou
   const fc = forecast?.days || [];
   const digest = {
     name:String(name || '').trim(), now, content:dailyContent(now), afterDark:prefs.afterDark === true,
-    weather:fc[0] ? { ...fc[0], tomorrow:fc[1] || null } : null,
+    weather:fc[0] ? { ...fc[0], tomorrow:fc[1] || null } : null, outlook:fc.slice(0, 7),
     rain:weatherFlags(events.map(e => ({ ...e, start:e.start.toISOString(), end:e.end.toISOString() })), fc, now),
     today:onDay(events, today), tomorrow:onDay(events, tomorrow), week:{ plans:week.reduce((sum, d) => sum + d.count, 0), busiest:busiest?.count ? busiest : null },
     freeNights:freeEvenings(events, now, 14, 3).map(n => n.date), chores, groceries, baby:null,
@@ -130,6 +130,13 @@ function worldSection(world) {
     + (rows.length ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0">${rows.join('')}</table>` : '')
     + p(small('Headlines: NPR and BBC World. Good news: Good News Network. Markets and rates: FRED (St. Louis Fed), last close shown.'), 'margin:8px 0 0'));
 }
+const SKY = { sun:'☀️', partly:'⛅', cloud:'☁️', rain:'🌧️', storm:'⛈️', snow:'❄️', fog:'🌫️' };
+export const WEATHER_URL = 'https://gitcrazygitwild.github.io/Miateorology/';
+// The week's forecast in one row; each day links to Miateorology.
+function outlookRow(days) {
+  const cells = days.map((day, i) => `<td style="width:${Math.floor(100 / days.length)}%;padding:6px 2px;text-align:center;vertical-align:top"><a href="${WEATHER_URL}" style="text-decoration:none;color:${C.ink}" title="${esc(day.label || '')}"><div style="font:600 11px/1.3 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.muted}">${i === 0 ? 'Today' : esc(new Date(`${day.date}T12:00:00`).toLocaleDateString('en-US', { weekday:'short' }))}</div><div style="font-size:18px;line-height:1.5">${SKY[day.kind] || '•'}</div><div style="font:600 13px/1.3 -apple-system,Segoe UI,Roboto,Arial,sans-serif">${day.high == null ? '—' : Math.round(day.high)}°<span style="font-weight:400;color:${C.muted}"> ${day.low == null ? '' : `${Math.round(day.low)}°`}</span></div>${day.rain != null && day.rain >= 30 ? `<div style="font:11px/1.3 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#3b6fa8">${Math.round(day.rain)}%</div>` : ''}</a></td>`).join('');
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:4px 0 12px;border-top:1px solid ${C.line};border-bottom:1px solid ${C.line}"><tr>${cells}</tr></table>`;
+}
 function planRows(events) {
   return events.map(e => `<tr><td style="padding:7px 12px 7px 0;width:92px;vertical-align:top;font:600 12px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.accent};white-space:nowrap">${e.allDay ? 'All day' : esc(clock(e.start))}</td><td style="padding:7px 0;border-bottom:1px solid ${C.line};font:14px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.ink}">${esc(e.title)} ${small(esc([WHO[e.owner] ?? '', e.withFrankie ? '+ Frankie' : ''].filter(Boolean).join(' ')))}</td></tr>`).join('');
 }
@@ -145,7 +152,7 @@ export function composeEmail(d) {
   const weatherLine = w ? p(`<strong>${Math.round(w.high)}° / ${Math.round(w.low)}°</strong> · ${esc(w.label || '')}${w.rain != null ? ` · ${Math.round(w.rain)}% rain` : ''}${w.tomorrow ? ` ${small(`· Tomorrow ${Math.round(w.tomorrow.high)}° ${esc(w.tomorrow.label || '')}`)}` : ''}`) : '';
   const rain = d.rain.length ? p(`☔ Rain may affect <strong>${esc(d.rain[0].title)}</strong> (${esc(shortDate(new Date(d.rain[0].start)))}${d.rain[0].rain != null ? `, ${d.rain[0].rain}%` : ''})${d.rain.length > 1 ? ` and ${d.rain.length - 1} more` : ''}.`, 'font-size:13px') : '';
   sections.push(section('Today in Richmond', `${d.today.length ? `${d.today.length} plan${d.today.length === 1 ? '' : 's'} today` : 'A wide-open day'}`,
-    weatherLine + rain + (d.today.length ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0">${planRows(d.today)}</table>` : p('Nothing on the calendar. Make it your own.', `color:${C.muted}`))
+    weatherLine + (d.outlook?.length > 1 ? outlookRow(d.outlook) : '') + rain + (d.today.length ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0">${planRows(d.today)}</table>` : p('Nothing on the calendar. Make it your own.', `color:${C.muted}`))
     + (d.tomorrow.length ? p(`<strong>Tomorrow:</strong> ${d.tomorrow.slice(0, 4).map(e => `${esc(e.title)}${e.allDay ? '' : ` ${small(esc(clock(e.start)))}`}`).join(' · ')}${d.tomorrow.length > 4 ? ` +${d.tomorrow.length - 4}` : ''}`, 'margin-top:12px;font-size:13px') : '')));
 
   // Frankie
@@ -186,7 +193,7 @@ export function composeEmail(d) {
 ${sections.join('\n')}
 <tr><td style="padding:8px 4px 0;text-align:center;font:12px/1.6 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.muted}"><a href="${APP_URL}" style="color:${C.accent};font-weight:600">Open Hubert’s House</a> · <a href="${APP_URL}/#settings" style="color:${C.muted}">Newsletter settings</a><br>Made for hanry, Karena, Frankie, Hubert, Mack & Mia.</td></tr>
 </table></td></tr></table></body></html>`;
-  const text = [`${greeting.replace(/&#39;|&amp;/g, m => m === '&amp;' ? '&' : "'")}. ${longDate(d.now)}`, w ? `Weather: ${Math.round(w.high)}°/${Math.round(w.low)}° ${w.label || ''}` : '',
+  const text = [`${greeting.replace(/&#39;|&amp;/g, m => m === '&amp;' ? '&' : "'")}. ${longDate(d.now)}`, w ? `Weather: ${Math.round(w.high)}°/${Math.round(w.low)}° ${w.label || ''}${d.outlook?.length > 1 ? `\nThis week: ${d.outlook.slice(1).map(day => `${new Date(`${day.date}T12:00:00`).toLocaleDateString('en-US', { weekday:'short' })} ${day.high == null ? '—' : Math.round(day.high)}°/${day.low == null ? '—' : Math.round(day.low)}°${day.rain != null && day.rain >= 30 ? ` ${Math.round(day.rain)}%` : ''}`).join(' · ')} (${WEATHER_URL})` : ''}` : '',
     `Today: ${d.today.length ? d.today.map(e => `${e.allDay ? 'All day' : clock(e.start)} ${e.title}`).join('; ') : 'nothing planned'}`,
     d.baby ? (storyText(d.baby) || `${d.baby.name}: yesterday ${hm(d.baby.yesterday.sleep?.total)} sleep, ${d.baby.yesterday.bottles?.ounces ?? 0} oz`) : '',
     d.world?.headlines.length ? `Top headlines:\n${d.world.headlines.map(h => `• ${h.title} (${h.source}) ${h.link}`).join('\n')}` : '',

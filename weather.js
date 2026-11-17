@@ -13,7 +13,7 @@ export function selectForecast(blend, conditions, now = new Date()) {
   const byDate = new Map((Array.isArray(conditions?.days) ? conditions.days : []).map(day => [day.date, day]));
   const number = value => Number.isFinite(value) ? value : null;
   const days = (Array.isArray(blend?.days) ? blend.days : []).filter(day => /^\d{4}-\d{2}-\d{2}$/.test(day.date) && day.date >= today)
-    .sort((a,b) => a.date.localeCompare(b.date)).slice(0, 4).map(day => ({
+    .sort((a,b) => a.date.localeCompare(b.date)).slice(0, 7).map(day => ({
       date: day.date, high: number(day.blendedHighF), low: number(day.blendedLowF), rain: number(day.blendedPrecipProbability), wind: number(day.blendedWindMph),
       ...forecastCondition(byDate.get(day.date)), detail: byDate.get(day.date)?.writeup || ''
     }));
@@ -45,15 +45,15 @@ export function initWeather({ demo = false } = {}) {
     }
     const precip = today.rain === null ? 'Rain chance unavailable' : `${Math.round(today.rain)}% rain chance`;
     const wind = today.wind === null ? '' : `${Math.round(today.wind * (units === 'C' ? 1.609344 : 1))} ${units === 'C' ? 'km/h' : 'mph'} wind`;
-    $('weatherContent').innerHTML = `<div class="weather-now"><div class="weather-main-icon">${weatherIcon(today.kind)}</div><div><div class="weather-temperatures"><strong>${degree(today.high)}</strong><span>/ ${degree(today.low)}</span></div><div class="weather-condition">${esc(today.label)}</div><small>Today’s high / low · °${units}</small></div></div><div class="weather-facts"><span>${esc(precip)}</span>${wind ? `<span>${esc(wind)}</span>` : ''}</div><div class="weather-outlook">${forecast.days.slice(1).map(day => `<div><span>${esc(new Date(`${day.date}T12:00:00`).toLocaleDateString([], { weekday: 'short' }))}</span>${weatherIcon(day.kind)}<strong>${degree(day.high)} <small>${degree(day.low)}</small></strong><span class="sr-only">${esc(day.label)}</span></div>`).join('')}</div>`;
+    $('weatherContent').innerHTML = `<div class="weather-now"><div class="weather-main-icon">${weatherIcon(today.kind)}</div><div><div class="weather-temperatures"><strong>${degree(today.high)}</strong><span>/ ${degree(today.low)}</span></div><div class="weather-condition">${esc(today.label)}</div><small>Today’s high / low · °${units}</small></div></div><div class="weather-facts"><span>${esc(precip)}</span>${wind ? `<span>${esc(wind)}</span>` : ''}</div><div class="weather-outlook">${forecast.days.slice(1, 4).map(day => `<div><span>${esc(new Date(`${day.date}T12:00:00`).toLocaleDateString([], { weekday: 'short' }))}</span>${weatherIcon(day.kind)}<strong>${degree(day.high)} <small>${degree(day.low)}</small></strong><span class="sr-only">${esc(day.label)}</span></div>`).join('')}</div>`;
     const stamp = new Date(forecast.generatedAt).toLocaleString([], { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
     $('weatherStatus').textContent = demo ? 'Sample forecast · Richmond' : `${note ? `${note} · ` : ''}${forecast.older ? 'Older forecast' : 'Forecast'} from ${stamp} ET`;
   }
   function demoForecast() {
     const today = richmondDay(), date = new Date(`${today}T12:00:00Z`);
-    const days = Array.from({ length: 4 }, (_, i) => {
+    const days = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(date); d.setUTCDate(d.getUTCDate() + i);
-      return { date: richmondDay(d), high: 64 - i * 2, low: 44 - i, rain: i === 2 ? 65 : 10, wind: 7, ...[{kind:'partly',label:'Sun & clouds'},{kind:'sun',label:'Mostly clear'},{kind:'rain',label:'A chance of showers'},{kind:'cloud',label:'Cloudy skies'}][i] };
+      return { date: richmondDay(d), high: 64 - (i % 4) * 2, low: 44 - (i % 3), rain: i === 2 || i === 5 ? 65 : 10, wind: 7, ...[{kind:'partly',label:'Sun & clouds'},{kind:'sun',label:'Mostly clear'},{kind:'rain',label:'A chance of showers'},{kind:'cloud',label:'Cloudy skies'},{kind:'partly',label:'Sun & clouds'},{kind:'rain',label:'A chance of showers'},{kind:'sun',label:'Mostly clear'}][i] };
     });
     return { days, generatedAt: new Date().toISOString(), location: 'Richmond, VA' };
   }

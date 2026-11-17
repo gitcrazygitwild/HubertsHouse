@@ -21,6 +21,9 @@ test('weather chooses today in Richmond instead of the first published day and r
   assert.equal(result.days[0].wind, null);
   assert.equal(selectForecast({...blend,generatedAt:'2026-11-10T00:00:00Z'},conditions,now),null);
   assert.equal(selectForecast(blend,conditions,new Date('2026-11-18T12:00:00Z')),null);
+  // The whole published week is kept (up to seven days), not just four.
+  const long = { generatedAt, days:Array.from({length:9}, (_, i) => ({date:`2026-11-${String(14 + i).padStart(2, '0')}`, blendedHighF:50 + i, blendedLowF:30 + i})) };
+  assert.equal(selectForecast(long, conditions, now).days.length, 7);
 });
 
 test('weather does not turn missing conditions into sunshine, and precipitation signals get the right icons', () => {

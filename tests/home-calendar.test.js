@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { JSDOM } from 'jsdom';
 import { dateKey } from '../household-model.js';
-import { homeCalendarWeek, homeCalendarRange, initHomeCalendar } from '../home-calendar.js';
+import { homeCalendarWeek, homeCalendarRange, initHomeCalendar, dayWeather, WEATHER_URL } from '../home-calendar.js';
 
 process.env.TZ = 'America/New_York';
 
@@ -69,4 +69,13 @@ test('home event cards escape titles, retain the source occurrence, and add to t
   doc.querySelector('[data-home-add="2026-11-21"]').click();
   assert.equal(dateKey(added[0]), '2026-11-21');
   assert.equal(JSON.stringify(record), before);
+});
+
+test('each day of the week shows its forecast, linked to Miateorology, in the chosen units', () => {
+  const forecast = {days:[{date:'2026-11-17', high:58.7, low:35.5, rain:0, kind:'sun', label:'Mostly clear'}, {date:'2026-11-18', high:62, low:44, rain:70, kind:'rain', label:'Rain <b>in</b> the forecast'}]};
+  const sunny = dayWeather(forecast, '2026-11-17');
+  assert.match(sunny, new RegExp(`href="${WEATHER_URL}"`)); assert.match(sunny, />59° <small>36°<\/small>/); assert.doesNotMatch(sunny, /home-day-rain/);
+  const wet = dayWeather(forecast, '2026-11-18', 'C');
+  assert.match(wet, />17° <small>7°<\/small>/); assert.match(wet, /home-day-rain"> · 70%/); assert.match(wet, /Rain &lt;b&gt;in&lt;\/b&gt; the forecast/);
+  assert.equal(dayWeather(forecast, '2026-11-25'), ''); assert.equal(dayWeather(null, '2026-11-17'), '');
 });

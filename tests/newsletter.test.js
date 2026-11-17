@@ -92,3 +92,11 @@ test('the newsletter tells Frankie’s yesterday in words and adds headlines and
   const plain = composeEmail(buildDigest({ now, snapshot }));
   assert.doesNotMatch(plain.html, /The world, briefly/); assert.match(plain.html, /She had 6 bottles, 25 oz in all\./);
 });
+
+test('the newsletter shows the week’s forecast, each day linked to Miateorology', () => {
+  const week = { days:['2026-11-16', '2026-11-17', '2026-11-18', '2026-11-19', '2026-11-20', '2026-11-21', '2026-11-22'].map((date, i) => ({ date, high:60 + i, low:40 + i, rain:i === 3 ? 70 : 0, kind:i === 3 ? 'rain' : 'sun', label:i === 3 ? 'Rain in the forecast' : 'Mostly clear' })) };
+  const email = composeEmail(buildDigest({ now, forecast:week }));
+  assert.equal((email.html.match(/href="https:\/\/gitcrazygitwild\.github\.io\/Miateorology\/"/g) || []).length, 7);
+  assert.match(email.html, />Today<\/div>/); assert.match(email.html, />Thu<\/div>/); assert.match(email.html, /🌧️/); assert.match(email.html, />70%<\/div>/);
+  assert.match(email.text, /This week: Tue 61°\/41° · Wed 62°\/42° · Thu 63°\/43° 70% · Fri 64°\/44° · Sat 65°\/45° · Sun 66°\/46°/);
+});

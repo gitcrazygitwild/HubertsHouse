@@ -7,7 +7,9 @@ import { showNotice } from './household.js';
 
 const $ = id => document.getElementById(id);
 let call, state = null, busy = false;
-const message = e => e?.code === 'functions/not-found' ? 'The newsletter service is still deploying. Try again in a few minutes.' : e?.message || 'The newsletter service could not be reached.';
+const message = e => e?.code === 'functions/not-found' ? 'The newsletter service is still deploying. Try again in a few minutes.'
+  : ['functions/internal', 'functions/deadline-exceeded'].includes(e?.code) ? 'The newsletter took too long to put together. Try again in a minute.'
+  : e?.message || 'The newsletter service could not be reached.';
 function render() {
   const root = $('newsletterPanel'); if (!root) return;
   if (!call) { root.innerHTML = '<p class="tiny muted">The newsletter is available when signed in to the household. This preview doesn’t send email.</p>'; return; }
@@ -41,7 +43,7 @@ function render() {
     run(event.submitter, async () => { const result = (await call({ action:'setSender', email:$('nlSenderEmail').value, password })).data; Object.assign(state, result); showNotice('Sending account saved.'); render(); }); });
 }
 export async function initNewsletterSettings(app) {
-  call = app ? httpsCallable(getFunctions(app, config.functionsRegion), 'newsletter', { timeout:120000 }) : null;
+  call = app ? httpsCallable(getFunctions(app, config.functionsRegion), 'newsletter', { timeout:300000 }) : null;
   render();
   if (!call) return;
   try { state = (await call({ action:'status' })).data; render(); } catch (e) { const root = $('newsletterPanel'); if (root) root.innerHTML = `<p class="form-error">${esc(message(e))}</p>`; }
