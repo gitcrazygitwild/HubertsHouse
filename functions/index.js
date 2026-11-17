@@ -2,7 +2,7 @@ import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
-import { warn } from 'firebase-functions/logger';
+import { warn, info } from 'firebase-functions/logger';
 import { CalDAV, CalendarError, resourceToken, appleURL } from './caldav.js';
 import { readEvents, writeEvent, canDelete, eventUID } from './ical.js';
 import { createAssignmentStore, validateAssignment, assignmentKey } from './calendar-assignments.js';
@@ -142,11 +142,23 @@ export const calendarDelete = endpoint(async (uid,input) => {
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { getAuth } from 'firebase-admin/auth';
 import nodemailer from 'nodemailer';
-import { buildDigest, composeEmail, validatePrefs, validateSender, NewsletterError, HOUSE_TZ } from './newsletter.js';
+import { buildDigest, composeEmail, validatePrefs, validateSender, NewsletterError, HOUSE_TZ, BUDGET, withinTime } from './newsletter.js';
 import { selectForecast } from './shared/weather.js';
 const senderRef = () => db.doc('privateNewsletterSender/config');
 const prefsRef = uid => db.doc(`newsletterPrefs/${uid}`);
-const transport = sender => nodemailer.createTransport({ service:'gmail', auth:{ user:sender.email, pass:sender.password } });
+// Without explicit timeouts a stuck Gmail connection can hang for ten minutes.
+const transport = sender => nodemailer.createTransport({ service:'gmail', auth:{ user:sender.email, pass:sender.password }, connectionTimeout:20000, greetingTimeout:15000, socketTimeout:45000 });
+// Gmail's answer, in words a person can act on. Never includes the password.
+function mailError(error) {
+  if (error?.code === 'EAUTH' || error?.responseCode === 535) return new NewsletterError('failed-precondition', 'Gmail turned down the sending account. Make a new app password in Google and save it under Change.');
+  if (['ETIMEDOUT', 'ESOCKET', 'ECONNECTION', 'EDNS'].includes(error?.code)) return new NewsletterError('unavailable', 'Gmail didn’t answer in time. Try again in a minute.');
+  return new NewsletterError('unavailable', `Gmail didn’t accept the message${error?.responseCode ? ` (code ${error.responseCode})` : ''}. Try again in a minute.`);
+}
+async function sendMail(mailer, message) {
+  const result = await withinTime(mailer.sendMail(message), BUDGET.mail);
+  if (result.late) throw new NewsletterError('unavailable', 'Gmail didn’t answer in time. Try again in a minute.');
+  if (result.failed) throw mailError(result.error);
+}
 async function loadSender() {
   const snap = await senderRef().get(); if (!snap.exists) return null;
   return { email:snap.data().email, password:decryptCredential(snap.data().credential, encryptionKey.value(), 'newsletter-sender').password };
@@ -161,6 +173,10 @@ async function forecastNow() {
   } catch { return null; }
 }
 async function icloudEvents(uid, from, to) {
+  const result = await withinTime(icloudEventsNow(uid, from, to), BUDGET.icloud, []);
+  return { events:result.value || [], late:result.late };
+}
+async function icloudEventsNow(uid, from, to) {
   try {
     const { data, client } = await connection(uid);
     const grouped = await Promise.all(data.selected.map(async id => { const calendar = calendarFor(data, id); return (await client.events(calendar, from, to)).flatMap(object => readEvents(object, calendar, from, to)); }));
@@ -175,33 +191,52 @@ export const briefing = endpoint(async (_uid, input) => {
   try { return await briefingService(input?.history !== undefined ? { history:String(input.history) } : {}); }
   catch (error) { if (error.code === 'invalid-argument') throw new HttpsError('invalid-argument', error.message); throw error; }
 });
+// Frankie's data for the email. If Huckleberry is slow, fall back to the snapshot the
+// app saved most recently (privateBabySnapshots) so her section still goes out.
 async function babySnapshot(uids) {
-  if (!uids.length) return null;
-  try { return await huckleberryHandler(uids[0], { action:'snapshot' }); }
-  catch { return null; } // One shared connection; retrying each member repeats the same request.
+  if (!uids.length) return { snapshot:null, fresh:false };
+  const live = await withinTime(huckleberryHandler(uids[0], { action:'snapshot' }), BUDGET.snapshot);
+  if (live.value?.sleeps) return { snapshot:live.value, fresh:true };
+  const saved = (await db.doc('privateBabySnapshots/household-home').get().catch(() => null))?.data();
+  return { snapshot:saved?.sleeps ? saved : null, fresh:false, late:live.late };
 }
 // Everything one member's email needs, gathered fresh.
 async function newsletterFor(uid, shared) {
   const prefs = validatePrefs((await prefsRef(uid).get()).data() || {});
   const now = new Date(), from = new Date(now); from.setHours(0, 0, 0, 0); const to = new Date(+from + 15 * 86400000);
   const icloud = await icloudEvents(uid, from, to);
-  const digest = buildDigest({ name:prefs.name, now, household:shared.household, icloud, items:shared.items, forecast:shared.forecast, snapshot:shared.snapshot, predictions:shared.predictions, recent:shared.recent, briefing:shared.briefing, prefs });
-  return { prefs, email:composeEmail(digest) };
+  const skipped = [...shared.skipped, ...(icloud.late ? ['icloud'] : [])];
+  const digest = buildDigest({ name:prefs.name, now, household:shared.household, icloud:icloud.events, items:shared.items, forecast:shared.forecast, snapshot:shared.snapshot, predictions:shared.predictions, recent:shared.recent, briefing:shared.briefing, prefs, skipped });
+  return { prefs, email:composeEmail(digest), skipped };
 }
 // Diapers aren't in the snapshot's history; the recent-logs list has them.
 async function babyRecent(uids) {
-  if (!uids.length) return null;
-  try { return (await huckleberryHandler(uids[0], { action:'recent' })).entries; } catch { return null; }
+  if (!uids.length) return { entries:null };
+  const result = await withinTime(huckleberryHandler(uids[0], { action:'recent' }), BUDGET.recent);
+  return { entries:result.value?.entries || null, late:result.late };
 }
 async function sharedNewsletterData(uids) {
   // Huckleberry calls run one after the other: each opens its own provider client,
   // and two at once on a small instance ran out of memory.
-  const baby = (async () => { const snapshot = await babySnapshot(uids); return { snapshot, recent:snapshot ? await babyRecent(uids) : null }; })();
-  const [events, items, forecast, { snapshot, recent }, predictions, world] = await Promise.all([
-    db.collection('events').get(), db.collection('householdItems').get(), forecastNow(), baby,
-    db.collection('babyPredictions').orderBy('lastWake', 'desc').limit(400).get(), briefingService().catch(() => null)
+  // Every outside service has a time budget; anything late is left out and named.
+  const started = Date.now(), took = {};
+  const timed = (name, work) => Promise.resolve(work).finally(() => { took[name] = Date.now() - started; });
+  const baby = (async () => {
+    const live = await babySnapshot(uids);
+    const recent = live.fresh ? await babyRecent(uids) : { entries:null }; // no fresh connection, no second wait
+    return { ...live, recent };
+  })();
+  const [events, items, forecast, babyData, predictions, world] = await Promise.all([
+    db.collection('events').get(), db.collection('householdItems').get(), timed('forecast', withinTime(forecastNow(), BUDGET.forecast)), timed('baby', baby),
+    db.collection('babyPredictions').orderBy('lastWake', 'desc').limit(400).get(), timed('briefing', withinTime(briefingService(), BUDGET.briefing))
   ]);
-  return { household:events.docs.map(d => d.data()), items:items.docs.map(d => d.data()), forecast, snapshot, predictions:predictions.docs.map(d => ({ id:d.id, ...d.data() })), recent, briefing:world };
+  const skipped = [];
+  if (forecast.late) skipped.push('forecast');
+  if (world.late) skipped.push('briefing');
+  if (!babyData.fresh && (babyData.late || babyData.snapshot)) skipped.push('baby'); // slow, or answered with an error while a saved copy exists
+  if (babyData.fresh && babyData.recent.late) skipped.push('diapers');
+  info('Newsletter data gathered', { ms:took, skipped, babyFallback:!babyData.fresh && !!babyData.snapshot });
+  return { household:events.docs.map(d => d.data()), items:items.docs.map(d => d.data()), forecast:forecast.value, snapshot:babyData.snapshot, predictions:predictions.docs.map(d => ({ id:d.id, ...d.data() })), recent:babyData.recent.entries, briefing:world.value, skipped };
 }
 async function activeMembers() {
   return (await db.collection('households/home/members').where('active', '==', true).get()).docs.map(d => d.id);
@@ -224,9 +259,9 @@ export const newsletter = endpoint(async (uid, input) => {
   if (action === 'sendTest') {
     const sender = await loadSender(); if (!sender) throw new NewsletterError('failed-precondition', 'Set up the sending Gmail account first.');
     const to = (await getAuth().getUser(uid)).email; if (!to) throw new NewsletterError('failed-precondition', 'Your login has no email address.');
-    const { email } = await newsletterFor(uid, await sharedNewsletterData(await activeMembers()));
-    await transport(sender).sendMail({ from:`Hubert’s House <${sender.email}>`, to, subject:email.subject, html:email.html, text:email.text });
-    return { sent:true, to };
+    const { email, skipped } = await newsletterFor(uid, await sharedNewsletterData(await activeMembers()));
+    await sendMail(transport(sender), { from:`Hubert’s House <${sender.email}>`, to, subject:email.subject, html:email.html, text:email.text });
+    return { sent:true, to, skipped };
   }
   throw new NewsletterError('invalid-argument', 'Choose a newsletter action.');
 }, { memory:'512MiB', timeoutSeconds:300 });
@@ -242,7 +277,7 @@ export const morningNewsletter = onSchedule({ schedule:'30 6 * * *', timeZone:HO
       const to = (await getAuth().getUser(uid)).email; if (!to) continue;
       const { prefs, email } = await newsletterFor(uid, shared);
       if (!prefs.enabled) { await log.set({ skipped:'disabled' }, { merge:true }); continue; }
-      await mailer.sendMail({ from:`Hubert’s House <${sender.email}>`, to, subject:email.subject, html:email.html, text:email.text });
+      await sendMail(mailer, { from:`Hubert’s House <${sender.email}>`, to, subject:email.subject, html:email.html, text:email.text });
       await log.set({ sentAt:FieldValue.serverTimestamp() }, { merge:true });
     } catch (error) { if (error?.code !== 6) warn('Newsletter not sent to one member', { reason:error?.code || 'send-failed' }); } // 6 = already sent today
   }

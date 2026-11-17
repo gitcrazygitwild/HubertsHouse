@@ -100,3 +100,19 @@ test('the newsletter shows the week’s forecast, each day linked to Miateorolog
   assert.match(email.html, />Today<\/div>/); assert.match(email.html, />Thu<\/div>/); assert.match(email.html, /🌧️/); assert.match(email.html, />70%<\/div>/);
   assert.match(email.text, /This week: Tue 61°\/41° · Wed 62°\/42° · Thu 63°\/43° 70% · Fri 64°\/44° · Sat 65°\/45° · Sun 66°\/46°/);
 });
+
+test('a slow service is left out and named instead of stalling the send', async () => {
+  const { withinTime, BUDGET } = await import('../functions/newsletter.js');
+  const fast = await withinTime(Promise.resolve(5), 50);
+  assert.deepEqual(fast, { value:5, late:false });
+  const slow = await withinTime(new Promise(() => {}), 20, 'fallback');
+  assert.deepEqual(slow, { value:'fallback', late:true });
+  const broken = await withinTime(Promise.reject(Object.assign(new Error('boom'), { code:'EAUTH' })), 50, null);
+  assert.equal(broken.failed, true); assert.equal(broken.error.code, 'EAUTH');
+  // Budgets add up to well under the function's 300-second limit, even run one after another.
+  assert.ok(BUDGET.snapshot + BUDGET.recent + BUDGET.icloud + BUDGET.mail < 240000);
+  const email = composeEmail(buildDigest({ now, forecast, skipped:['baby', 'briefing', 'nonsense'] }));
+  assert.match(email.html, /Left out or older this time because a service was slow to answer: the newest Huckleberry logs \(Frankie’s section uses the last saved copy\), headlines and markets\./);
+  assert.match(email.text, /Left out or older this time \(slow to answer\)/);
+  assert.doesNotMatch(composeEmail(buildDigest({ now, forecast })).html, /Left out/);
+});
