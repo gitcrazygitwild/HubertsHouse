@@ -7,8 +7,9 @@ import { showNotice } from './household.js';
 
 const $ = id => document.getElementById(id);
 let call, state = null, busy = false;
+const SKIPPED = { baby:'Frankie’s latest', diapers:'diapers', icloud:'Apple Calendar', forecast:'weather', briefing:'headlines' };
 const message = e => e?.code === 'functions/not-found' ? 'The newsletter service is still deploying. Try again in a few minutes.'
-  : ['functions/internal', 'functions/deadline-exceeded'].includes(e?.code) ? 'The newsletter took too long to put together. Try again in a minute.'
+  : ['functions/internal', 'functions/deadline-exceeded'].includes(e?.code) ? `The newsletter took too long to put together. Try again in a minute. (${e.code.replace('functions/', '')})`
   : e?.message || 'The newsletter service could not be reached.';
 function render() {
   const root = $('newsletterPanel'); if (!root) return;
@@ -36,7 +37,7 @@ function render() {
   $('newsletterPrefsForm').addEventListener('submit', event => { event.preventDefault(); run(event.submitter, async () => {
     state.prefs = (await call({ action:'savePrefs', prefs:{ enabled:$('nlEnabled').checked, name:$('nlName').value, afterDark:$('nlAfterDark').checked } })).data.prefs; showNotice('Newsletter settings saved.'); render();
   }); });
-  $('nlTest').addEventListener('click', event => run(event.currentTarget, async () => { const { to } = (await call({ action:'sendTest' })).data; showNotice(`Newsletter sent to ${to}.`); }));
+  $('nlTest').addEventListener('click', event => run(event.currentTarget, async () => { const { to, skipped = [] } = (await call({ action:'sendTest' })).data; showNotice(`Newsletter sent to ${to}.${skipped.length ? ` A slow service was left out (${skipped.map(key => SKIPPED[key] || key).join(', ')}); it should be back next time.` : ''}`); }));
   $('nlChangeSender')?.addEventListener('click', () => { $('newsletterSenderForm').hidden = false; $('nlSenderEmail').focus(); });
   $('nlRemoveSender')?.addEventListener('click', event => { if (confirm('Stop sending the newsletter for everyone?')) run(event.currentTarget, async () => { await call({ action:'clearSender' }); state.senderConfigured = false; state.senderEmail = ''; render(); }); });
   $('newsletterSenderForm').addEventListener('submit', event => { event.preventDefault(); const password = $('nlSenderPassword').value; $('nlSenderPassword').value = '';

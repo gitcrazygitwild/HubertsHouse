@@ -16,6 +16,16 @@ export const HOUSE_TZ = 'America/New_York';
 export const APP_URL = 'https://huberts-house.web.app';
 const DAY = 86400000;
 export class NewsletterError extends Error { constructor(code, message) { super(message); this.code = code; } }
+// Each outside service gets a time budget. A slow one is left out of the email (and
+// named in it) instead of stalling the whole send past the function's deadline.
+export const BUDGET = { snapshot:75000, recent:25000, icloud:40000, forecast:12000, briefing:25000, mail:60000 };
+export async function withinTime(work, ms, fallback = null) {
+  let timer;
+  const late = new Promise(resolve => { timer = setTimeout(() => resolve({ value:fallback, late:true }), ms); });
+  try { return await Promise.race([Promise.resolve(work).then(value => ({ value, late:false }), error => ({ value:fallback, late:false, failed:true, error })), late]); }
+  finally { clearTimeout(timer); }
+}
+export const SKIPPED_LABELS = { baby:'the newest Huckleberry logs (Frankie’s section uses the last saved copy)', diapers:'diaper changes', icloud:'Apple Calendar plans', forecast:'the weather', briefing:'headlines and markets' };
 
 // "2026-11-16" is a local calendar date, not UTC midnight.
 export const parseWhen = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(...value.split('-').map((n, i) => i === 1 ? Number(n) - 1 : Number(n))) : new Date(value);
@@ -51,7 +61,7 @@ const startOfDay = date => { const d = new Date(date); d.setHours(0, 0, 0, 0); r
 const dateKey = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 const onDay = (events, day) => { const from = startOfDay(day), to = new Date(+from + DAY); return events.filter(e => e.start < to && e.end > from); };
 
-export function buildDigest({ name = '', now = new Date(), household = [], icloud = [], items = [], forecast = null, snapshot = null, predictions = [], recent = null, briefing = null, prefs = {} }) {
+export function buildDigest({ name = '', now = new Date(), household = [], icloud = [], items = [], forecast = null, snapshot = null, predictions = [], recent = null, briefing = null, prefs = {}, skipped = [] }) {
   const today = startOfDay(now), horizon = new Date(+today + 15 * DAY);
   const events = eventsInRange(household, icloud, today, horizon), tomorrow = new Date(+today + DAY);
   const week = Array.from({ length:7 }, (_, i) => { const day = new Date(+today + i * DAY); return { day, count:onDay(events, day).length }; });
@@ -66,7 +76,7 @@ export function buildDigest({ name = '', now = new Date(), household = [], iclou
     weather:fc[0] ? { ...fc[0], tomorrow:fc[1] || null } : null, outlook:fc.slice(0, 7),
     rain:weatherFlags(events.map(e => ({ ...e, start:e.start.toISOString(), end:e.end.toISOString() })), fc, now),
     today:onDay(events, today), tomorrow:onDay(events, tomorrow), week:{ plans:week.reduce((sum, d) => sum + d.count, 0), busiest:busiest?.count ? busiest : null },
-    freeNights:freeEvenings(events, now, 14, 3).map(n => n.date), chores, groceries, baby:null,
+    freeNights:freeEvenings(events, now, 14, 3).map(n => n.date), chores, groceries, baby:null, skipped:[...new Set(skipped)].filter(key => SKIPPED_LABELS[key]),
     world:briefing && (briefing.headlines?.length || briefing.markets?.length) ? { headlines:(briefing.headlines || []).slice(0, 6), goodNews:briefing.goodNews || null, markets:briefing.markets || [] } : null
   };
   if (snapshot?.sleeps) {
@@ -191,6 +201,7 @@ export function composeEmail(d) {
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px">
 <tr><td style="padding:4px 4px 18px"><div style="font:700 10px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;letter-spacing:.09em;text-transform:uppercase;color:${C.pink}">Hubert’s House · ${esc(longDate(d.now))}</div><div style="font:400 30px/1.2 Georgia,'Times New Roman',serif;color:${C.ink};margin-top:6px">${greeting}.</div></td></tr>
 ${sections.join('\n')}
+${d.skipped?.length ? `<tr><td style="padding:0 4px 10px;text-align:center;font:12px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.muted}">Left out or older this time because a service was slow to answer: ${esc(d.skipped.map(key => SKIPPED_LABELS[key]).join(', '))}.</td></tr>` : ''}
 <tr><td style="padding:8px 4px 0;text-align:center;font:12px/1.6 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.muted}"><a href="${APP_URL}" style="color:${C.accent};font-weight:600">Open Hubert’s House</a> · <a href="${APP_URL}/#settings" style="color:${C.muted}">Newsletter settings</a><br>Made for hanry, Karena, Frankie, Hubert, Mack & Mia.</td></tr>
 </table></td></tr></table></body></html>`;
   const text = [`${greeting.replace(/&#39;|&amp;/g, m => m === '&amp;' ? '&' : "'")}. ${longDate(d.now)}`, w ? `Weather: ${Math.round(w.high)}°/${Math.round(w.low)}° ${w.label || ''}${d.outlook?.length > 1 ? `\nThis week: ${d.outlook.slice(1).map(day => `${new Date(`${day.date}T12:00:00`).toLocaleDateString('en-US', { weekday:'short' })} ${day.high == null ? '—' : Math.round(day.high)}°/${day.low == null ? '—' : Math.round(day.low)}°${day.rain != null && day.rain >= 30 ? ` ${Math.round(day.rain)}%` : ''}`).join(' · ')} (${WEATHER_URL})` : ''}` : '',
@@ -199,7 +210,7 @@ ${sections.join('\n')}
     d.world?.headlines.length ? `Top headlines:\n${d.world.headlines.map(h => `• ${h.title} (${h.source}) ${h.link}`).join('\n')}` : '',
     d.world?.goodNews ? `Good news: ${d.world.goodNews.title} ${d.world.goodNews.link}` : '',
     d.world?.markets.length ? `Markets: ${d.world.markets.map(marketLine).join(' · ')}` : '',
-    `Dad joke: ${c.joke.setup} — ${c.joke.punchline}`, APP_URL].filter(Boolean).join('\n\n');
+    `Dad joke: ${c.joke.setup} — ${c.joke.punchline}`, d.skipped?.length ? `Left out or older this time (slow to answer): ${d.skipped.map(key => SKIPPED_LABELS[key]).join(', ')}.` : '', APP_URL].filter(Boolean).join('\n\n');
   return { subject, html, text };
 }
 
