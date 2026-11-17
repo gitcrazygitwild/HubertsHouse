@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 process.env.TZ = 'America/New_York';
-const { planSiriLog, createSiriHandler, hashSiriKey, newSiriKey, readKey, missingKeyHint, readRequest, EMPTY_TEXT_HINT } = await import('../functions/siri.js');
+const { planSiriLog, createSiriHandler, hashSiriKey, newSiriKey, readKey, missingKeyHint, readRequest, EMPTY_TEXT_HINT, SLOW_SNAPSHOT, SLOW_WRITE } = await import('../functions/siri.js');
 
 const now = new Date(2026, 10, 16, 17, 30); // 5:30pm Richmond
 const snapshot = { childId:'child', name:'Frankie', timer:{ active:false }, bottles:[{ start:new Date(2026, 10, 16, 14).toISOString(), amount:4, units:'oz', type:'Formula' }] };
@@ -110,4 +110,21 @@ test('the words are found however the Shortcut sent them, and an empty request s
   assert.equal(empty.json.ok, false); assert.equal(empty.json.speak, EMPTY_TEXT_HINT); assert.equal(writes.length, 0);
   const capital = await call({ Text:'5 ounces at 5:15', Confirm:'True' });
   assert.equal(capital.json.saved, true); assert.equal(writes[0].entry.amount, 5);
+});
+
+test('a slow Huckleberry still gets a spoken JSON answer, never an error page', async () => {
+  const key = newSiriKey(), docs = new Map([[`siriKeys/${hashSiriKey(key)}`, { uid:'owner' }]]), seen = [];
+  const db = { doc:path => ({ get:async () => ({ exists:docs.has(path), data:() => docs.get(path) }), update:async () => {} }) };
+  const run = async (slow, body) => {
+    const huckleberry = async (_uid, input) => { seen.push(input); if (input.action === slow) return new Promise(() => {}); return input.action === 'snapshot' ? { ...snapshot, connection:{connectionVersion:'v'} } : { saved:true }; };
+    const handler = createSiriHandler({ db, huckleberry, members:async () => ['owner'], now:() => now, budgetMs:50 });
+    let status, json; await handler({ method:'POST', headers:{ authorization:`Bearer ${key}` }, body }, { status(code) { status = code; return this; }, json(value) { json = value; } });
+    return { status, json };
+  };
+  const preview = await run('snapshot', { text:'wet diaper' });
+  assert.equal(preview.status, 200); assert.equal(preview.json.speak, SLOW_SNAPSHOT);
+  const saving = await run('write', { text:'wet diaper', confirm:true });
+  assert.equal(saving.status, 200); assert.equal(saving.json.speak, SLOW_WRITE);
+  // Siri asks for a light snapshot, so it does not reload 60 days of history.
+  assert.ok(seen.filter(input => input.action === 'snapshot').every(input => input.light === true));
 });

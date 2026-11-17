@@ -152,7 +152,9 @@ async function intervalHistory(client, path, from, now) {
   ]);
   return {docs:[...regular.docs,...batches.docs],complete:regular.size < HISTORY_LIMIT && batches.size < BATCH_LIMIT};
 }
-export async function huckleberrySnapshot(client, childId, timezone, cached, forceHistory = false, now = Date.now(), napPlan = DEFAULT_NAP_PLAN) {
+// `light` (Siri) reuses cached history when there is any, so a voice log stays fast;
+// the app refreshes the full history on its next load.
+export async function huckleberrySnapshot(client, childId, timezone, cached, forceHistory = false, now = Date.now(), napPlan = DEFAULT_NAP_PLAN, light = false) {
   const child = id(childId);
   const [profile, sleepDoc, feedDoc, diaperDoc] = await Promise.all(['childs','sleep','feed','diaper'].map(collection => client.doc(`${collection}/${child}`).get()));
   if (!profile.exists) fail('not-found','This Huckleberry child profile is no longer available.');
@@ -160,7 +162,7 @@ export async function huckleberrySnapshot(client, childId, timezone, cached, for
   const from = now - HISTORY_DAYS * 86400000;
   // A cache from before bottle history existed has no `bottles` field; reload it.
   let sleeps = cached?.sleeps || [], bottles = cached?.bottles || [], historyComplete = cached?.historyComplete ?? false, feedsComplete = cached?.feedsComplete ?? false, historyCheckedAt = Array.isArray(cached?.bottles) ? cached?.historyCheckedAt : undefined;
-  if (forceHistory || !historyCheckedAt || now - Date.parse(historyCheckedAt) > 15 * 60000) {
+  if (forceHistory || !historyCheckedAt || (!light && now - Date.parse(historyCheckedAt) > 15 * 60000)) {
     const [sleepHistory, feedHistory] = await Promise.all([intervalHistory(client,`sleep/${child}/intervals`,from,now),intervalHistory(client,`feed/${child}/intervals`,from,now)]);
     sleeps = normalizeSleepHistory(sleepHistory.docs,from,now); bottles = normalizeFeedHistory(feedHistory.docs,from,now);
     historyComplete = sleepHistory.complete; feedsComplete = feedHistory.complete; historyCheckedAt = new Date(now).toISOString();

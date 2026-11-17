@@ -128,6 +128,15 @@ test('snapshot selects the saved SweetSpot and exposes only normalized fields', 
   assert.equal(snapshot.sweetspot.time,'2026-11-15T16:00:00.000Z'); assert.equal(snapshot.timer.start,start); assert.equal(snapshot.sleeps.length,1); assert.equal(snapshot.lastBottle.amount,4); assert.equal(snapshot.private,undefined);
 });
 
+test('a light snapshot (Siri) reuses stale cached history instead of reloading it', async () => {
+  const records = {'childs/child':{childsName:'Frankie'},'sleep/child':{},'feed/child':{}};
+  let historyReads = 0;
+  const client = {doc:path => ({get:async () => ({exists:!!records[path],data:() => records[path]})}),collection:() => { historyReads++; throw new Error('history read'); }};
+  const stale = {sleeps:[],bottles:[],historyComplete:true,historyCheckedAt:new Date(now - 3600000).toISOString()};
+  const snapshot = await huckleberrySnapshot(client,'child','America/New_York',stale,false,now,undefined,true);
+  assert.equal(historyReads,0); assert.equal(snapshot.historyCheckedAt,stale.historyCheckedAt);
+});
+
 test('bottle history keeps only valid bottle feeds, including archived batches, and drops breast feeds', () => {
   const bottle = {mode:'bottle',start:(now - 3600000)/1000,amount:4,units:'oz',bottleType:'Formula'};
   const values = normalizeFeedHistory([bottle,{multi:true,data:{a:bottle,b:{mode:'bottle',start:now - 7200000,amount:120,units:'ml',bottleType:'Breast Milk'}}},
