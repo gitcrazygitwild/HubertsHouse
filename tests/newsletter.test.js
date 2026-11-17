@@ -59,3 +59,35 @@ test('preferences and sender details are validated', () => {
   assert.deepEqual(validateSender({ email:'house@example.com', password:'abcd efgh ijkl mnop' }), { email:'house@example.com', password:'abcdefghijklmnop' });
   assert.throws(() => validateSender({ email:'nope', password:'abcdefghijklmnop' })); assert.throws(() => validateSender({ email:'a@b.co', password:'short' }));
 });
+
+test('the newsletter tells Frankie’s yesterday in words and adds headlines and markets', async () => {
+  const { dayStory } = await import('../baby-history.js');
+  const y = (h, m = 0) => new Date(2026, 10, 15, h, m).toISOString(); // Sunday, yesterday
+  const sleeps = [];
+  // Three nights at 9:30 PM teach the evening line; the night before yesterday ends 6:45 AM.
+  for (let d = 10; d <= 13; d++) sleeps.push({ start:new Date(2026, 10, d, 21, 30).toISOString(), end:new Date(2026, 10, d + 1, 6, 30).toISOString() });
+  sleeps.push({ start:new Date(2026, 10, 14, 21, 40).toISOString(), end:y(6, 45) });
+  sleeps.push({ start:y(9), end:y(10, 10) }, { start:y(12, 30), end:y(13, 50) }, { start:y(19, 15), end:y(19, 45) }); // last one: a late catnap
+  sleeps.push({ start:y(21, 40), end:new Date(2026, 10, 16, 1, 0).toISOString() }, { start:new Date(2026, 10, 16, 1, 20).toISOString(), end:new Date(2026, 10, 16, 6, 10).toISOString() });
+  const bottles = [7, 10, 13, 16, 19, 21].map((h, i) => ({ start:y(h), amount:i === 2 ? 5 : 4, units:'oz', type:'Formula' }));
+  const diapers = [{ kind:'diaper', start:y(7), mode:'pee' }, { kind:'diaper', start:y(11), mode:'both' }, { kind:'diaper', start:y(15), mode:'poo' }, { kind:'diaper', start:new Date(2026, 10, 16, 2).toISOString(), mode:'pee' }];
+  const story = dayStory({ sleeps, bottles }, diapers, 'America/New_York', '2026-11-15', +now);
+  assert.equal(story.wake, y(6, 45)); assert.equal(story.bedtime, y(21, 40));
+  assert.deepEqual(story.naps, { count:3, minutes:180, longest:{ minutes:80, start:y(12, 30) } });
+  assert.deepEqual(story.overnight, { minutes:200 + 290, woke:new Date(2026, 10, 16, 6, 10).toISOString() });
+  assert.deepEqual(story.bottles, { count:6, ounces:25, largest:5 });
+  assert.deepEqual(story.diapers, { count:3, wet:2, dirty:2 });
+
+  const briefing = { fetchedAt:now.toISOString(), headlines:[{ title:'Storm closes schools & roads', link:'https://www.npr.org/a', source:'NPR' }],
+    markets:[{ id:'SP500', name:'S&P 500', kind:'index', value:7416.59, change:-145.08, changePct:-1.92, date:'2026-11-13' }, { id:'DGS10', name:'10-yr Treasury', kind:'rate', value:5.15, change:0.05, changePct:null, date:'2026-11-13' }] };
+  const snapshot = { name:'Frankie', timezone:'America/New_York', sleeps, bottles, timer:{ active:false } };
+  const email = composeEmail(buildDigest({ now, household, icloud, items, forecast, snapshot, recent:diapers, briefing }));
+  assert.match(email.html, /Yesterday Frankie was up for the day at 6:45 AM, took 3 naps \(3h 0m in all; the longest, 1h 20m, started at 12:30 PM\) and went down for the night at 9:40 PM\./);
+  assert.match(email.html, /She had 6 bottles, 25 oz in all and 3 diaper changes \(2 wet, 2 dirty\)\./);
+  assert.match(email.html, /Overnight she slept 8h 10m and woke at 6:10 AM\./);
+  assert.match(email.html, /The world, briefly/); assert.match(email.html, /Storm closes schools &amp; roads/); assert.match(email.html, /7,416\.59/); assert.match(email.html, /▼ 1\.92%/); assert.match(email.html, /▲ 0\.05 pt/);
+  assert.match(email.text, /Yesterday Frankie was up/); assert.match(email.text, /• Storm closes schools & roads \(NPR\) https:\/\/www\.npr\.org\/a/); assert.match(email.text, /Markets: S&P 500 7,416\.59 ▼ 1\.92%/);
+  // No briefing, no diapers: those parts are simply left out.
+  const plain = composeEmail(buildDigest({ now, snapshot }));
+  assert.doesNotMatch(plain.html, /The world, briefly/); assert.match(plain.html, /She had 6 bottles, 25 oz in all\./);
+});

@@ -4,7 +4,8 @@
 // The shared/ modules are copied from the app by scripts/share.mjs at build and
 // deploy time, so the email uses exactly the same logic as the home page.
 import { dailyContent } from './shared/daily-content.js';
-import { babySummary, dailySleep, dailyBottles } from './shared/baby-history.js';
+import { babySummary, dailySleep, dailyBottles, dayStory, localDay } from './shared/baby-history.js';
+import { marketValue, marketChange, marketDate, marketLine } from './shared/briefing-format.js';
 import { purrfectWindow, miaForecast, huckleberryPrediction } from './shared/baby-model.js';
 import { scorePredictions } from './shared/prediction-log.js';
 import { weatherFlags } from './shared/smart-home.js';
@@ -50,7 +51,7 @@ const startOfDay = date => { const d = new Date(date); d.setHours(0, 0, 0, 0); r
 const dateKey = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 const onDay = (events, day) => { const from = startOfDay(day), to = new Date(+from + DAY); return events.filter(e => e.start < to && e.end > from); };
 
-export function buildDigest({ name = '', now = new Date(), household = [], icloud = [], items = [], forecast = null, snapshot = null, predictions = [], prefs = {} }) {
+export function buildDigest({ name = '', now = new Date(), household = [], icloud = [], items = [], forecast = null, snapshot = null, predictions = [], recent = null, briefing = null, prefs = {} }) {
   const today = startOfDay(now), horizon = new Date(+today + 15 * DAY);
   const events = eventsInRange(household, icloud, today, horizon), tomorrow = new Date(+today + DAY);
   const week = Array.from({ length:7 }, (_, i) => { const day = new Date(+today + i * DAY); return { day, count:onDay(events, day).length }; });
@@ -65,12 +66,14 @@ export function buildDigest({ name = '', now = new Date(), household = [], iclou
     weather:fc[0] ? { ...fc[0], tomorrow:fc[1] || null } : null,
     rain:weatherFlags(events.map(e => ({ ...e, start:e.start.toISOString(), end:e.end.toISOString() })), fc, now),
     today:onDay(events, today), tomorrow:onDay(events, tomorrow), week:{ plans:week.reduce((sum, d) => sum + d.count, 0), busiest:busiest?.count ? busiest : null },
-    freeNights:freeEvenings(events, now, 14, 3).map(n => n.date), chores, groceries, baby:null
+    freeNights:freeEvenings(events, now, 14, 3).map(n => n.date), chores, groceries, baby:null,
+    world:briefing && (briefing.headlines?.length || briefing.markets?.length) ? { headlines:(briefing.headlines || []).slice(0, 6), markets:briefing.markets || [] } : null
   };
   if (snapshot?.sleeps) {
     const tz = snapshot.timezone || HOUSE_TZ, summary = babySummary(snapshot, tz, +now);
     // Yesterday: the last full local day.
     const yesterday = { sleep:dailySleep(snapshot.sleeps, tz, 2, +now)[0], bottles:dailyBottles(snapshot.bottles || [], tz, 2, +now)[0] };
+    yesterday.story = dayStory(snapshot, recent?.filter(entry => entry.kind === 'diaper') ?? null, tz, localDay(+now - DAY, tz), +now);
     const huck = huckleberryPrediction(snapshot, now), purr = purrfectWindow({ sleeps:snapshot.sleeps, timer:snapshot.timer, timezone:tz }, now), mia = miaForecast({ sleeps:snapshot.sleeps, timer:snapshot.timer, timezone:tz }, now);
     const score = scorePredictions(predictions, snapshot.sleeps, snapshot.timer, tz);
     digest.baby = { name:snapshot.name || 'Frankie', tz, timer:snapshot.timer, lastWake:snapshot.sleeps.at(-1)?.end || null, lastBottle:snapshot.bottles?.at(-1) || null, summary, yesterday,
@@ -96,6 +99,36 @@ function section(eyebrow, title, body) {
 }
 const p = (text, style = '') => `<p style="margin:0 0 8px;font:14px/1.55 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.ink};${style}">${text}</p>`;
 const small = text => `<span style="color:${C.muted};font-size:12px">${text}</span>`;
+const minutes = m => m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
+const plural = (n, word, words = `${word}s`) => `${n} ${n === 1 ? word : words}`;
+// A few plain sentences about Frankie's yesterday.
+export function storyText(b) {
+  const s = b.yesterday.story, name = b.name, tz = b.tz;
+  if (!s) return '';
+  const day = [];
+  if (s.wake) day.push(`was up for the day at ${clock(s.wake, tz)}`);
+  if (s.naps.count) day.push(`took ${plural(s.naps.count, 'nap')} (${minutes(s.naps.minutes)} in all${s.naps.count > 1 && s.naps.longest ? `; the longest, ${minutes(s.naps.longest.minutes)}, started at ${clock(s.naps.longest.start, tz)}` : ''})`);
+  else day.push('had no naps logged');
+  if (s.bedtime) day.push(`went down for the night at ${clock(s.bedtime, tz)}`);
+  const sentences = [`Yesterday ${name} ${day.length > 1 ? `${day.slice(0, -1).join(', ')} and ${day.at(-1)}` : day[0]}.`];
+  const feeds = [s.bottles.count ? `${plural(s.bottles.count, 'bottle')}, ${s.bottles.ounces} oz in all` : 'no bottles logged'];
+  if (s.diapers) feeds.push(s.diapers.count ? `${plural(s.diapers.count, 'diaper change')} (${s.diapers.wet} wet, ${s.diapers.dirty} dirty)` : 'no diaper changes logged');
+  sentences.push(`She had ${feeds.join(' and ')}.`);
+  if (s.overnight && !b.timer?.active) sentences.push(`Overnight she slept ${minutes(s.overnight.minutes)} and woke at ${clock(s.overnight.woke, tz)}.`);
+  else if (s.bedtime && b.timer?.active) sentences.push(`She’s still asleep${s.overnight ? ` after ${minutes(s.overnight.minutes)} of logged night sleep` : ''}.`);
+  const total = b.yesterday.sleep?.total, avg = b.summary.avgSleep;
+  if (total && avg && Math.abs(total - avg) >= 0.25) sentences.push(`That’s ${minutes(Math.round(Math.abs(total - avg) * 60))} ${total > avg ? 'more' : 'less'} sleep than her 7-day average.`);
+  return sentences.join(' ');
+}
+function worldSection(world) {
+  const tiles = world.markets.map(m => { const change = marketChange(m), color = change.tone === 'up' ? '#2f7d4f' : change.tone === 'down' ? '#b4232a' : C.muted;
+    return `<td style="width:33%;padding:8px 8px 8px 0;vertical-align:top"><div style="font:11px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.muted}">${esc(m.name)}</div><div style="font:600 16px/1.3 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.ink}">${esc(marketValue(m))}</div><div style="font:11px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${color}">${esc(change.text)} <span style="color:${C.muted}">${esc(marketDate(m.date))}</span></div></td>`; });
+  const rows = []; for (let i = 0; i < tiles.length; i += 3) rows.push(`<tr>${tiles.slice(i, i + 3).join('')}</tr>`);
+  const news = world.headlines.map(h => `<li style="margin:0 0 6px"><a href="${esc(h.link)}" style="color:${C.ink};text-decoration:none;font-weight:600">${esc(h.title)}</a> <span style="color:${C.muted};font-size:12px">${esc(h.source)}</span></li>`).join('');
+  return section('The world, briefly', 'Top headlines & markets', (news ? `<ol style="margin:0 0 10px;padding-left:20px;font:14px/1.45 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.ink}">${news}</ol>` : '')
+    + (rows.length ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0">${rows.join('')}</table>` : '')
+    + p(small('Headlines: NPR and BBC World. Markets and rates: FRED (St. Louis Fed), last close shown.'), 'margin:8px 0 0'));
+}
 function planRows(events) {
   return events.map(e => `<tr><td style="padding:7px 12px 7px 0;width:92px;vertical-align:top;font:600 12px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.accent};white-space:nowrap">${e.allDay ? 'All day' : esc(clock(e.start))}</td><td style="padding:7px 0;border-bottom:1px solid ${C.line};font:14px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.ink}">${esc(e.title)} ${small(esc([WHO[e.owner] ?? '', e.withFrankie ? '+ Frankie' : ''].filter(Boolean).join(' ')))}</td></tr>`).join('');
 }
@@ -123,10 +156,12 @@ export function composeEmail(d) {
     const tiles = `<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>${stats.map(([label, value, note]) => `<td style="width:33%;padding:10px 8px 10px 0;vertical-align:top"><div style="font:11px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.muted}">${esc(label)}</div><div style="font:400 20px/1.3 Georgia,serif;color:${C.ink}">${esc(value)}</div><div style="font:11px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.muted}">${esc(note)}</div></td>`).join('')}</tr></table>`;
     const awards = b.awards.length ? `<div style="margin-top:10px;padding:10px 12px;border-radius:12px;background:#fbf3df">${p(`<strong>🏆 Last week’s awards:</strong> ${b.awards.map(a => `${a.icon} ${esc(a.title)} <strong>${esc(a.value)}</strong>`).join(' · ')}`, 'margin:0;font-size:13px')}</div>` : '';
     sections.push(section('Little moments, big love', `${esc(b.name)} is ${esc(status)}`,
-      tiles + (nap.length ? p(`<strong>Next nap:</strong> ${esc(nap.join(' · '))}`, 'font-size:13px;margin-top:6px') : '')
+      (b.yesterday.story ? p(esc(storyText(b)), 'margin-bottom:10px') : '') + tiles + (nap.length ? p(`<strong>Next nap:</strong> ${esc(nap.join(' · '))}`, 'font-size:13px;margin-top:6px') : '')
       + (b.lastBottle ? p(small(`Last bottle ${esc(ago(b.lastBottle.start, now))} ago · ${esc(b.lastBottle.amount)} ${esc(b.lastBottle.units)}`)) : '')
       + (b.leader ? p(`🏆 <strong>${esc(b.leader.owner)}’s ${esc(b.leader.name)}</strong> leads the nap challenge · ±${b.leader.mae} min over ${b.leader.n} naps`, 'font-size:13px') : '') + awards));
   }
+
+  if (d.world) sections.push(worldSection(d.world));
 
   // Around the house
   const house = [];
@@ -152,7 +187,9 @@ ${sections.join('\n')}
 </table></td></tr></table></body></html>`;
   const text = [`${greeting.replace(/&#39;|&amp;/g, m => m === '&amp;' ? '&' : "'")}. ${longDate(d.now)}`, w ? `Weather: ${Math.round(w.high)}°/${Math.round(w.low)}° ${w.label || ''}` : '',
     `Today: ${d.today.length ? d.today.map(e => `${e.allDay ? 'All day' : clock(e.start)} ${e.title}`).join('; ') : 'nothing planned'}`,
-    d.baby ? `${d.baby.name}: yesterday ${hm(d.baby.yesterday.sleep?.total)} sleep, ${d.baby.yesterday.bottles?.ounces ?? 0} oz` : '',
+    d.baby ? (storyText(d.baby) || `${d.baby.name}: yesterday ${hm(d.baby.yesterday.sleep?.total)} sleep, ${d.baby.yesterday.bottles?.ounces ?? 0} oz`) : '',
+    d.world?.headlines.length ? `Top headlines:\n${d.world.headlines.map(h => `• ${h.title} (${h.source}) ${h.link}`).join('\n')}` : '',
+    d.world?.markets.length ? `Markets: ${d.world.markets.map(marketLine).join(' · ')}` : '',
     `Dad joke: ${c.joke.setup} — ${c.joke.punchline}`, APP_URL].filter(Boolean).join('\n\n');
   return { subject, html, text };
 }

@@ -55,6 +55,8 @@ async function fixture(options = {}) {
   await module('upgrades.js',['initUpgrades'],'const esc=escapeHTML;');
   await module('newsletter-settings.js',['initNewsletterSettings'],'const esc=escapeHTML;');
   await module('siri-settings.js',['initSiriSettings','shortcutSteps'],'const esc=escapeHTML;');
+  await module('briefing-format.js',['marketValue','marketChange','marketDate','marketLine']);
+  await module('world-briefing.js',['briefingHTML','sampleBriefing','initWorldBriefing'],'const esc=escapeHTML;');
   w.eval(clean(await read('app.js')) + ';window.__testApp={getDocs:()=>rawDocs,setCloudDocs:(records)=>{cloudDocs=records;rebuildEvents();},persistMovedEvent,redraw:()=>updateHouseholdEvents(expandedEvents)};'); await settle();
   return {dom,w,doc:w.document,errors};
 }
