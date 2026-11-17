@@ -1,4 +1,4 @@
-// "Hey Siri, ping Hubert": an Apple Shortcut sends what was said to the `siri`
+// "Hey Siri, Frankie log": an Apple Shortcut sends what was said to the `siri`
 // HTTPS function with a personal key. The text is parsed with the same code as
 // the app's quick-add bar, read back for confirmation, then saved through the
 // existing guarded Huckleberry write path (createHuckleberryHandler).
@@ -107,7 +107,7 @@ export function createSiriHandler({ db, huckleberry, members, now = () => new Da
   return async (request, response) => {
     const reply = (status, body) => response.status(status).json(body);
     try {
-      if (request.method !== 'POST') return reply(405, { ok:false, speak:'Hubert only listens to the Ping Hubert shortcut.' });
+      if (request.method !== 'POST') return reply(405, { ok:false, speak:'Hubert only listens to the Frankie log shortcut.' });
       const body = readRequest(request.body);
       const key = readKey(request.headers, body);
       if (!key) return reply(401, { ok:false, speak:missingKeyHint(request.headers, body) });

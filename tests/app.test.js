@@ -389,11 +389,11 @@ test('quick add logs for Frankie: bottle defaults to the last one, text fills th
   assert.deepEqual(errors, []);
 });
 
-test('Settings explains the "Ping Hubert" shortcut, and the preview creates no keys', async t => {
+test('Settings explains the "Frankie log" shortcut, and the preview creates no keys', async t => {
   const {dom,doc,errors}=await fixture(); t.after(() => dom.window.close());
   const panel = doc.getElementById('siriPanel');
   assert.match(panel.textContent, /doesn’t create keys/);
-  assert.match(panel.textContent, /Ping Hubert/); assert.match(panel.textContent, /Get Contents of URL/); assert.match(panel.textContent, /Bearer/);
+  assert.match(panel.textContent, /Frankie log/); assert.match(panel.textContent, /Get Contents of URL/); assert.match(panel.textContent, /Bearer/);
   assert.equal(doc.getElementById('siriCreate'), null);
   assert.deepEqual(errors, []);
 });
