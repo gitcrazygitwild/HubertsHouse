@@ -24,15 +24,53 @@ export function dayKeys(days, timezone, now = Date.now()) {
   for (let i = 0; i < days; i++) { keys.unshift(key); key = localDay(dayStart(key, timezone) - DAY / 2, timezone); }
   return keys;
 }
-const hourAt = (stamp, timezone) => Number(fmt('hour', timezone, { hour:'numeric', hourCycle:'h23' }).format(new Date(stamp)));
-// Same rule as Mia's forecast: a daytime sleep under four hours is a nap.
-export const sleepKind = (sleep, timezone) => { const hour = hourAt(sleep.start, timezone); return hour >= 5 && hour < 19 && sleep.end - sleep.start < 4 * 3600000 ? 'nap' : 'night'; };
+const toStamp = value => typeof value === 'number' ? value : Date.parse(value);
+// Minutes since local midnight.
+export function clockAt(stamp, timezone) {
+  const parts = fmt('clock', timezone, { hour:'numeric', minute:'2-digit', hourCycle:'h23' }).formatToParts(new Date(stamp));
+  const get = type => Number(parts.find(part => part.type === type).value);
+  return get('hour') * 60 + get('minute');
+}
+export const DEFAULT_NIGHT_LINE = 19 * 60;
+// Frankie's own evening line, learned from her recent nights instead of a fixed
+// 7 PM. Each night starts with its main sleep (3h+ beginning between 5 PM and 3 AM)
+// plus any segments just before it with under 45 minutes awake in between. The line
+// sits 30 minutes before her earlier bedtimes (the 20th percentile), so a late catnap
+// before bed still counts as a nap. Sleeps that start after the line are night sleep.
+export function nightLine(sleeps, timezone, now = Date.now(), days = 21) {
+  const list = [];
+  for (const sleep of sleeps.map(s => ({ start:toStamp(s.start), end:toStamp(s.end) }))
+    .filter(s => Number.isFinite(s.start) && s.end > s.start && s.end <= +now && s.start >= +now - days * DAY).sort((a, b) => a.start - b.start)) {
+    const previous = list.at(-1);
+    if (previous && sleep.start <= previous.end) previous.end = Math.max(previous.end, sleep.end); else list.push(sleep);
+  }
+  const evening = stamp => { const clock = clockAt(stamp, timezone); return clock < 6 * 60 ? clock + 1440 : clock; }; // 1 AM → 25:00
+  const nights = new Map();
+  list.forEach((sleep, index) => {
+    const clock = evening(sleep.start);
+    if (sleep.end - sleep.start < 3 * 3600000 || clock < 17 * 60 || clock >= 27 * 60) return;
+    let first = index;
+    while (first > 0 && list[first].start - list[first - 1].end <= 45 * MINUTE && evening(list[first - 1].start) >= 17 * 60) first--;
+    const key = localDay(list[first].start - 6 * 3600000, timezone), start = evening(list[first].start);
+    nights.set(key, Math.min(nights.get(key) ?? Infinity, start));
+  });
+  if (nights.size < 3) return DEFAULT_NIGHT_LINE;
+  const sorted = [...nights.values()].sort((a, b) => a - b), position = (sorted.length - 1) * 0.2, low = Math.floor(position);
+  const early = sorted[low] + (sorted[Math.ceil(position)] - sorted[low]) * (position - low);
+  return Math.round(Math.min(23.5 * 60, Math.max(18 * 60, early - 30)));
+}
+// A sleep under four hours that starts between 5 AM and Frankie's evening line is a nap.
+export const sleepKind = (sleep, timezone, line = DEFAULT_NIGHT_LINE) => {
+  const clock = clockAt(toStamp(sleep.start), timezone);
+  return clock >= 5 * 60 && clock < line && toStamp(sleep.end) - toStamp(sleep.start) < 4 * 3600000 ? 'nap' : 'night';
+};
 
 function intervals(sleeps) {
   return sleeps.map(sleep => ({ start:Date.parse(sleep.start), end:Date.parse(sleep.end) })).filter(s => Number.isFinite(s.start) && s.end > s.start).sort((a,b) => a.start - b.start);
 }
 export function dailySleep(sleeps, timezone, days, now = Date.now()) {
-  const list = intervals(sleeps).map(sleep => ({ ...sleep, kind:sleepKind(sleep, timezone) }));
+  const line = nightLine(sleeps, timezone, now);
+  const list = intervals(sleeps).map(sleep => ({ ...sleep, kind:sleepKind(sleep, timezone, line) }));
   return dayKeys(days, timezone, now).map(key => {
     const from = dayStart(key, timezone), to = Math.min(dayStart(localDay(from + DAY * 1.5, timezone), timezone), +now);
     let night = 0, nap = 0, naps = 0;
@@ -55,7 +93,8 @@ export function dailyBottles(bottles, timezone, days, now = Date.now()) {
 }
 // One row per day; each block is minutes from local midnight, clipped to the day.
 export function timelineRows(sleeps, timezone, days, now = Date.now()) {
-  const list = intervals(sleeps).map(sleep => ({ ...sleep, kind:sleepKind(sleep, timezone) }));
+  const line = nightLine(sleeps, timezone, now);
+  const list = intervals(sleeps).map(sleep => ({ ...sleep, kind:sleepKind(sleep, timezone, line) }));
   return dayKeys(days, timezone, now).map(key => {
     const from = dayStart(key, timezone), next = dayStart(localDay(from + DAY * 1.5, timezone), timezone), length = (next - from) / MINUTE;
     const blocks = list.filter(s => s.end > from && s.start < next).map(s => ({

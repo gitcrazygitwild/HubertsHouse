@@ -12,6 +12,7 @@
 //   all three, so a wide window earns no easier hits. Window widths are shown
 //   separately so a cautious, wide window is visible.
 import { purrfectWindow, miaForecast } from './baby-model.js';
+import { nightLine, sleepKind } from './baby-history.js';
 
 export const MODELS = [
   { key:'sweetspot', name:'SweetSpot', owner:'Huckleberry' },
@@ -23,21 +24,26 @@ export const HIT_MINUTES = 15;
 const ms = value => Date.parse(value);
 export const predictionId = lastWake => `w${ms(lastWake)}`;
 
-// Only daytime wake-ups (5am–8pm in the baby's time zone) are nap predictions;
-// a 3am feed wake followed by more night sleep is not a nap to score.
+// Only wake-ups before a nap are scored: the end of a nap, or the end of the night
+// in the morning. A 3am feed wake followed by more night sleep is not a nap to score.
+// With the sleep log, nap vs night follows Frankie's learned evening line (so a late
+// catnap before a 10 PM bedtime counts); without it, the old 5am–8pm rule applies.
 const hourFormats = new Map();
-export function isDaytimeWake(lastWake, timezone = 'America/New_York') {
+export function isDaytimeWake(lastWake, timezone = 'America/New_York', sleeps = null, line = null) {
   if (!hourFormats.has(timezone)) hourFormats.set(timezone, new Intl.DateTimeFormat('en-US', { timeZone:timezone, hour:'numeric', hourCycle:'h23' }));
-  const hour = Number(hourFormats.get(timezone).format(new Date(lastWake)));
-  return hour >= 5 && hour < 20;
+  const wake = typeof lastWake === 'number' ? lastWake : ms(lastWake), hour = Number(hourFormats.get(timezone).format(new Date(wake)));
+  const ended = sleeps?.find(sleep => ms(sleep.end) === wake);
+  if (!ended) return hour >= 5 && hour < 20;
+  if (sleepKind(ended, timezone, line ?? nightLine(sleeps, timezone, wake)) === 'nap') return true;
+  return hour >= 5 && hour < 12;
 }
 
 // The SweetSpot record for the current wake-up, or null when there is nothing
 // new and valid to save. `previousTarget` is the SweetSpot saved for the wake-up
 // before this one: seeing it again means Huckleberry has not recalculated yet.
-export function sweetspotEntry({ lastWake, childId, sweetspot, previousTarget = null, timer = null, timezone, now = new Date() }) {
+export function sweetspotEntry({ lastWake, childId, sweetspot, previousTarget = null, timer = null, timezone, sleeps = null, now = new Date() }) {
   const wake = ms(lastWake);
-  if (!Number.isFinite(wake) || +now - wake > MAX_WAIT || !isDaytimeWake(wake, timezone) || timer?.active) return null;
+  if (!Number.isFinite(wake) || +now - wake > MAX_WAIT || !isDaytimeWake(wake, timezone, sleeps) || timer?.active) return null;
   if (!sweetspot?.available || sweetspot.sleeping || !(ms(sweetspot.time) > wake) || sweetspot.time === previousTarget) return null;
   return { id:predictionId(lastWake), lastWake:new Date(wake).toISOString(), childId:String(childId || ''), sweetspot:{ target:sweetspot.time, loggedAt:new Date(+now).toISOString() } };
 }
@@ -79,7 +85,8 @@ function computeScores(entries, sleeps, timer, timezone) {
   const saved = new Map(entries.map(entry => [entry.id, entry]));
   // Naps before the first saved SweetSpot predate the scoreboard; ignore them.
   const since = Math.min(...entries.map(entry => ms(entry.lastWake)).filter(Number.isFinite));
-  const wakes = [...new Set(sleeps.map(sleep => sleep.end))].filter(end => ms(end) >= since && isDaytimeWake(end, timezone));
+  const latest = Math.max(0, ...sleeps.map(sleep => ms(sleep.end)).filter(Number.isFinite)), line = nightLine(sleeps, timezone, latest, 60);
+  const wakes = [...new Set(sleeps.map(sleep => sleep.end))].filter(end => ms(end) >= since && isDaytimeWake(end, timezone, sleeps, line));
   const results = []; let skipped = 0;
   for (const lastWake of wakes) {
     const actual = actualSleepStart(lastWake, sleeps, timer);

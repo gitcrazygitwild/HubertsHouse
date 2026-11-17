@@ -1,5 +1,6 @@
 // A transparent personal-history estimate. No age-based sleep prescription,
 // Huckleberry prediction, or population training data enters this calculation.
+import { nightLine, sleepKind } from './baby-history.js';
 const MINUTE = 60000, DAY = 86400000;
 const stamp = value => typeof value === 'number' ? value : Date.parse(value);
 // Building an Intl formatter is slow; reuse one per time zone.
@@ -73,8 +74,8 @@ export function huckleberryPrediction(snapshot, now = new Date()) {
 // (2) weights recent days more heavily (3-day half-life) with a small growth
 // trend, and (3) shortens or lengthens the window based on how the last nap
 // compared with that nap's usual length, learned from this baby's own history.
-const NIGHT_START_HOUR = 19, NIGHT_END_HOUR = 5;
-const isNap = (sleep, timezone) => { const hour = localParts(sleep.start, timezone).hour; return hour >= NIGHT_END_HOUR && hour < NIGHT_START_HOUR && sleep.end - sleep.start < 4 * 3600000; };
+// Nap or night follows Frankie's own learned evening line (see nightLine), not a fixed hour.
+const isNap = (sleep, timezone, line) => sleepKind(sleep, timezone, line) === 'nap';
 function weighted(values, weights) { const total = weights.reduce((a,b) => a + b, 0); return values.reduce((sum,value,index) => sum + value * weights[index], 0) / total; }
 function slope(xs, ys, weights) {
   const mx = weighted(xs,weights), my = weighted(ys,weights);
@@ -92,16 +93,18 @@ function mergeSleeps(sleeps, now, days) {
 }
 // Wake windows labeled by their position in the day.
 const nextDay = day => new Date(Date.parse(`${day}T12:00:00Z`) + DAY).toISOString().slice(0, 10);
+const previousDay = day => new Date(Date.parse(`${day}T12:00:00Z`) - DAY).toISOString().slice(0, 10);
 // Minutes since local midnight; small hours count as late evening (25:00, not 1:00).
 const clockOf = (value, timezone) => { const {hour, minute} = localParts(value, timezone); return (hour < 6 ? hour + 24 : hour) * 60 + minute; };
 export function indexedWakeWindows(sleeps, timezone, now = new Date(), days = 21) {
-  const merged = mergeSleeps(sleeps, now, days), byDay = new Map();
+  const merged = mergeSleeps(sleeps, now, days), byDay = new Map(), line = nightLine(merged, timezone, now, days);
   const entryFor = day => { if (!byDay.has(day)) byDay.set(day, {wake:null,naps:[],bed:null,night:0}); return byDay.get(day); };
   for (const sleep of merged) {
-    if (isNap(sleep, timezone)) { entryFor(localParts(sleep.start, timezone).day).naps.push(sleep); continue; }
+    if (isNap(sleep, timezone, line)) { entryFor(localParts(sleep.start, timezone).day).naps.push(sleep); continue; }
     const start = localParts(sleep.start, timezone), end = localParts(sleep.end, timezone);
     // A night belongs to the morning it ends: evening segments count toward the next day's night.
-    if (start.hour >= 16) { const evening = entryFor(start.day); if (evening.bed == null) evening.bed = sleep.start; }
+    // Bedtime can be after midnight; it still belongs to the evening before.
+    if (start.hour >= 16 || start.hour < 5) { const evening = entryFor(start.hour < 5 ? previousDay(start.day) : start.day); if (evening.bed == null) evening.bed = sleep.start; }
     const morning = start.hour >= 12 ? nextDay(start.day) : start.day;
     entryFor(morning).night += (sleep.end - sleep.start) / MINUTE;
     if (end.hour < 12 && end.day === morning) entryFor(morning).wake = sleep.end; // the night ended this morning
@@ -124,7 +127,7 @@ export function indexedWakeWindows(sleeps, timezone, now = new Date(), days = 21
       if (minutes >= 30 && minutes <= 420) bedtimes.push({minutes, naps:naps.length, previousNap:(lastNap.end - lastNap.start) / MINUTE, clock:clockOf(bed, timezone), daysAgo, day});
     }
   }
-  return {samples, bedtimes, byDay, today};
+  return {samples, bedtimes, byDay, today, line};
 }
 // One learned adjustment: β is the slope of window vs. the factor in Frankie's history
 // (with enough samples), scaled by how far today's value is from her usual.
@@ -154,10 +157,11 @@ export function miaForecast({ sleeps = [], timer = null, timezone = 'America/New
   const merged = mergeSleeps(sleeps, now, 21), last = merged.at(-1);
   if (!last || +now - last.end > 8 * 3600000) return empty('Log a recent sleep and wake-up for a forecast.');
   const current = localParts(+now, timezone);
-  if (current.hour < 6 || current.hour >= 23) return empty('Overnight is outside Mia’s forecast.');
-  const {samples, bedtimes, byDay, today} = indexedWakeWindows(sleeps, timezone, now);
-  const todays = byDay.get(today) || {naps:[]}, lastWasNap = isNap(last, timezone);
-  if (!lastWasNap && localParts(last.end, timezone).hour >= 12) return empty('Overnight is outside Mia’s forecast.');
+  if (current.hour >= 1 && current.hour < 5) return empty('Overnight is outside Mia’s forecast.');
+  const {samples, bedtimes, byDay, today, line} = indexedWakeWindows(sleeps, timezone, now);
+  const todays = byDay.get(today) || {naps:[]}, lastWasNap = isNap(last, timezone, line), lastEnd = localParts(last.end, timezone).hour;
+  // After night sleep, only a morning wake-up (4 AM–noon) starts a new day; anything else is a night waking.
+  if (!lastWasNap && (lastEnd < 4 || lastEnd >= 12)) return empty('Overnight is outside Mia’s forecast. A sleep that starts after Frankie’s usual evening line counts as night sleep.');
   const napsToday = todays.naps.filter(nap => nap.end <= last.end).length;
   const napNumber = lastWasNap ? napsToday + 1 : 1;
   const previousNap = lastWasNap ? (last.end - last.start) / MINUTE : null;
