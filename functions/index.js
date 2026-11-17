@@ -233,7 +233,7 @@ export const morningNewsletter = onSchedule({ schedule:'30 6 * * *', timeZone:HO
   }
 });
 
-// ---------- "Hey Siri, ping Hubert" ----------
+// ---------- "Hey Siri, Frankie log" ----------
 // A public HTTPS address for the Apple Shortcut. Every request must carry a
 // personal key (only its SHA-256 is stored, in server-only `siriKeys`); logs are
 // read back for confirmation and saved through the guarded Huckleberry path.

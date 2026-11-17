@@ -162,13 +162,13 @@ This adds no separately billed API or AI model. An existing eligible Huckleberry
 - Open a checklist in two sessions, save one, then try a conflicting save from the old editor. Confirm it asks to reopen rather than overwriting the newer checklist.
 - Disconnect or deselect an Apple calendar and confirm its saved lists disappear from this session while provider events and saved metadata remain intact.
 
-### Hey Siri, ping Hubert
+### Hey Siri, Frankie log
 
-The `siri` HTTPS function (`functions/siri.js`) accepts `POST {text, confirm}` with `Authorization: Bearer <key>` from an Apple Shortcut named **Ping Hubert**. It parses the text with the app’s own `parseBabyLog` (copied into `functions/shared/` by `scripts/share.mjs`). With `confirm:false` it returns `{speak}` for Siri to read back; with `confirm:true` it saves through the existing guarded Huckleberry write path and returns what was logged. Requests use the shared household Huckleberry connection as the key’s owner, whose active membership is checked on every request. A stable request ID per key, text and 10-minute slot keeps a double-run from saving twice.
+The `siri` HTTPS function (`functions/siri.js`) accepts `POST {text, confirm}` with `Authorization: Bearer <key>` from an Apple Shortcut named **Frankie log**. It parses the text with the app’s own `parseBabyLog` (copied into `functions/shared/` by `scripts/share.mjs`). With `confirm:false` it returns `{speak}` for Siri to read back; with `confirm:true` it saves through the existing guarded Huckleberry write path and returns what was logged. Requests use the shared household Huckleberry connection as the key’s owner, whose active membership is checked on every request. A stable request ID per key, text and 10-minute slot keeps a double-run from saving twice.
 
-1. In **Settings → “Hey Siri, ping Hubert”**, press **Make my Siri key**. The key is shown once; only its SHA-256 is stored, in server-only `siriKeys`. **Make a new key** replaces it; **Turn off Siri** deletes it.
+1. In **Settings → “Hey Siri, Frankie log”**, press **Make my Siri key**. The key is shown once; only its SHA-256 is stored, in server-only `siriKeys`. **Make a new key** replaces it; **Turn off Siri** deletes it.
 2. Follow the on-screen steps to build the shortcut (Ask for Input → Get Contents of URL → Get Dictionary Value `speak` → Choose from Menu Yes/No → confirm request → Show Result).
-3. Say “Hey Siri, Ping Hubert”, then for example “5 ounces at 5:15”, then “Yes”.
+3. Say “Hey Siri, Frankie log”, then for example “5 ounces at 5:15”, then “Yes”.
 
 Treat the key like a password: anyone who has it can log entries for Frankie. Revoke it from Settings if a phone is lost.
 

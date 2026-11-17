@@ -140,3 +140,7 @@ Siri body reading made forgiving after hanry got 'didn't hear anything' (the key
 ### Nov 16, 2026, 9:02 PM ET · Claude → Codex
 
 Mia's Catnap Forecast now uses night sleep (added to PR #15 at the household's request). (1) Bedtime: once Frankie has had her usual number of naps (learned from recent days), or when another nap would run into her usual bedtime, Mia forecasts bedtime instead of a nap. It blends the usual last-nap → night gap with her usual bedtime clock time, weighting whichever has been steadier (result.kind = 'bedtime', usualNaps, usualBedtime, clockShare). Evening forecasts now run until 11 PM. (2) Nap 1 is adjusted for last night's total sleep versus her usual night; segments split by a night waking add up to one night (nightMinutes, lastNight, typicalNight). indexedWakeWindows also returns bedtimes and byDay[day].night/bed. The scoreboard replay is unchanged, so evening wakes now score Mia's bedtime guess against the actual night start. Codex: an early bedtime split by a waking before 7 PM still looks like a nap to isNap (an older limitation); worth revisiting if bedtime guesses look off.
+
+### Nov 16, 2026, 9:09 PM ET · Claude → Codex
+
+Renamed the Siri shortcut from "Ping Hubert" to "Frankie log" everywhere (Settings card and steps, the server's 405 reply, README, SETUP anchor #hey-siri-frankie-log, tests). Siri heard "ping" as a Find My command. Steps now warn against names starting with Ping or matching an app or home-screen icon. No behavior change.

@@ -1,5 +1,5 @@
-// Settings → "Hey Siri, ping Hubert": make or revoke a personal Siri key and
-// follow the steps to build the "Ping Hubert" Apple Shortcut.
+// Settings → "Hey Siri, Frankie log": make or revoke a personal Siri key and
+// follow the steps to build the "Frankie log" Apple Shortcut.
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/12.9.0/firebase-functions.js';
 import { config } from './config.js';
 import { escapeHTML as esc } from './household-model.js';
@@ -15,7 +15,7 @@ export function shortcutSteps(url, keyHint = 'your key') {
   const step = (title, items) => `<li><strong>${title}</strong>${items.length ? `<ul>${items.map(item => `<li>${item}</li>`).join('')}</ul>` : ''}</li>`;
   return `<p class="tiny">Do this on your iPhone. Keep this page open — you’ll copy the <b>Shortcut address</b> and <b>your key</b> from it (your clipboard holds one at a time, so you’ll switch back once).</p>
   <ol class="siri-steps">
-    ${step('Create the shortcut', ['Open the <b>Shortcuts</b> app and tap <b>＋</b> (top right).', 'Tap the name at the top → <b>Rename</b> → type <b>Ping Hubert</b> → Done. That name is what you say to Siri.'])}
+    ${step('Create the shortcut', ['Open the <b>Shortcuts</b> app and tap <b>＋</b> (top right).', 'Tap the name at the top → <b>Rename</b> → type <b>Frankie log</b> → Done. That name is what you say to Siri. (Avoid names starting with “Ping”: Siri hears that as Find My.)'])}
     ${step('Ask what to log', ['Tap the search bar at the bottom, type <b>Ask for Input</b>, tap it.', 'Tap <b>Prompt</b> and type <i>What should I log?</i> (leave the type as Text).'])}
     ${step('Send it to Hubert (preview)', ['Search <b>Get Contents of URL</b> and tap it.', 'Copy the <b>Shortcut address</b> here, then tap <b>URL</b> and paste.', 'Tap the small <b>›</b> on that action to expand it:',
       'Method: change <b>GET</b> to <b>POST</b>.', `Headers: <b>Add new header</b>. Key: <code>Authorization</code>. Value: <code>Bearer </code> (the word Bearer and a space), then paste ${esc(keyHint)}.`,
@@ -24,10 +24,10 @@ export function shortcutSteps(url, keyHint = 'your key') {
     ${step('If you say “Yes”, save it', ['<b>Long-press</b> the Get Contents of URL action → <b>Duplicate</b>, and drag the copy <b>directly under “Yes”</b>.', 'Expand the copy (<b>›</b>) and change <b>confirm</b> to <b>True</b>.',
       'Right under it (still in Yes): <b>Get Dictionary Value</b> with key <code>speak</code>. Tap its blue <b>Contents of URL</b> to check it highlights the copy under Yes, not the first one.', 'Right under that: <b>Show Content</b> (older iPhones: <b>Show Result</b>) set to <b>Dictionary Value</b>.'])}
     ${step('If you say “No”', ['Under <b>No</b>: <b>Show Content</b> with the text <i>Okay, nothing logged.</i>', 'Tap <b>Done</b>.'])}
-    ${step('Try it', ['Say <b>“Hey Siri, Ping Hubert”</b> → <i>“5 ounces at 5:15”</i> → <i>“Yes”</i>.', 'The first time, allow the shortcut to connect (choose <b>Always Allow</b>).', 'Apple Watch: open the shortcut, tap <b>ⓘ</b>, turn on <b>Show on Apple Watch</b>.'])}
+    ${step('Try it', ['Say <b>“Hey Siri, Frankie log”</b> → <i>“5 ounces at 5:15”</i> → <i>“Yes”</i>.', 'The first time, allow the shortcut to connect (choose <b>Always Allow</b>).', 'Apple Watch: open the shortcut, tap <b>ⓘ</b>, turn on <b>Show on Apple Watch</b>.'])}
   </ol>
   <p class="tiny muted"><b>Want it quicker, with no Yes/No?</b> Skip the read-back and the menu: in the one Get Contents of URL, set <b>confirm</b> to <b>True</b>, then add <b>Get Dictionary Value</b> (<code>speak</code>) and <b>Show Content</b>. Siri just says what it logged. A misheard entry saves right away, so listen to what it says, and fix mistakes in Huckleberry.</p>
-  <p class="tiny muted"><b>Not working?</b> Both URL actions must be <b>POST</b>; the header is exactly <code>Authorization</code> with <code>Bearer</code>, a space, then your key; fields are lowercase <code>text</code> and <code>confirm</code> (False in the first, True in the copy). If Siri repeats the question after “Yes”, the last Get Dictionary Value is reading the first URL action. If Siri says it got <i>no words</i>, the <code>text</code> field is set to Shortcut Input instead of Provided Input.</p>
+  <p class="tiny muted"><b>Not working?</b> Both URL actions must be <b>POST</b>; the header is exactly <code>Authorization</code> with <code>Bearer</code>, a space, then your key; fields are lowercase <code>text</code> and <code>confirm</code> (False in the first, True in the copy). If Siri repeats the question after “Yes”, the last Get Dictionary Value is reading the first URL action. If Siri says it got <i>no words</i>, the <code>text</code> field is set to Shortcut Input instead of Provided Input. If Siri opens something else, rename the shortcut so it doesn’t match an app or home-screen icon.</p>
   <p class="tiny muted">Things you can say: “5 ounces at 5:15”, “4 ounces breast milk”, “a bottle” (same as last time), “dirty diaper”, “wet and dirty diaper at 3”, “nap from 1 to 2:30”, “napped 45 minutes”, “fell asleep at 2:40”, “woke up”. Times are Richmond time; a time later than now means earlier today or last night.</p>`;
 }
 function render() {
@@ -41,7 +41,7 @@ function render() {
     ${freshKey ? `<div class="siri-fresh"><p class="tiny"><strong>Here’s your Siri key. Copy it into the shortcut now; it won’t be shown again.</strong></p>${copyRow('siriKey', 'Your Siri key', freshKey, true)}</div>` : ''}
     ${copyRow('siriURL', 'Shortcut address', state.url)}
     <div class="connection-actions"><button type="button" class="btn btn-primary" id="siriCreate">${state.hasKey || freshKey ? 'Make a new key' : 'Make my Siri key'}</button>${state.hasKey || freshKey ? '<button type="button" class="btn" id="siriRevoke">Turn off Siri</button>' : ''}</div>
-    <details class="siri-how" ${freshKey ? 'open' : ''}><summary>Set up the “Ping Hubert” shortcut (about 2 minutes)</summary>${shortcutSteps(state.url, freshKey ? 'hh_… (your key)' : 'your key')}</details>
+    <details class="siri-how" ${freshKey ? 'open' : ''}><summary>Set up the “Frankie log” shortcut (about 2 minutes)</summary>${shortcutSteps(state.url, freshKey ? 'hh_… (your key)' : 'your key')}</details>
     <p id="siriError" class="form-error" role="alert"></p>`;
   const run = async (button, fn) => { if (busy) return; busy = true; button.disabled = true; $('siriError').textContent = ''; try { await fn(); } catch (e) { $('siriError').textContent = message(e); } finally { busy = false; if (button.isConnected) button.disabled = false; } };
   $('siriCreate').addEventListener('click', event => {
