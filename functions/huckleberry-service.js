@@ -68,7 +68,7 @@ export function createHuckleberryHandler({ db, key, api = provider, now = Date.n
     const member = await db.doc(`households/home/members/${uid}`).get();
     if (!member.exists || member.data().active !== true) throw new provider.HuckleberryError('permission-denied','This account is not a member of the household.');
     const action = input.action;
-    if (!['status','connect','select','snapshot','write','disconnect'].includes(action)) throw new provider.HuckleberryError('invalid-argument','Choose a Huckleberry action.');
+    if (!['status','connect','select','snapshot','write','recent','change','disconnect'].includes(action)) throw new provider.HuckleberryError('invalid-argument','Choose a Huckleberry action.');
     const connectTimezone = action === 'connect' ? api.validTimezone(input.timezone) : null;
     const connection = await loadShared(!['connect','disconnect'].includes(action)), cacheRef = sharedCache();
     if (input.connectionVersion !== undefined && input.connectionVersion !== (connection?.version || null)) throw changed();
@@ -108,6 +108,16 @@ export function createHuckleberryHandler({ db, key, api = provider, now = Date.n
       // Recheck provider account membership before accessing or mutating a child.
       const children = await providerCall('children',() => api.huckleberryChildren(client,session.userId));
       if (!children.some(item => item.id === child)) throw new provider.HuckleberryError('permission-denied','This child is no longer shared with the household Huckleberry account. Choose a profile in Settings.');
+      if (action === 'recent') return providerCall('recent',() => api.huckleberryRecent(client,child,now()));
+      if (action === 'change') {
+        // Edit or delete one recent entry. The entry's own version guards against
+        // overwriting a change made meanwhile in the Huckleberry app.
+        if (input.childId !== child) throw new provider.HuckleberryError('aborted','The selected child changed. Refresh the list.');
+        checkVersion((await sharedRef().get()).data(),connection);
+        const result = await providerCall('write',() => api.changeHuckleberry(client,child,input.entry,connection.timezone,now()));
+        await change(connection,tx => tx.delete(cacheRef)).catch(() => {}); // the next refresh reloads history
+        return result;
+      }
       if (action === 'write') {
         if (input.childId !== child) throw new provider.HuckleberryError('aborted','The selected child changed. Reopen the log form.');
         const current = (await sharedRef().get()).data();

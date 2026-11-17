@@ -7,10 +7,14 @@ import { sweetspotEntry, sweetspotPatch, previousSweetspot, scorePredictions } f
 import { sampleHistory, samplePredictions } from './baby-sample.js';
 import { renderFrankie, initFrankie } from './frankie.js';
 import { renderHTML } from './dom.js';
+import { logsHTML, describeLog, logKey } from './baby-logs.js';
 
 const $ = id => document.getElementById(id);
 let service, demo = false, connection = {connected:false}, snapshot = null, error = '', busy = false, inFlight, lastAttempt = 0, pendingTimer;
-let formChild, formVersion, formId, predictionStore = null, predictions = [], lastLogged = '';
+let formChild, formVersion, formId, formEdit = null, predictionStore = null, predictions = [], lastLogged = '';
+// Frankie page → Recent logs. Loaded only while that card is open.
+const logs = {entries:null, filter:'all', showAll:false, loading:false, error:''};
+let sampleLogs = null;
 const zone = () => connection.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York';
 const time = value => value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleTimeString([], {hour:'numeric',minute:'2-digit',timeZone:zone()}) : '—';
 const when = value => value ? new Date(value).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZone:zone()}) : 'No entry yet';
@@ -170,6 +174,68 @@ export function logBabyFromText(log) {
   if (log.kind === 'sleep-start' || log.kind === 'sleep-stop') return toggleSleep(log.kind === 'sleep-start' || +log.start < Date.now() - 60000 ? log.start : null, log.kind);
   return openLog(log.kind, log);
 }
+// ---------- Recent logs: list, edit, delete ----------
+const LOG_FORM = {sleep:'sleep-log', bottle:'bottle', diaper:'diaper'};
+function renderLogs() {
+  const root = $('frankieLogs'); if (!root) return;
+  document.querySelectorAll('[data-log-filter]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.logFilter === logs.filter)));
+  $('frankieLogsError').textContent = logs.error;
+  if (!logs.entries) { renderHTML(root, `<p class="tiny muted log-empty">${logs.loading ? 'Loading recent logs from Huckleberry…' : snapshot ? 'Open to load recent logs.' : 'Connect Huckleberry in Settings to see recent logs.'}</p>`); return; }
+  renderHTML(root, logsHTML({entries:logs.entries, timezone:zone(), filter:logs.filter, showAll:logs.showAll}));
+}
+async function loadLogs() {
+  if (!snapshot || logs.loading) { renderLogs(); return; }
+  logs.loading = true; logs.error = ''; renderLogs();
+  try { logs.entries = demo ? demoLogs() : (await call('recent')).entries || []; }
+  catch (e) { logs.error = message(e); }
+  finally { logs.loading = false; renderLogs(); }
+}
+async function changeLog(entry, childId = connection.selected, connectionVersion = connection.connectionVersion) {
+  if (demo) demoChange(entry); else await call('change',{entry,childId,connectionVersion});
+}
+// Sample logs for the preview: the last three days of sample sleep and bottles, plus diapers.
+function demoLogs() {
+  if (sampleLogs) return sampleLogs.map(entry => ({...entry}));
+  const since = Date.now() - 3 * 86400000, modes = ['pee','both','poo','pee'];
+  const sleeps = snapshot.sleeps.filter(item => Date.parse(item.start) >= since).map((item, i) => ({kind:'sleep',id:`s${i}`,version:'1.000000000',start:item.start,end:item.end}));
+  const bottles = snapshot.bottles.filter(item => Date.parse(item.start) >= since).map((item, i) => ({kind:'bottle',id:`b${i}`,version:'1.000000000',start:item.start,amount:item.amount,units:item.units,bottleType:item.type}));
+  const diapers = bottles.map((item, i) => ({kind:'diaper',id:`d${i}`,version:'1.000000000',start:new Date(Date.parse(item.start) + 20 * 60000).toISOString(),mode:modes[i % modes.length]})).filter(item => Date.parse(item.start) < Date.now());
+  sampleLogs = [...sleeps, ...bottles, ...diapers].sort((a, b) => Date.parse(b.start) - Date.parse(a.start));
+  return sampleLogs.map(entry => ({...entry}));
+}
+function demoChange(entry) {
+  demoLogs(); const index = sampleLogs.findIndex(item => item.kind === entry.kind && item.id === entry.id);
+  if (index < 0) return;
+  if (entry.change === 'delete') sampleLogs.splice(index, 1);
+  else { const {change, ...fields} = entry; sampleLogs[index] = {...sampleLogs[index], ...fields}; sampleLogs.sort((a, b) => Date.parse(b.start) - Date.parse(a.start)); }
+}
+function editLog(entry) {
+  const prefill = {start:entry.start, end:entry.end, amount:entry.amount, units:entry.units, bottleType:entry.bottleType, mode:entry.mode};
+  openLog(LOG_FORM[entry.kind], prefill, entry);
+}
+async function deleteLog(entry, button) {
+  if (busy) return;
+  const {noun, what, when} = describeLog(entry, zone());
+  if (!confirm(`Delete this ${noun} (${what}, ${when}) from ${demo ? 'the sample logs' : 'Huckleberry'}? This can’t be undone.`)) return;
+  busy = true; button.disabled = true; logs.error = ''; home();
+  try { await changeLog({change:'delete', kind:entry.kind, id:entry.id, version:entry.version}); showNotice(demo ? 'Sample log deleted.' : 'Deleted from Huckleberry.'); await refresh(true); }
+  catch (e) { logs.error = message(e); }
+  finally { busy = false; if (button.isConnected) button.disabled = false; home(); await loadLogs(); }
+}
+function initLogs() {
+  const card = $('frankieLogsCard'); if (!card) return;
+  $('frankieLogsDetails').addEventListener('toggle', e => { if (e.currentTarget.open) loadLogs(); });
+  card.addEventListener('click', e => {
+    const filter = e.target.closest('[data-log-filter]'), find = key => logs.entries?.find(entry => logKey(entry) === key);
+    if (filter) { logs.filter = filter.dataset.logFilter; logs.showAll = false; renderLogs(); return; }
+    if (e.target.closest('[data-log-more]')) { logs.showAll = true; renderLogs(); return; }
+    if (e.target.closest('[data-log-refresh]')) { loadLogs(); return; }
+    const edit = e.target.closest('[data-log-edit]'), remove = e.target.closest('[data-log-delete]');
+    if (edit && find(edit.dataset.logEdit)) editLog(find(edit.dataset.logEdit));
+    if (remove && find(remove.dataset.logDelete)) deleteLog(find(remove.dataset.logDelete), remove);
+  });
+  renderLogs();
+}
 const LOG_LOOK = { bottle:['🍼','Bottle','Save bottle'], diaper:['♡','Diaper change','Save diaper'], 'sleep-log':['☾','Finished sleep','Save sleep'] };
 const AMOUNTS = { oz:[2, 3, 4, 5, 6], ml:[60, 90, 120, 150, 180] };
 const fmtAmount = (amount, units) => `${Number(amount)} ${units}`;
@@ -210,18 +276,19 @@ function syncLogForm() {
   $('babyLogAmountChips').querySelectorAll('[data-amount]').forEach(chip => chip.setAttribute('aria-pressed', String(Number(chip.dataset.amount) === amount)));
 }
 // prefill: {start, end, amount, units, bottleType, mode} from quick add.
-function openLog(kind, prefill = {}) {
+function openLog(kind, prefill = {}, editing = null) {
   if (busy || !snapshot) return false;
-  formChild = connection.selected; formVersion = connection.connectionVersion; formId = crypto.randomUUID();
+  formChild = connection.selected; formVersion = connection.connectionVersion; formId = crypto.randomUUID(); formEdit = editing;
   $('babyLogForm').reset(); $('babyLogKind').value = kind; $('babyLogError').textContent = ''; $('babyLogNotesWrap').open = false;
-  const [icon, title, save] = LOG_LOOK[kind]; $('babyLogIcon').textContent = icon; $('babyLogTitle').textContent = title; $('babyLogSave').textContent = save;
+  const [icon, title, save] = LOG_LOOK[kind]; $('babyLogIcon').textContent = icon; $('babyLogTitle').textContent = editing ? `Edit ${title.toLowerCase()}` : title; $('babyLogSave').textContent = editing ? 'Save changes' : save;
+  $('babyLogNotesWrap').hidden = !!editing; // notes stay as they are in Huckleberry
   $('babyLogStartLabel').textContent = kind === 'sleep-log' ? 'Fell asleep' : kind === 'diaper' ? 'Changed' : 'When';
   $('babyLogStart').value = inputTime(prefill.start || Date.now() - (kind === 'sleep-log' ? 3600000 : 0)); $('babyLogEnd').value = inputTime(prefill.end || Date.now());
   // New bottles start from the last bottle logged (amount, units, milk).
   const last = lastBottle(), same = $('babyLogSame');
   $('babyLogAmount').value = String(prefill.amount ?? last?.amount ?? 4); $('babyLogUnits').value = prefill.units || last?.units || 'oz';
   $('babyLogMilk').value = prefill.bottleType || last?.type || 'Formula';
-  same.hidden = !last; if (last) { same.textContent = `Same as last · ${fmtAmount(last.amount, last.units)} ${last.type || ''}`.trim(); same.dataset.amount = last.amount; same.dataset.units = last.units; same.dataset.type = last.type || 'Formula'; }
+  same.hidden = !last || !!editing; if (last) { same.textContent = `Same as last · ${fmtAmount(last.amount, last.units)} ${last.type || ''}`.trim(); same.dataset.amount = last.amount; same.dataset.units = last.units; same.dataset.type = last.type || 'Formula'; }
   if (prefill.mode) $('babyLogDiaper').value = prefill.mode;
   $('babyLogZone').textContent = `Times are in this device’s time zone (${Intl.DateTimeFormat().resolvedOptions().timeZone.replaceAll('_', ' ')}).`;
   document.querySelectorAll('[data-log-fields]').forEach(group => { const active = group.dataset.logFields === kind; group.hidden = !active; group.querySelectorAll('input,select').forEach(input => { input.disabled = !active; }); });
@@ -242,7 +309,7 @@ export async function initHuckleberry(app, options = {}) {
   if (demo) { connection = {connected:true,selected:'sample-frankie',children:[{id:'sample-frankie',name:'Frankie'}],timezone:zone()}; snapshot = sampleSnapshot(); }
   predictionStore = demo ? memoryPredictions(samplePredictions(snapshot.sleeps, zone())) : options.predictions || null;
   predictionStore?.subscribe(entries => { predictions = (entries || []).filter(entry => !snapshot || !entry.childId || entry.childId === snapshot.childId); home(); });
-  initFrankie(frankie);
+  initFrankie(frankie); initLogs();
   $('babyScore').addEventListener('click', e => { if (e.target.closest('[data-go="frankie"]')) showView('frankie'); });
   $('babySettings').addEventListener('click', () => { showView('settings'); $('huckleberrySettings').scrollIntoView?.({behavior:'smooth',block:'start'}); });
   $('babyRefresh').addEventListener('click', async () => { if (busy) return; busy = true; home(); try { await refresh(true); } finally { busy = false; home(); } });
@@ -266,13 +333,17 @@ export async function initHuckleberry(app, options = {}) {
     e.preventDefault(); if (busy) return;
     const kind = $('babyLogKind').value, start = new Date($('babyLogStart').value), end = new Date($('babyLogEnd').value);
     if (isNaN(start) || +start > Date.now() + 60000 || +start < Date.now() - 30 * 86400000 || (kind === 'sleep-log' && (isNaN(end) || end <= start || +end > Date.now() + 60000 || end - start > 48 * 3600000))) { $('babyLogError').textContent = 'Choose valid times within the past 30 days. A finished sleep needs an end after its start, within 48 hours.'; return; }
-    const entry = {kind,start:start.toISOString(),requestId:formId,notes:$('babyLogNotes').value};
+    const entry = formEdit ? {change:'edit',kind:formEdit.kind,id:formEdit.id,version:formEdit.version,start:start.toISOString()} : {kind,start:start.toISOString(),requestId:formId,notes:$('babyLogNotes').value};
     if (kind === 'sleep-log') entry.end = end.toISOString();
     if (kind === 'bottle') Object.assign(entry,{amount:Number($('babyLogAmount').value),units:$('babyLogUnits').value,bottleType:$('babyLogMilk').value});
     if (kind === 'diaper') entry.mode = $('babyLogDiaper').value;
     const controls = [...e.currentTarget.querySelectorAll('input,textarea,select,button')].filter(control => !control.disabled);
     busy = true; controls.forEach(control => { control.disabled = true; }); $('babyLogError').textContent = ''; home();
-    try { await write(entry,formChild,formVersion); $('babyLogDialog').close(); showNotice(demo ? 'Sample log saved.' : 'Saved in Huckleberry.'); await refresh(true); }
+    try {
+      if (formEdit) { await changeLog(entry,formChild,formVersion); $('babyLogDialog').close(); showNotice(demo ? 'Sample log updated.' : 'Updated in Huckleberry.'); }
+      else { await write(entry,formChild,formVersion); $('babyLogDialog').close(); showNotice(demo ? 'Sample log saved.' : 'Saved in Huckleberry.'); }
+      await refresh(true); if ($('frankieLogsDetails')?.open) loadLogs();
+    }
     catch (e) { $('babyLogError').textContent = message(e); }
     finally { busy = false; controls.forEach(control => { control.disabled = false; }); home(); }
   });

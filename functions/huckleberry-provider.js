@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { Firestore } from '@google-cloud/firestore';
+import { Firestore, FieldValue, Timestamp } from '@google-cloud/firestore';
 import { GoogleAuth, OAuth2Client } from 'google-auth-library';
 
 // Public Firebase configuration, not an account credential. Collection schemas
@@ -258,6 +258,96 @@ export async function writeHuckleberry(client, childId, input, timezone, now = D
       // and recheck the timer/newest-summary guards before attempting again.
       if (![6,9,10].includes(error.code)) throw error;
       if (attempt === 2) fail('aborted','Huckleberry changed while saving this entry. Refresh and try again.');
+    }
+  }
+}
+
+// ---------- Recent logs: list, edit, delete ----------
+// Only ordinary interval documents are listed. Older entries that Huckleberry has
+// folded into "multi" batch documents are left alone (edit those in Huckleberry).
+const COLLECTION = {sleep:'sleep', bottle:'feed', diaper:'diaper'};
+const LAST_FIELD = {sleep:'lastSleep', bottle:'lastBottle', diaper:'lastDiaper'};
+export const RECENT_DAYS = 7;
+const version = doc => doc.updateTime ? `${doc.updateTime.seconds}.${String(doc.updateTime.nanoseconds).padStart(9,'0')}` : '';
+const toTimestamp = value => {
+  const match = /^(\d{1,12})\.(\d{9})$/.exec(String(value || ''));
+  if (!match) fail('invalid-argument','Refresh the list and try again.');
+  return new Timestamp(Number(match[1]), Number(match[2]));
+};
+function recentEntry(kind, doc) {
+  const value = doc.data() || {}, start = epochMs(value.start);
+  if (value.multi || !Number.isFinite(start)) return null;
+  const base = {kind, id:doc.id, version:version(doc), start:new Date(start).toISOString()};
+  if (kind === 'sleep') {
+    const duration = Number(value.duration);
+    if (!Number.isFinite(duration) || duration <= 0 || duration > 48 * 3600) return null;
+    return {...base, end:new Date(start + duration * 1000).toISOString()};
+  }
+  if (kind === 'bottle') {
+    const amount = Number(value.amount), units = ['oz','ml'].includes(value.units) ? value.units : null;
+    if (value.mode !== 'bottle' || !units || !Number.isFinite(amount) || amount <= 0) return null;
+    return {...base, amount:Math.round(amount * 100) / 100, units, bottleType:BOTTLE_TYPES.includes(value.bottleType) ? value.bottleType : 'Other'};
+  }
+  return ['pee','poo','both','dry'].includes(value.mode) ? {...base, mode:value.mode} : null;
+}
+export async function huckleberryRecent(client, childId, now = Date.now(), days = RECENT_DAYS) {
+  const child = id(childId), from = (now - days * 86400000) / 1000;
+  const lists = await Promise.all(Object.entries(COLLECTION).map(async ([kind, collection]) => {
+    const result = await client.collection(`${collection}/${child}/intervals`).where('start','>=',from).orderBy('start','desc').limit(300).get();
+    return result.docs.map(doc => recentEntry(kind, doc)).filter(Boolean);
+  }));
+  return {days, entries:lists.flat().sort((a, b) => Date.parse(b.start) - Date.parse(a.start))};
+}
+// The "newest entry" summary Huckleberry keeps in prefs (lastSleep, lastBottle,
+// lastDiaper). The app's history merges it in, so it must follow edits and deletes
+// or a deleted entry would reappear.
+function lastSummary(kind, value) {
+  if (kind === 'sleep') return {start:value.start, duration:value.duration, offset:value.offset};
+  if (kind === 'bottle') return {mode:'bottle', start:value.start, bottleType:value.bottleType, bottleAmount:value.amount, bottleUnits:value.units, offset:value.offset};
+  return {start:value.start, mode:value.mode, offset:value.offset};
+}
+// input: {change:'edit'|'delete', kind, id, version, ...fields for an edit}
+export async function changeHuckleberry(client, childId, input, timezone, now = Date.now()) {
+  const child = id(childId), kind = input?.kind, change = input?.change;
+  if (!COLLECTION[kind] || !['edit','delete'].includes(change)) fail('invalid-argument','Choose an entry to change.');
+  if (typeof input.id !== 'string' || !/^[\w.:-]{1,200}$/.test(input.id)) fail('invalid-argument','Refresh the list and try again.');
+  const expected = toTimestamp(input.version);
+  let fields = null;
+  if (change === 'edit') {
+    // Same limits as a new log; the request ID is only needed by new entries.
+    const data = validateBabyWrite({...input, kind:kind === 'sleep' ? 'sleep-log' : kind, requestId:'00000000-0000-0000-0000-000000000000', notes:undefined}, now);
+    const offset = offsetAt(data.start, timezone), seconds = now / 1000;
+    if (kind === 'sleep') fields = {start:data.start / 1000, duration:Math.floor((data.end - data.start) / 1000), offset, end_offset:offsetAt(data.end, timezone), lastUpdated:seconds};
+    else if (kind === 'bottle') fields = {start:data.start / 1000, amount:data.amount, units:data.units, bottleType:data.bottleType, offset, end_offset:offset, lastUpdated:seconds};
+    else fields = {start:data.start / 1000, mode:data.mode, offset, lastUpdated:seconds};
+  }
+  const parent = client.doc(`${COLLECTION[kind]}/${child}`), interval = parent.collection('intervals').doc(input.id), field = LAST_FIELD[kind];
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const [current, existing, newest] = await Promise.all([parent.get(), interval.get(), parent.collection('intervals').orderBy('start','desc').limit(6).get()]);
+    if (!existing.exists) { if (change === 'delete') return {saved:true, missing:true}; fail('not-found','This entry is no longer in Huckleberry. Refresh the list.'); }
+    if (!existing.updateTime?.isEqual(expected)) fail('aborted','This entry changed in Huckleberry. Refresh the list and try again.');
+    const old = existing.data() || {};
+    if (old.multi || !recentEntry(kind, existing)) fail('failed-precondition','Edit this older entry in the Huckleberry app.');
+    if (epochMs(old.start) < now - 30 * 86400000) fail('failed-precondition','Edit entries older than 30 days in the Huckleberry app.');
+    const batch = client.batch();
+    if (change === 'delete') batch.delete(interval, {lastUpdateTime:existing.updateTime});
+    else batch.update(interval, fields, {lastUpdateTime:existing.updateTime});
+    // Recompute the newest entry after this change and keep prefs in step with it.
+    const after = newest.docs.filter(doc => doc.id !== input.id).map(doc => ({doc, value:doc.data() || {}}))
+      .concat(change === 'edit' ? [{doc:existing, value:{...old, ...fields}}] : [])
+      .filter(item => recentEntry(kind, {id:item.doc.id, updateTime:item.doc.updateTime, data:() => item.value}))
+      .sort((a, b) => epochMs(b.value.start) - epochMs(a.value.start));
+    const state = current.data() || {}, saved = state.prefs?.[field];
+    const wasNewest = saved && Math.abs(epochMs(saved.start) - epochMs(old.start)) < 1000;
+    const becomesNewest = change === 'edit' && (!saved || epochMs(fields.start * 1000) >= epochMs(saved.start));
+    if (current.exists && (wasNewest || becomesNewest)) {
+      const seconds = now / 1000, next = after[0] ? lastSummary(kind, after[0].value) : FieldValue.delete();
+      batch.update(parent, {[`prefs.${field}`]:next, 'prefs.timestamp':{seconds}, 'prefs.local_timestamp':seconds}, {lastUpdateTime:current.updateTime});
+    }
+    try { await batch.commit(); return {saved:true}; }
+    catch (error) {
+      if (![6,9,10].includes(error.code)) throw error;
+      if (attempt === 2) fail('aborted','Huckleberry changed while saving. Refresh the list and try again.');
     }
   }
 }

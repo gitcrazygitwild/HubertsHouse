@@ -41,6 +41,7 @@ async function fixture(options = {}) {
   await module('baby-sample.js',['sampleHistory','samplePredictions']);
   await module('awards.js',['frankieAwards']);
   await module('frankie.js',['renderFrankie','initFrankie'],'const esc=escapeHTML;');
+  await module('baby-logs.js',['LOG_FILTERS','describeLog','logKey','logsHTML'],'const esc=escapeHTML;');
   await module('baby.js',['initHuckleberry','logBabyFromText'],'const esc=escapeHTML;');
   await module('calendar-view.js',['initCalendarExperience','calendarEventContent'],'const esc=escapeHTML;');
   await module('home-calendar.js',['initHomeCalendar','homeCalendarWeek'],'const esc=escapeHTML;');
