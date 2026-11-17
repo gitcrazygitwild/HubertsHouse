@@ -240,7 +240,9 @@ export const morningNewsletter = onSchedule({ schedule:'30 6 * * *', timeZone:HO
 import { onRequest } from 'firebase-functions/v2/https';
 import { createSiriHandler, newSiriKey, hashSiriKey, SIRI_TZ } from './siri.js';
 const siriHandler = createSiriHandler({ db, huckleberry:(uid, input) => huckleberryHandler(uid, input), members:activeMembers });
-export const siri = onRequest({ region:'us-central1', secrets:[encryptionKey], timeoutSeconds:60, memory:'256MiB', cpu:'gcf_gen1', concurrency:1, minInstances:0, maxInstances:1, cors:false }, async (request, response) => {
+// More memory and a second instance than the app's callables: a Shortcut that gets a
+// platform error page instead of JSON fails with "couldn't convert Rich Text".
+export const siri = onRequest({ region:'us-central1', secrets:[encryptionKey], timeoutSeconds:120, memory:'512MiB', cpu:'gcf_gen1', concurrency:1, minInstances:0, maxInstances:2, cors:false }, async (request, response) => {
   process.env.TZ = SIRI_TZ; // "5:15" means Richmond time
   await siriHandler(request, response);
 });

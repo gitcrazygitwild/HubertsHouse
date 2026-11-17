@@ -102,10 +102,16 @@ function latestBottle(snapshot) {
   return history ? { amount:history.amount, units:history.units, type:history.type } : null;
 }
 
+export const SLOW_SNAPSHOT = 'Huckleberry is slow to answer right now. Nothing was logged. Try again in a minute.';
+export const SLOW_WRITE = 'Huckleberry is slow to answer. It may still save, so check Huckleberry before you try again.';
 // The HTTPS handler. deps: db (Firestore), huckleberry(uid, input), members() → uids, now().
-export function createSiriHandler({ db, huckleberry, members, now = () => new Date() }) {
+// Siri must always get JSON back: if Huckleberry is slow, answer in words before the
+// Shortcut (or the platform) gives up and returns an error page instead.
+export function createSiriHandler({ db, huckleberry, members, now = () => new Date(), budgetMs = 40000 }) {
   return async (request, response) => {
-    const reply = (status, body) => response.status(status).json(body);
+    const started = Date.now();
+    const reply = (status, body) => { if (!response.headersSent) response.status(status).json(body); };
+    const inTime = (promise, message) => { let timer; return Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new SiriError(message)), Math.max(1000, budgetMs - (Date.now() - started))); })]).finally(() => clearTimeout(timer)); };
     try {
       if (request.method !== 'POST') return reply(405, { ok:false, speak:'Hubert only listens to the Frankie log shortcut.' });
       const body = readRequest(request.body);
@@ -117,13 +123,13 @@ export function createSiriHandler({ db, huckleberry, members, now = () => new Da
       // The caller must still be a member, even when their Siri key exists.
       if (!(await members()).includes(owner)) return reply(403, { ok:false, speak:'This Siri key no longer has household access.' });
       let snapshot;
-      try { snapshot = await huckleberry(owner, { action:'snapshot' }); } catch { /* handled below */ }
+      try { snapshot = await inTime(huckleberry(owner, { action:'snapshot', light:true }), SLOW_SNAPSHOT); } catch (error) { if (error instanceof SiriError) throw error; }
       if (!snapshot?.childId) return reply(409, { ok:false, speak:'Hubert can’t reach Huckleberry right now. Check the connection in settings.' });
       if (!body.text) return reply(200, { ok:false, speak:EMPTY_TEXT_HINT });
       const plan = planSiriLog({ text:body.text, snapshot, now:now(), keyHash });
       await keyRef.update({ lastUsedAt:now().toISOString() }).catch(() => {});
       if (!body.confirm) return reply(200, { ok:true, needsConfirm:true, speak:plan.speak });
-      await huckleberry(owner, { action:'write', childId:snapshot.childId, connectionVersion:snapshot.connection?.connectionVersion, entry:plan.entry });
+      await inTime(huckleberry(owner, { action:'write', childId:snapshot.childId, connectionVersion:snapshot.connection?.connectionVersion, entry:plan.entry }), SLOW_WRITE);
       return reply(200, { ok:true, saved:true, speak:plan.done });
     } catch (error) {
       if (error instanceof SiriError) return reply(200, { ok:false, speak:error.message });

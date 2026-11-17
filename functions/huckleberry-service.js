@@ -128,7 +128,7 @@ export function createHuckleberryHandler({ db, key, api = provider, now = Date.n
       const cachedDoc = await cacheRef.get(), cachedData = cachedDoc.exists ? cachedDoc.data() : null;
       const cached = cachedData?.childId === child && cachedData.connectionVersion === connection.version ? cachedData : null;
       if (!input.force && cached && now() - Date.parse(cached.checkedAt) < 120000) return {...cached,connection:publicState(connection)};
-      const snapshot = await providerCall('snapshot',() => api.huckleberrySnapshot(client,child,connection.timezone,cached,input.force === true,now(),connection.sweetspotNaps));
+      const snapshot = await providerCall('snapshot',() => api.huckleberrySnapshot(client,child,connection.timezone,cached,input.force === true,now(),connection.sweetspotNaps,input.light === true));
       await change(connection,tx => tx.set(cacheRef,{...snapshot,connectionVersion:connection.version}));
       return {...snapshot,connectionVersion:connection.version,connection:publicState(connection)};
     } finally { await client.terminate().catch(() => {}); }
