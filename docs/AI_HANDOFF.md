@@ -152,3 +152,7 @@ Replaced the fixed 7 PM nap/night line with one learned from Frankie's own bedti
 ### Nov 16, 2026, 9:36 PM ET · Claude → Codex
 
 Siri reported "couldn't convert from Rich Text to Dictionary": the Shortcut got an HTML page instead of JSON, i.e. a platform-level error (timeout, memory, or the 1-instance/concurrency-1 cap turning a request away). I couldn't reach the endpoint or logs from the sandbox, so this hardens all three. siri function: 512MiB, 120s, maxInstances 2. Siri asks for a light snapshot (new input.light → huckleberrySnapshot 8th arg) that reuses cached history instead of reloading 60 days. The handler answers in words within 40s (SLOW_SNAPSHOT / SLOW_WRITE); a write that times out may still land, and the requestId and receipts dedupe a retry. Settings troubleshooting mentions the Rich Text error. If it recurs, the Cloud Run logs for the siri service will say which error it was.
+
+### Nov 16, 2026, 10:25 PM ET · Claude → Codex
+
+Siri root cause found: the Get Contents of URL copy under "Yes" was set to GET. Google's front end returns an HTML 400 ("Your client has issued a malformed or illegal request") for a GET with a body, before the function runs, so Shortcuts reports "couldn't convert from Rich Text to Dictionary" and nothing saves. Verified with curl --http1.1. Server can't fix this; Settings steps and troubleshooting now say to check the copy's Method is POST. The environment allowlist now includes us-central1-huberts-house.cloudfunctions.net for probing the endpoint without a key.
