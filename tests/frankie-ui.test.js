@@ -14,8 +14,8 @@ test('Frankie page survives the empty state and renders once a snapshot arrives'
   const dom = new JSDOM(await read('index.html'), { url:'https://house.test/', runScripts:'outside-only', pretendToBeVisual:true, virtualConsole });
   t.after(() => dom.window.close());
   const w = dom.window;
-  for (const [file, names] of [['household-model.js', ['escapeHTML', 'dateKey']], ['dom.js', ['renderHTML']], ['baby-model.js', ['purrfectWindow', 'miaForecast', 'huckleberryPrediction']],
-    ['prediction-log.js', ['MODELS', 'scorePredictions', 'sweetspotEntry']], ['baby-history.js', ['dailySleep', 'dailyBottles', 'timelineRows', 'babySummary', 'dayStart', 'dayKeys', 'localDay', 'sleepKind', 'toOunces']],
+  for (const [file, names] of [['household-model.js', ['escapeHTML', 'dateKey']], ['dom.js', ['renderHTML']], ['baby-history.js', ['dailySleep', 'dailyBottles', 'timelineRows', 'babySummary', 'dayStart', 'dayKeys', 'localDay', 'sleepKind', 'nightLine', 'clockAt', 'DEFAULT_NIGHT_LINE', 'toOunces']], ['baby-model.js', ['purrfectWindow', 'miaForecast', 'huckleberryPrediction']],
+    ['prediction-log.js', ['MODELS', 'scorePredictions', 'sweetspotEntry']],
     ['baby-sample.js', ['sampleHistory', 'samplePredictions']], ['awards.js', ['frankieAwards']], ['frankie.js', ['renderFrankie', 'initFrankie']]]) {
     w.eval(`(() => { const esc = window.escapeHTML; ${clean(await read(file))}\nObject.assign(window,{${names.join(',')}}); })();`);
   }

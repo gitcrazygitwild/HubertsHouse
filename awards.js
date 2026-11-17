@@ -1,5 +1,5 @@
 // Frankie's Weekly Awards: playful superlatives from the last seven full days.
-import { dailySleep, dailyBottles, dayKeys, dayStart, localDay, sleepKind, toOunces } from './baby-history.js';
+import { dailySleep, dailyBottles, dayKeys, dayStart, localDay, sleepKind, nightLine, toOunces } from './baby-history.js';
 
 const MINUTE = 60000;
 const hm = minutes => { const m = Math.round(minutes); return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`; };
@@ -10,7 +10,8 @@ export function frankieAwards({ sleeps = [], bottles = [] } = {}, timezone = 'Am
   const keys = dayKeys(8, timezone, now).slice(0, 7), first = dayStart(keys[0], timezone), last = dayStart(dayKeys(1, timezone, now)[0], timezone);
   const inWeek = stamp => stamp >= first && stamp < last;
   const list = sleeps.map(s => ({ start:Date.parse(s.start), end:Date.parse(s.end) })).filter(s => s.end > s.start && inWeek(s.start));
-  const naps = list.filter(s => sleepKind(s, timezone) === 'nap'), nights = list.filter(s => sleepKind(s, timezone) === 'night');
+  const line = nightLine(sleeps, timezone, now);
+  const naps = list.filter(s => sleepKind(s, timezone, line) === 'nap'), nights = list.filter(s => sleepKind(s, timezone, line) === 'night');
   const awards = [];
   const longestNap = naps.sort((a, b) => (b.end - b.start) - (a.end - a.start))[0];
   if (longestNap) awards.push({ icon:'🏆', title:'Nap of the Week', value:hm((longestNap.end - longestNap.start) / MINUTE), detail:`${weekday(localDay(longestNap.start, timezone), timezone)} at ${clock(longestNap.start, timezone)}` });

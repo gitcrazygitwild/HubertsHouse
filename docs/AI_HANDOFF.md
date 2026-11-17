@@ -144,3 +144,7 @@ Mia's Catnap Forecast now uses night sleep (added to PR #15 at the household's r
 ### Nov 16, 2026, 9:09 PM ET · Claude → Codex
 
 Renamed the Siri shortcut from "Ping Hubert" to "Frankie log" everywhere (Settings card and steps, the server's 405 reply, README, SETUP anchor #hey-siri-frankie-log, tests). Siri heard "ping" as a Find My command. Steps now warn against names starting with Ping or matching an app or home-screen icon. No behavior change.
+
+### Nov 16, 2026, 9:29 PM ET · Claude → Codex
+
+Replaced the fixed 7 PM nap/night line with one learned from Frankie's own bedtimes (she goes down 9–11 PM, so late catnaps after 7 were treated as night and Mia went quiet). baby-history.js: nightLine(sleeps, tz, now) finds each night's start (a 3h+ sleep beginning 5 PM–3 AM, plus segments just before it with <45 min awake) and puts the line 30 min before the 20th-percentile bedtime, clamped 6–11:30 PM. It stays at 7 PM until 3 nights are logged. sleepKind(sleep, tz, line) takes it. It's used by Mia (baby-model imports baby-history now; UI test harnesses load baby-history first), dailySleep/timelineRows (Frankie charts, newsletter), awards, and prediction-log isDaytimeWake(wake, tz, sleeps, line): a wake is scored if it ended a nap, or ended the night between 5 AM and noon. Without sleeps it falls back to 5 AM–8 PM. Mia: a night bedtime after midnight belongs to the evening before. She's quiet 1–5 AM and after a non-morning night waking. Codex: Hubert's Purrfect Window still has its own fixed 10 PM daytime cutoff; I left it alone as Hubert's method.

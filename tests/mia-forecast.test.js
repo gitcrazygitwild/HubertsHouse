@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { miaForecast, indexedWakeWindows, purrfectWindow } from '../baby-model.js';
+import { nightLine, sleepKind, dailySleep } from '../baby-history.js';
+import { isDaytimeWake } from '../prediction-log.js';
 
 const zone = 'UTC', DAY = 86400000, H = 3600000, M = 60000;
 const today = Date.parse('2026-11-16T00:00:00Z');
@@ -107,4 +109,38 @@ test('night segments with a waking add up to one night', () => {
   const entry = byDay.get('2026-11-16');
   assert.equal(entry.night, 660); assert.equal(entry.wake, base + 6.5 * H);
   assert.equal(samples[0].minutes, 90); assert.equal(samples[0].lastNight, 660);
+});
+
+// Frankie's real rhythm: bed around 10 PM and a late catnap 7:15–7:45 PM.
+function lateDay(offset, bedHour = 22) {
+  const sleeps = day(offset, [120,150,150,150], [60,60,45,30]);
+  sleeps[0].start = today - offset * DAY - (24 - bedHour) * H; // last night's bedtime
+  return sleeps;
+}
+test('the evening line is learned from Frankie’s bedtimes, so a late catnap is still a nap', () => {
+  const history = []; for (let d = 1; d <= 8; d++) history.push(...lateDay(d, d % 2 ? 21.5 : 22.5));
+  const line = nightLine(iso(history), zone, today);
+  assert.ok(line >= 20.5 * 60 && line <= 21.5 * 60, `line ${line / 60}`);
+  const catnap = {start:new Date(today - DAY + 19.25 * H).toISOString(), end:new Date(today - DAY + 19.75 * H).toISOString()};
+  assert.equal(sleepKind(catnap, zone, line), 'nap');
+  assert.equal(sleepKind(catnap, zone), 'night'); // the old fixed 7 PM rule
+  assert.equal(nightLine([], zone, today), 19 * 60); // too little history: the old line
+  // The Frankie page counts the catnap as a nap too.
+  const yesterday = dailySleep(iso(history), zone, 3, today).at(-2);
+  assert.equal(yesterday.naps, 4);
+});
+
+test('after a late catnap Mia forecasts bedtime instead of calling it overnight', () => {
+  const history = []; for (let d = 1; d <= 8; d++) history.push(...lateDay(d));
+  const sleeps = iso([...history, ...lateDay(0)]); // catnap 7:15–7:45 PM today
+  const now = new Date(today + 20 * H);
+  const mia = miaForecast({sleeps, timezone:zone}, now);
+  assert.equal(mia.available, true, mia.reason); assert.equal(mia.kind, 'bedtime'); assert.equal(mia.napsToday, 4);
+  assert.equal(Date.parse(mia.target), today + 22 * H);
+  // A real night waking (asleep at 10, up at 11) stays quiet.
+  const waking = iso([...history, ...lateDay(0), {start:today + 22 * H, end:today + 23 * H}]);
+  assert.equal(miaForecast({sleeps:waking, timezone:zone}, new Date(today + 23.1 * H)).available, false);
+  // The scoreboard scores the wake-up after the catnap, but not the night waking.
+  assert.equal(isDaytimeWake(sleeps.at(-1).end, zone, sleeps), true);
+  assert.equal(isDaytimeWake(waking.at(-1).end, zone, waking), false);
 });

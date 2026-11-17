@@ -69,7 +69,7 @@ function glance(huck, own, mia) {
 function logPredictions(huck) {
   if (!predictionStore || !snapshot || snapshot.historyComplete === false) return;
   const lastWake = snapshot.sleeps.at(-1)?.end; if (!lastWake) return;
-  const entry = sweetspotEntry({lastWake,childId:snapshot.childId,sweetspot:huck,previousTarget:previousSweetspot(predictions,lastWake),timer:snapshot.timer,timezone:zone()});
+  const entry = sweetspotEntry({lastWake,childId:snapshot.childId,sweetspot:huck,previousTarget:previousSweetspot(predictions,lastWake),timer:snapshot.timer,timezone:zone(),sleeps:snapshot.sleeps});
   if (!entry || !sweetspotPatch(predictions.find(item => item.id === entry.id), entry)) return;
   const signature = `${entry.id}:${entry.sweetspot.target}`;
   if (signature === lastLogged) return;

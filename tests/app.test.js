@@ -35,9 +35,9 @@ async function fixture(options = {}) {
   await module('checklists.js',['checklistKey','eventChecklistKey','eventChecklistGroups']);
   await module('household.js',['initHousehold','updateHouseholdEvents','showNotice','showView'],'const esc=escapeHTML;');
   await module('cloud-calendar.js',['initCloudCalendar','setCloudRange','refreshCloud','saveCloudEvent','saveCloudAssignment','deleteCloudEvent'],'const esc=escapeHTML;');
+  await module('baby-history.js',['toOunces','localDay','dayStart','dayKeys','sleepKind','nightLine','clockAt','DEFAULT_NIGHT_LINE','dailySleep','dailyBottles','timelineRows','babySummary']);
   await module('baby-model.js',['purrfectWindow','huckleberryPrediction','miaForecast','indexedWakeWindows']);
   await module('prediction-log.js',['MODELS','predictionId','isDaytimeWake','sweetspotEntry','sweetspotPatch','previousSweetspot','actualSleepStart','replayGuesses','scorePredictions']);
-  await module('baby-history.js',['toOunces','localDay','dayStart','dayKeys','sleepKind','dailySleep','dailyBottles','timelineRows','babySummary']);
   await module('baby-sample.js',['sampleHistory','samplePredictions']);
   await module('awards.js',['frankieAwards']);
   await module('frankie.js',['renderFrankie','initFrankie'],'const esc=escapeHTML;');
