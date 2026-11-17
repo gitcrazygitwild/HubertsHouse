@@ -84,15 +84,19 @@ The digest is built from the same modules as the app: `scripts/share.mjs` copies
 ## 4. Connect Apple Calendar in the app
 
 1. Sign in to Hubert’s House with a household account.
-2. Open **Settings → Apple Calendar**.
+2. Open **Settings → Apple Calendar**. A connected household calendar appears for both adults automatically; Karena does not need another Apple sign-in to view and edit shared events.
 3. At [account.apple.com](https://account.apple.com), create an app-specific password named “Hubert’s House” under Sign-In and Security. Apple requires two-factor authentication for app-specific passwords. Use an app-specific password, not the Apple Account password.
 4. Enter the Apple Account email and app-specific password in the app. The password is cleared from the form after submission and is never retained in browser storage.
-5. Select the calendars to show and save the selection. No calendars are selected automatically on a first connection.
+5. The person who connected Apple selects up to six calendars to share. Both adults can view and edit selected writable calendars; unselected calendars stay private, including their names. No calendars are selected automatically on a first connection.
 6. Optionally choose the iCloud calendar under **Default for new events** (saved for this account on this device). When adding an event, choose a writable iCloud calendar in the **Calendar** field. “Hubert’s House” continues to mean an event stored only in the household database.
 
-Connect each household member’s Apple account under their own sign-in. An iCloud calendar already shared between members can be selected by either member. A tablet left signed in can access that member’s selected calendars; choose a shared household calendar if that is the intended display audience.
+The existing single connection is adopted into `privateCalendarConnections/household-home`, with its credential re-encrypted under the `calendar:household:home` authentication context. The selected calendar IDs, URLs, Apple event UIDs, and private household assignments/checklists are unchanged. The original per-user connection stays untouched as a recovery copy. Only active members are considered for adoption; multiple legacy connections require choosing a sharing source instead of guessing.
 
-Disconnect removes the encrypted credential from the service without changing Apple events. To revoke the password at Apple as well, delete it at account.apple.com.
+Both active members can read, create, edit, and delete ordinary events in the selected writable calendars. Apple read-only calendars, recurring events, and invitations keep their existing restrictions. Household owners, Frankie flags, and checklists remain editable through the private metadata path, including on read-only Apple events. The shared Apple selection is also used for both morning newsletters.
+
+The person who originally connected Apple manages the password, selection, and disconnect controls. The other adult sees the shared calendars and a refresh button without an Apple password prompt or unselected calendar names. Shared state refreshes every five minutes while visible, or immediately on manual refresh. Configuration versions protect stale settings and event requests; existing Apple ETags and metadata versions still protect individual events/checklists.
+
+Disconnect removes the active shared credential, hides the calendars for both adults, and retains a disconnected marker so the old recovery copy cannot silently reconnect. Apple events and private household assignments/checklists remain intact. To revoke the app-specific password at Apple as well, delete it at account.apple.com.
 
 ## Live acceptance checks
 

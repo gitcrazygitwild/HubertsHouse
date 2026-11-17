@@ -44,8 +44,8 @@ test('member-only owner edits work for read-only Apple events without a CalDAV w
   const originalDoc=db.doc,originalTransaction=db.runTransaction,originalRead=CalDAV.prototype.read,originalPut=CalDAV.prototype.put;
   process.env.CALENDAR_ENCRYPTION_KEY=key;
   t.after(()=>{db.doc=originalDoc;db.runTransaction=originalTransaction;CalDAV.prototype.read=originalRead;CalDAV.prototype.put=originalPut;if(oldKey===undefined)delete process.env.CALENDAR_ENCRYPTION_KEY;else process.env.CALENDAR_ENCRYPTION_KEY=oldKey;});
-  const calendar={id:'cal',writable:false,url:'https://p42-caldav.icloud.com/123/home/'},connection={calendars:[calendar],selected:['cal'],credential:encryptCredential({username:'sample@example.com',password:'sample-only'},key,'member')};
-  db.doc=path=>path.startsWith('households/')?{get:async()=>({exists:path.endsWith('/member'),data:()=>({active:true})})}:path==='privateCalendarConnections/member'?{get:async()=>({exists:true,data:()=>connection})}:fake.doc(path);
+  const calendar={id:'cal',writable:false,url:'https://p42-caldav.icloud.com/123/home/'},connection={calendars:[calendar],selected:['cal'],managerUid:'member',version:'current',credential:encryptCredential({username:'sample@example.com',password:'sample-only'},key,'calendar:household:home')};
+  db.doc=path=>path.startsWith('households/')?{get:async()=>({exists:path.endsWith('/member'),data:()=>({active:true})})}:path==='privateCalendarConnections/household-home'?{get:async()=>({exists:true,data:()=>connection})}:fake.doc(path);
   db.runTransaction=fake.runTransaction;
   const data='BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:stable-uid\r\nDTSTART:20261115T140000Z\r\nDTEND:20261115T150000Z\r\nSUMMARY:Appointment\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n';
   let reads=0,writes=0;CalDAV.prototype.read=async()=>{reads++;return {data,etag:'v1'};};CalDAV.prototype.put=async()=>{writes++;};
