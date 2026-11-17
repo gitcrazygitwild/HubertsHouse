@@ -11,10 +11,25 @@ export class SiriError extends Error { constructor(message, status = 400) { supe
 // Keys are random 32-byte secrets shown once; only their SHA-256 is stored.
 export const newSiriKey = () => `hh_${randomBytes(32).toString('base64url')}`;
 export const hashSiriKey = key => createHash('sha256').update(String(key)).digest('hex');
+// Forgiving on purpose: Shortcuts are typed by hand on a phone. The key is found
+// in the Authorization header with or without "Bearer" (any case), in an
+// X-Siri-Key header, or in a JSON "key" field; quotes and invisible characters
+// picked up when pasting are ignored. A key is "hh_" + 43 base64url characters.
+const KEY_PATTERN = /hh_[A-Za-z0-9_-]{43}(?![A-Za-z0-9_-])/;
+const clean = value => String(value ?? '').replace(/[\u200B-\u200D\u2060\uFEFF"'“”‘’<>]/g, '');
 export function readKey(headers = {}, body = {}) {
-  const auth = String(headers.authorization || headers.Authorization || '');
-  const key = auth.startsWith('Bearer ') ? auth.slice(7).trim() : String(body.key || '').trim();
-  return /^hh_[A-Za-z0-9_-]{40,60}$/.test(key) ? key : null;
+  for (const value of [headers.authorization, headers.Authorization, headers['x-siri-key'], body?.key]) {
+    const match = clean(value).match(KEY_PATTERN);
+    if (match) return match[0];
+  }
+  return null;
+}
+// Why no key was found, in words Siri can say.
+export function missingKeyHint(headers = {}, body = {}) {
+  const auth = clean(headers.authorization || headers.Authorization || headers['x-siri-key'] || body?.key || '').trim();
+  if (!auth) return 'This shortcut needs your Siri key. In Get Contents of URL, add a header named Authorization with the value Bearer, a space, then your key from Hubert’s House settings.';
+  if (!/hh_/.test(auth)) return 'I found an Authorization header but no Siri key in it. The value should be Bearer, a space, then your key, which starts with h h underscore.';
+  return 'Your Siri key looks cut off or has extra characters. Copy it again from Hubert’s House settings, or make a new key.';
 }
 
 const clock = date => date.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', timeZone:SIRI_TZ });
@@ -79,7 +94,7 @@ export function createSiriHandler({ db, huckleberry, members, now = () => new Da
       if (request.method !== 'POST') return reply(405, { ok:false, speak:'Hubert only listens to the Ping Hubert shortcut.' });
       const body = typeof request.body === 'object' && request.body ? request.body : {};
       const key = readKey(request.headers, body);
-      if (!key) return reply(401, { ok:false, speak:'This shortcut needs your Siri key from Hubert’s House settings.' });
+      if (!key) return reply(401, { ok:false, speak:missingKeyHint(request.headers, body) });
       const keyHash = hashSiriKey(key), keyRef = db.doc(`siriKeys/${keyHash}`), record = await keyRef.get();
       if (!record.exists) return reply(401, { ok:false, speak:'That Siri key isn’t valid anymore. Make a new one in Hubert’s House settings.' });
       const owner = record.data().uid;
