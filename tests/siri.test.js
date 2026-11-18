@@ -22,7 +22,7 @@ test('what you say becomes the right Huckleberry entry and read-back', () => {
 
 test('unclear or impossible requests get a helpful spoken answer instead of a save', () => {
   assert.throws(() => planSiriLog({ text:'', snapshot, now }), /didn’t hear/);
-  assert.throws(() => planSiriLog({ text:'what is the weather', snapshot, now }), /didn’t catch that/);
+  assert.throws(() => planSiriLog({ text:'what is the weather', snapshot, now }), /couldn’t tell what to log/);
   assert.throws(() => planSiriLog({ text:'diaper change', snapshot, now }), /wet, dirty, both or dry/);
   assert.throws(() => planSiriLog({ text:'woke up', snapshot, now }), /isn’t on a sleep timer/);
   assert.throws(() => planSiriLog({ text:'bottle', snapshot:{ ...snapshot, bottles:[] }, now }), /How much/);
@@ -76,7 +76,7 @@ test('the endpoint refuses missing or revoked keys and non-POST requests, and ne
   assert.equal((await call({ text:'5 oz' }, { authorization:`Bearer ${newSiriKey()}` })).status, 401);
   assert.equal((await call({}, undefined, 'GET')).status, 405);
   const unclear = await call({ text:'hello there', confirm:true });
-  assert.equal(unclear.json.ok, false); assert.match(unclear.json.speak, /didn’t catch that/); assert.equal(writes.length, 0);
+  assert.equal(unclear.json.ok, false); assert.match(unclear.json.speak, /couldn’t tell what to log/); assert.equal(writes.length, 0);
   const nobody = harness({ connected:[] }); assert.equal((await nobody.call({ text:'5 oz' })).status, 409);
 });
 
@@ -127,4 +127,20 @@ test('a slow Huckleberry still gets a spoken JSON answer, never an error page', 
   assert.equal(saving.status, 200); assert.equal(saving.json.speak, SLOW_WRITE);
   // Siri asks for a light snapshot, so it does not reload 60 days of history.
   assert.ok(seen.filter(input => input.action === 'snapshot').every(input => input.light === true));
+});
+
+test('spoken numbers and colon-less times are understood, and a miss says what was heard', async () => {
+  const { normalizeSpeech, notUnderstood } = await import('../functions/siri.js');
+  assert.equal(normalizeSpeech('Five ounces at five fifteen'), '5 ounces at 5:15');
+  assert.equal(normalizeSpeech('5 ounces at 515'), '5 ounces at 5:15');
+  assert.equal(normalizeSpeech('four and a half ounces'), '4.5 ounces');
+  assert.equal(normalizeSpeech('nap from one to two thirty'), 'nap from 1 to 2:30');
+  assert.equal(normalizeSpeech('one twenty milliliters at five oh five'), '120 ml at 5:05');
+  assert.equal(normalizeSpeech('woke up an hour ago'), 'woke up an hour ago');
+  const five = planSiriLog({ text:'Five ounces at 5:15 PM.', snapshot, now });
+  assert.equal(five.entry.amount, 5); assert.equal(new Date(five.entry.start).getMinutes(), 15);
+  assert.equal(new Date(planSiriLog({ text:'4 ounces at 515', snapshot, now }).entry.start).getMinutes(), 15);
+  assert.throws(() => planSiriLog({ text:'what is the weather', snapshot, now }), /I heard “what is the weather”/);
+  assert.match(notUnderstood('What should I log?'), /question .* instead of your answer/);
+  assert.match(notUnderstood('Frankie log'), /shortcut’s name/);
 });
