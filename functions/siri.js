@@ -39,6 +39,31 @@ export function readRequest(raw) {
   const confirm = lower.confirm === true || (typeof lower.confirm === 'string' && /^(true|yes|1)$/i.test(lower.confirm.trim()));
   return { text:String(text || '').trim(), confirm, key:lower.key, fields:Object.keys(lower) };
 }
+// Dictation spells some numbers out ("five ounces at five fifteen") and drops the colon
+// in times ("at 515"). Turn those into what the parser reads: "5 ounces at 5:15".
+const ONES = { zero:0, one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9, ten:10, eleven:11, twelve:12, thirteen:13, fourteen:14, fifteen:15, sixteen:16, seventeen:17, eighteen:18, nineteen:19 };
+const TENS = { twenty:20, thirty:30, forty:40, fifty:50, sixty:60, seventy:70, eighty:80, ninety:90 };
+export function normalizeSpeech(text) {
+  let out = ` ${String(text || '')} `;
+  out = out.replace(new RegExp(`\\b(${Object.keys(TENS).join('|')})(?:[\\s-]+(${Object.keys(ONES).filter(w => ONES[w] && ONES[w] < 10).join('|')}))?\\b`, 'gi'), (_, tens, ones) => String(TENS[tens.toLowerCase()] + (ones ? ONES[ones.toLowerCase()] : 0)));
+  out = out.replace(new RegExp(`\\b(${Object.keys(ONES).join('|')})\\b`, 'gi'), word => String(ONES[word.toLowerCase()]));
+  out = out.replace(/\b(\d+) oh (\d)\b/gi, '$1 0$2'); // "five oh five" → 5 05
+  out = out.replace(/\b(\d+) and a half\b/gi, (_, n) => `${n}.5`);
+  out = out.replace(/\bmillilit(?:er|re)s?\b/gi, 'ml').replace(/\b(\d) (\d{2}) ?ml\b/gi, '$1$2 ml'); // "one twenty ml" → 120 ml
+  const clock = (h, m) => Number(h) >= 1 && Number(h) <= 12 && Number(m) < 60;
+  out = out.replace(/\b(at|from|to|until|til|till) (\d{1,2}) (\d{2})\b/gi, (all, word, h, m) => clock(h, m) ? `${word} ${h}:${m}` : all);
+  out = out.replace(/\b(at|from|to|until|til|till) (\d{1,2})(\d{2})\b/gi, (all, word, h, m) => clock(h, m) ? `${word} ${h}:${m}` : all);
+  out = out.replace(/\b(\d{1,2}) (\d{2}) ?(am|pm|a\.m\.|p\.m\.)/gi, (all, h, m, ampm) => clock(h, m) ? `${h}:${m} ${ampm}` : all);
+  return out.replace(/\s+/g, ' ').trim();
+}
+// When nothing could be read, say back exactly what arrived, so a shortcut sending
+// the wrong thing (the question, the shortcut's name) is easy to spot.
+export function notUnderstood(said) {
+  const heard = said.length > 80 ? `${said.slice(0, 77)}…` : said;
+  if (/what should i log/i.test(said)) return `I received the question “${heard}” instead of your answer. In Get Contents of URL, set the text field to Provided Input.`;
+  if (/^(hey siri,? )?frankie log\.?$/i.test(said)) return 'I received the shortcut’s name instead of your answer. In Get Contents of URL, set the text field to Provided Input from Ask for Input.';
+  return `I heard “${heard}”, but couldn’t tell what to log. Try “5 ounces at 5:15”, “dirty diaper”, “fell asleep at 2:40” or “woke up”.`;
+}
 export const EMPTY_TEXT_HINT = 'I got your request but no words. In Get Contents of URL, set the text field to Provided Input from Ask for Input, not Shortcut Input.';
 // Why no key was found, in words Siri can say.
 export function missingKeyHint(headers = {}, body = {}) {
@@ -63,8 +88,9 @@ export function planSiriLog({ text, snapshot, now = new Date(), keyHash = '' }) 
   const said = String(text || '').trim().slice(0, 200);
   if (!said) throw new SiriError('I didn’t hear anything. Try “5 ounces at 5:15”.');
   // Frankie is implied: "5 ounces at 5:15" means Frankie's bottle.
-  const log = parseBabyLog(/\b(frankie|baby)\b/i.test(said) ? said : `frankie ${said}`, now);
-  if (!log) throw new SiriError('I didn’t catch that. Try “5 ounces at 5:15”, “dirty diaper”, “fell asleep at 2:40” or “woke up”.');
+  const words = normalizeSpeech(said);
+  const log = parseBabyLog(/\b(frankie|baby)\b/i.test(words) ? words : `frankie ${words}`, now);
+  if (!log) throw new SiriError(notUnderstood(said));
   const entry = { kind:log.kind, start:log.start.toISOString(), requestId:requestId(keyHash, said, now) };
   const name = snapshot?.name || 'Frankie';
   if (log.kind === 'bottle') {
