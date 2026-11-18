@@ -1,8 +1,11 @@
 // Nap prediction scoreboard.
 // - Hubert's Purrfect Window and Mia's Catnap Forecast are deterministic, so
-//   their guess for any wake-up is recomputed "as of" that wake-up from sleeps
-//   that had ended by then. Backfilled naps therefore get honest guesses too,
+//   their guess for any wake-up is recomputed "as of" that wake-up from the sleeps
+//   and bottles logged by then. Backfilled naps therefore get honest guesses too,
 //   and nothing about them needs storing.
+// - When a model is improved, the scoreboard keeps judging past naps by what was
+//   actually forecast then: naps before MIA_V2_SINCE replay Mia's frozen version 1
+//   (mia-v1.js), so the new model is never credited with naps it didn't predict.
 // - Huckleberry's SweetSpot cannot be replayed. Its latest prediction is saved
 //   per wake-up while the baby is awake (Huckleberry recalculates after a nap is
 //   entered) and is no longer updated once the next sleep starts.
@@ -12,6 +15,7 @@
 //   all three, so a wide window earns no easier hits. Window widths are shown
 //   separately so a cautious, wide window is visible.
 import { purrfectWindow, miaForecast } from './baby-model.js';
+import { miaForecastV1 } from './mia-v1.js';
 import { nightLine, sleepKind } from './baby-history.js';
 
 export const MODELS = [
@@ -21,7 +25,7 @@ export const MODELS = [
 ];
 const MINUTE = 60000, MAX_WAIT = 8 * 3600000;
 export const HIT_MINUTES = 15;
-const ms = value => Date.parse(value);
+const ms = value => typeof value === 'number' ? value : Date.parse(value);
 export const predictionId = lastWake => `w${ms(lastWake)}`;
 
 // Only wake-ups before a nap are scored: the end of a nap, or the end of the night
@@ -67,21 +71,27 @@ export function actualSleepStart(lastWake, sleeps = [], timer = null) {
   return first && first - wake <= MAX_WAIT ? first : null;
 }
 
-// Hubert's and Mia's guesses as of one wake-up, from sleeps that had ended by then.
-export function replayGuesses(sleeps, lastWake, timezone) {
+// Mia's version 2 (age, bottles) took over at midnight Richmond time on Nov 19, 2026.
+export const MIA_V2_SINCE = Date.parse('2026-11-19T05:00:00Z');
+export const miaVersionAt = lastWake => ms(lastWake) >= MIA_V2_SINCE ? 2 : 1;
+// Hubert's and Mia's guesses as of one wake-up, from what had been logged by then,
+// using the version of each model that was live at that moment.
+export function replayGuesses(sleeps, lastWake, timezone, { bottles = [], birthdate = null } = {}) {
   const wake = ms(lastWake), known = sleeps.filter(sleep => ms(sleep.end) <= wake), at = new Date(wake + MINUTE);
   const pick = model => model.available ? { start:model.start, end:model.end, target:model.target } : null;
-  return { purrfect:pick(purrfectWindow({ sleeps:known, timezone }, at)), mia:pick(miaForecast({ sleeps:known, timezone }, at)) };
+  const mia = miaVersionAt(wake) === 2 ? miaForecast({ sleeps:known, bottles:bottles.filter(bottle => ms(bottle.start) <= +at), birthdate, timezone }, at) : miaForecastV1({ sleeps:known, timezone }, at);
+  return { purrfect:pick(purrfectWindow({ sleeps:known, timezone }, at)), mia:pick(mia) };
 }
 
 // Scores are recomputed only when the logs, saved SweetSpots or timer change.
 let memo = { key:null, value:null };
-export function scorePredictions(entries = [], sleeps = [], timer = null, timezone = 'America/New_York') {
-  const key = JSON.stringify([timezone, timer?.active ? timer.start : null, sleeps.length, sleeps.at(-1)?.start, sleeps.at(-1)?.end, sleeps[0]?.start, entries.map(entry => `${entry.id}:${entry.sweetspot?.target}`)]);
+export function scorePredictions(entries = [], sleeps = [], timer = null, timezone = 'America/New_York', extra = {}) {
+  const bottles = extra.bottles || [];
+  const key = JSON.stringify([timezone, timer?.active ? timer.start : null, sleeps.length, sleeps.at(-1)?.start, sleeps.at(-1)?.end, sleeps[0]?.start, bottles.length, bottles.at(-1)?.start, extra.birthdate || null, entries.map(entry => `${entry.id}:${entry.sweetspot?.target}`)]);
   if (memo.key === key) return memo.value;
-  const value = computeScores(entries, sleeps, timer, timezone); memo = { key, value }; return value;
+  const value = computeScores(entries, sleeps, timer, timezone, { bottles, birthdate:extra.birthdate || null }); memo = { key, value }; return value;
 }
-function computeScores(entries, sleeps, timer, timezone) {
+function computeScores(entries, sleeps, timer, timezone, extra) {
   const saved = new Map(entries.map(entry => [entry.id, entry]));
   // Naps before the first saved SweetSpot predate the scoreboard; ignore them.
   const since = Math.min(...entries.map(entry => ms(entry.lastWake)).filter(Number.isFinite));
@@ -94,10 +104,10 @@ function computeScores(entries, sleeps, timer, timezone) {
     // Without a saved SweetSpot a nap can never be scored, so skip the replay.
     const sweetspot = saved.get(predictionId(lastWake))?.sweetspot;
     if (!sweetspot) { skipped++; continue; }
-    const replay = replayGuesses(sleeps, lastWake, timezone);
+    const replay = replayGuesses(sleeps, lastWake, timezone, extra);
     const guesses = { sweetspot:sweetspot ? { target:sweetspot.target } : null, purrfect:replay.purrfect, mia:replay.mia };
     if (!MODELS.every(model => guesses[model.key])) { skipped++; continue; }
-    const row = { id:predictionId(lastWake), lastWake, actual:new Date(actual).toISOString(), models:{} };
+    const row = { id:predictionId(lastWake), lastWake, actual:new Date(actual).toISOString(), miaVersion:miaVersionAt(lastWake), models:{} };
     for (const model of MODELS) {
       const guess = guesses[model.key], error = (actual - ms(guess.target)) / MINUTE;
       const width = guess.start && guess.end ? Math.round((ms(guess.end) - ms(guess.start)) / MINUTE) : null;

@@ -85,8 +85,8 @@ export function buildDigest({ name = '', now = new Date(), household = [], iclou
     // Yesterday: the last full local day.
     const yesterday = { sleep:dailySleep(snapshot.sleeps, tz, 2, +now)[0], bottles:dailyBottles(snapshot.bottles || [], tz, 2, +now)[0] };
     yesterday.story = dayStory(snapshot, recent?.filter(entry => entry.kind === 'diaper') ?? null, tz, localDay(+now - DAY, tz), +now);
-    const huck = huckleberryPrediction(snapshot, now), purr = purrfectWindow({ sleeps:snapshot.sleeps, timer:snapshot.timer, timezone:tz }, now), mia = miaForecast({ sleeps:snapshot.sleeps, timer:snapshot.timer, timezone:tz }, now);
-    const score = scorePredictions(predictions, snapshot.sleeps, snapshot.timer, tz);
+    const huck = huckleberryPrediction(snapshot, now), purr = purrfectWindow({ sleeps:snapshot.sleeps, timer:snapshot.timer, timezone:tz }, now), mia = miaForecast({ sleeps:snapshot.sleeps, bottles:snapshot.bottles || [], birthdate:snapshot.birthdate, timer:snapshot.timer, timezone:tz }, now);
+    const score = scorePredictions(predictions, snapshot.sleeps, snapshot.timer, tz, { bottles:snapshot.bottles || [], birthdate:snapshot.birthdate });
     digest.baby = { name:snapshot.name || 'Frankie', tz, timer:snapshot.timer, lastWake:snapshot.sleeps.at(-1)?.end || null, lastBottle:snapshot.bottles?.at(-1) || null, summary, yesterday,
       predictions:{ huck, purr, mia }, leader:score.leader ? score.summary.find(m => m.key === score.leader) : null, scored:score.scoredNaps,
       awards:now.getDay() === 1 ? frankieAwards(snapshot, tz, +now).awards.slice(0, 4) : [] };

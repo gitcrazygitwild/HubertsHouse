@@ -2,7 +2,7 @@ import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/
 import { config } from './config.js';
 import { escapeHTML as esc } from './household-model.js';
 import { showNotice, showView } from './household.js';
-import { purrfectWindow, huckleberryPrediction, miaForecast, bottleForecast } from './baby-model.js';
+import { purrfectWindow, huckleberryPrediction, miaForecast, bottleForecast, ageLabel } from './baby-model.js';
 import { sweetspotEntry, sweetspotPatch, previousSweetspot, scorePredictions } from './prediction-log.js';
 import { sampleHistory, samplePredictions } from './baby-sample.js';
 import { renderFrankie, initFrankie } from './frankie.js';
@@ -44,14 +44,14 @@ function home() {
     renderHTML($('babyStats'),''); renderHTML($('babyScore'),''); frankie(); glance(); return;
   }
   const huck = huckleberryPrediction(snapshot), own = purrfectWindow({sleeps:snapshot.sleeps,timer:snapshot.timer,timezone:zone(),complete:snapshot.historyComplete});
-  const mia = miaForecast({sleeps:snapshot.sleeps,timer:snapshot.timer,timezone:zone(),complete:snapshot.historyComplete});
+  const mia = miaForecast({sleeps:snapshot.sleeps,bottles:snapshot.bottles || [],birthdate:snapshot.birthdate,timer:snapshot.timer,timezone:zone(),complete:snapshot.historyComplete});
   const nextBottle = bottleForecast(snapshot.bottles || [], {timezone:zone()});
   logPredictions(huck); glance(huck, own, mia, nextBottle);
-  const score = scorePredictions(predictions, snapshot.sleeps, snapshot.timer, zone()), leader = score.summary.find(model => model.key === score.leader);
+  const score = scorePredictions(predictions, snapshot.sleeps, snapshot.timer, zone(), { bottles:snapshot.bottles || [], birthdate:snapshot.birthdate }), leader = score.summary.find(model => model.key === score.leader);
   const hmText = minutes => `${Math.floor(minutes / 60)}h ${minutes % 60}m`, signed = minutes => `${minutes > 0 ? '+' : '−'}${Math.abs(minutes)}m`;
   const miaWhy = !mia.available ? '' : mia.kind === 'bedtime'
-    ? [`bedtime usually comes ${hmText(mia.baseMinutes)} after the last nap, around ${time(mia.usualBedtime)}`, mia.clockShare >= 60 ? 'leaning on her steady bedtime routine' : mia.clockShare <= 40 ? 'leaning on her wake window' : '', mia.trendMinutes ? `${signed(mia.trendMinutes)} for this week’s trend` : '', mia.napMinutes ? `${signed(mia.napMinutes)} because the last nap was ${mia.previousNap}m (usually ${mia.typicalNap}m)` : ''].filter(Boolean).join(', ')
-    : [`nap ${mia.napNumber} usually comes ${hmText(mia.baseMinutes)} after waking`, mia.trendMinutes ? `${signed(mia.trendMinutes)} for this week’s trend` : '', mia.napMinutes ? `${signed(mia.napMinutes)} because the last nap was ${mia.previousNap}m (usually ${mia.typicalNap}m)` : '', mia.nightMinutes ? `${signed(mia.nightMinutes)} because last night was ${hmText(mia.lastNight)} (usually ${hmText(mia.typicalNight)})` : ''].filter(Boolean).join(', ');
+    ? [`bedtime usually comes ${hmText(mia.baseMinutes)} after the last nap, around ${time(mia.usualBedtime)}`, mia.clockShare >= 60 ? 'leaning on her steady bedtime routine' : mia.clockShare <= 40 ? 'leaning on her wake window' : '', mia.feedShare ? `${mia.feedShare}% from her bottle at ${time(mia.lastFeed)} (asleep about ${mia.feedTypical}m after)` : '', mia.trendMinutes ? `${signed(mia.trendMinutes)} as she grows` : '', mia.napMinutes ? `${signed(mia.napMinutes)} because the last nap was ${mia.previousNap}m (usually ${mia.typicalNap}m)` : ''].filter(Boolean).join(', ')
+    : [`nap ${mia.napNumber} usually comes ${hmText(mia.baseMinutes)} after waking`, mia.trendMinutes ? `${signed(mia.trendMinutes)} as she grows${mia.ageDays != null ? ` (${ageLabel(mia.ageDays)})` : ''}` : '', mia.wakeMinutes ? `${signed(mia.wakeMinutes)} for an ${mia.wakeMinutes < 0 ? 'early' : 'late'} wake-up` : '', mia.bottleMinutes ? `${signed(mia.bottleMinutes)} for a ${mia.lastOz} oz bottle before` : '', mia.feedShare ? `leaning ${mia.feedShare}% on her bottle at ${time(mia.lastFeed)} (asleep about ${mia.feedTypical}m after a bottle)` : '', mia.napMinutes ? `${signed(mia.napMinutes)} because the last nap was ${mia.previousNap}m (usually ${mia.typicalNap}m)` : '', mia.nightMinutes ? `${signed(mia.nightMinutes)} because last night was ${hmText(mia.lastNight)} (usually ${hmText(mia.typicalNight)})` : ''].filter(Boolean).join(', ');
   const miaWhat = mia.kind === 'bedtime' ? `bedtime after ${mia.napsToday} nap${mia.napsToday === 1 ? '' : 's'}` : `nap ${mia.napNumber} of the day`;
   // Hubert: a nap, bedtime, or (asleep at night) the next wake-up.
   const purrWhat = !own.available ? '' : own.kind === 'wake' ? (own.phase === 'passed' ? 'next wake-up · past the window' : own.phase === 'within' ? 'next wake-up · in the window' : 'next wake-up')
@@ -359,7 +359,7 @@ function openLog(kind, prefill = {}, editing = null) {
 }
 function sampleSnapshot() {
   const now = Date.now(), {sleeps, bottles} = sampleHistory(now), last = bottles.at(-1), wake = Date.parse(sleeps.at(-1).end);
-  return {childId:'sample-frankie',name:'Frankie',timezone:zone(),checkedAt:new Date().toISOString(),historyComplete:true,feedsComplete:true,historyDays:45,sleeps,bottles,timer:{active:false},
+  return {childId:'sample-frankie',name:'Frankie',birthdate:new Date(now - 125 * 86400000).toISOString().slice(0, 10),timezone:zone(),checkedAt:new Date().toISOString(),historyComplete:true,feedsComplete:true,historyDays:45,sleeps,bottles,timer:{active:false},
     sweetspot:{time:new Date(Math.max(now + 20 * 60000, wake + 125 * 60000)).toISOString()},lastBottle:{time:last.start,amount:last.amount,units:last.units,type:last.type},lastDiaper:{time:new Date(now - 60 * 60000).toISOString(),mode:'pee'}};
 }
 function memoryPredictions(seed) {

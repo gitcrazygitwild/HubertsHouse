@@ -30,7 +30,7 @@ export async function initBirthdays(app, { demo = false, onChange = () => {} } =
   const panel = $('birthdayPanel');
   const call = demo || !app ? null : httpsCallable(getFunctions(app, config.functionsRegion), 'birthdays', { timeout:120000 });
   let state = null, busy = false;
-  const apply = next => { state = next; setBirthdayList(state?.enabled ? state.birthdays : []); if (panel) panel.innerHTML = birthdayPanelHTML(state, { demo }); onChange(); };
+  const apply = next => { state = next; setBirthdayList(state?.enabled ? state.birthdays : []); if (panel) panel.innerHTML = birthdayPanelHTML(state, { demo }); onChange(); window.dispatchEvent(new Event('hh:birthdays')); };
   const run = async (input, done) => {
     if (!call || busy) return; busy = true; panel?.querySelectorAll('button, input').forEach(el => { el.disabled = true; });
     try { apply((await call(input)).data); if (done) showNotice(done(state)); }

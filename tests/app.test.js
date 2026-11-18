@@ -36,11 +36,12 @@ async function fixture(options = {}) {
   await module('household.js',['initHousehold','updateHouseholdEvents','showNotice','showView'],'const esc=escapeHTML;');
   await module('cloud-calendar.js',['initCloudCalendar','setCloudRange','refreshCloud','saveCloudEvent','saveCloudAssignment','deleteCloudEvent'],'const esc=escapeHTML;');
   await module('baby-history.js',['toOunces','localDay','dayStart','dayKeys','sleepKind','dayStory','dayStoryText','nightLine','clockAt','DEFAULT_NIGHT_LINE','dailySleep','dailyBottles','timelineRows','babySummary']);
-  await module('baby-model.js',['purrfectWindow','huckleberryPrediction','miaForecast','indexedWakeWindows','bottleForecast']);
-  await module('prediction-log.js',['MODELS','predictionId','isDaytimeWake','sweetspotEntry','sweetspotPatch','previousSweetspot','actualSleepStart','replayGuesses','scorePredictions']);
+  await module('baby-model.js',['purrfectWindow','huckleberryPrediction','miaForecast','indexedWakeWindows','bottleForecast','correlation','ageInDays','ageLabel','halfLifeFor','typicalWindow','bottleSleepLinks']);
+  await module('mia-v1.js',['miaForecastV1']);
+  await module('prediction-log.js',['MODELS','predictionId','isDaytimeWake','sweetspotEntry','sweetspotPatch','previousSweetspot','actualSleepStart','replayGuesses','scorePredictions','MIA_V2_SINCE','miaVersionAt']);
   await module('baby-sample.js',['sampleHistory','samplePredictions']);
   await module('awards.js',['frankieAwards']);
-  await module('frankie.js',['renderFrankie','initFrankie','frankieDayText'],'const esc=escapeHTML;');
+  await module('frankie.js',['renderFrankie','initFrankie','frankieDayText','bottleLinksHTML'],'const esc=escapeHTML;');
   await module('baby-logs.js',['LOG_FILTERS','describeLog','logKey','logsHTML'],'const esc=escapeHTML;');
   await module('baby.js',['initHuckleberry','logBabyFromText'],'const esc=escapeHTML;');
   await module('calendar-view.js',['initCalendarExperience','calendarEventContent'],'const esc=escapeHTML;');
@@ -348,6 +349,8 @@ test('quick add, the command palette, Now & Next, the Frankie page and the after
   doc.querySelector('[data-view="frankie"]').click(); await settle();
   assert.ok(doc.querySelector('#frankieBottles svg .mark-bottle')); assert.ok(doc.querySelector('#frankieTimeline svg .mark-nap'));
   assert.equal(doc.querySelectorAll('#frankieScore .score-card').length, 3);
+  assert.equal(doc.querySelectorAll('#frankieLinks .link-row').length, 4); assert.match(doc.getElementById('frankieLinks').textContent, /Frankie is 4 months old/);
+  assert.match(doc.getElementById('frankieScore').textContent, /keep the forecasts her first version made/);
   // The after-dark joke is folded away and can be hidden per device.
   assert.equal(doc.getElementById('afterDarkJoke').open, false); assert.ok(doc.getElementById('afterDarkSetup').textContent.length > 8);
   doc.getElementById('afterDarkSetting').checked = false; doc.getElementById('afterDarkSetting').dispatchEvent(new w.Event('change'));
@@ -445,9 +448,14 @@ test('birthdays from Contacts show on Today and in Settings, and the calendar sw
   const today=doc.querySelector('#homeWeek .home-week-day.is-today');
   assert.match(today.querySelector('.home-birthday').textContent,/🎂 Grandma June turns \d+/);
   assert.match(doc.getElementById('birthdayPanel').textContent,/4 birthdays found/);
+  assert.match(doc.getElementById('nowNext').textContent,/🎂Grandma June turns \d+today/);
+  const brief=doc.querySelector('#briefInsights .has-birthday'); assert.match(brief.textContent,/2 birthdays this week/); assert.match(brief.textContent,/Grandma June turns \d+ today · Sam Rivera’s birthday \w+day/);
+  doc.querySelector('[data-view="calendar"]').click(); await settle();
+  assert.match(doc.getElementById('selectedDayEvents').querySelector('.day-birthday').textContent,/Grandma June/);
   assert.equal(doc.getElementById('birthdayToggle').checked,true);
   const toggle=doc.getElementById('calendarBirthdays'); assert.equal(toggle.checked,true);
   toggle.checked=false; toggle.dispatchEvent(new w.Event('change'));
   assert.equal(doc.querySelectorAll('#homeWeek .home-birthday').length,0); assert.equal(w.localStorage.getItem('hh_birthdays'),'0');
+  assert.equal(doc.querySelector('#briefInsights .has-birthday'),null); assert.doesNotMatch(doc.getElementById('nowNext').textContent,/Grandma/);
   assert.deepEqual(errors,[]);
 });

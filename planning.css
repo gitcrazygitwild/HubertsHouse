@@ -89,3 +89,7 @@
 .fc .fc-event.calendar-birthday:not(.fc-list-event) { background:#f8e6ec !important; color:#9a4862 !important; border-left-color:#d99aae !important; }
 [data-theme="dark"] .home-birthday { color:#eab0c2; }
 [data-theme="dark"] .fc .fc-event.calendar-birthday:not(.fc-list-event) { background:#45303a !important; color:#f0bfcf !important; border-color:#b07589 !important; --event-ink:#f0bfcf; }
+.day-birthday { padding:9px 12px; margin-bottom:8px; border-radius:10px; background:#f8e6ec; color:#9a4862; font-size:13px; font-weight:600; }
+[data-theme="dark"] .day-birthday { background:#45303a; color:#f0bfcf; }
+.brief-insight.has-birthday .brief-insight-icon { background:#f8e6ec; }
+[data-theme="dark"] .brief-insight.has-birthday .brief-insight-icon { background:#45303a; }

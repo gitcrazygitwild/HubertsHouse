@@ -4,7 +4,8 @@
 import { escapeHTML as esc } from './household-model.js';
 import { renderHTML } from './dom.js';
 import { dailySleep, dailyBottles, timelineRows, babySummary, dayStart, dayStory, dayStoryText, localDay } from './baby-history.js';
-import { MODELS, scorePredictions } from './prediction-log.js';
+import { MODELS, scorePredictions, MIA_V2_SINCE } from './prediction-log.js';
+import { bottleSleepLinks, ageInDays, ageLabel } from './baby-model.js';
 import { frankieAwards } from './awards.js';
 
 const $ = id => document.getElementById(id);
@@ -96,9 +97,22 @@ function scoreboard(score, timezone) {
     <p class="score-width">${model.avgWidth == null ? 'Picks a single time' : `Avg window ${model.avgWidth} min wide`}</p><p>${model.n ? `${model.n} nap${model.n === 1 ? '' : 's'} scored${model.bias ? ` · usually ${signed(-model.bias).replace('late', 'too late').replace('early', 'too early')}` : ' · no early/late lean'}` : 'No naps scored yet'}</p></article>`).join('');
   const recent = score.results.slice(0, 8).map(row => `<tr><td>${esc(new Date(row.actual).toLocaleDateString([], { weekday:'short', timeZone:timezone }))} ${esc(clock(row.actual, timezone))}</td>${MODELS.map(model => { const r = row.models[model.key]; return `<td class="${r ? r.hit ? 'is-hit' : 'is-miss' : ''}${row.winners.length === 1 && row.winners[0] === model.key ? ' is-best' : ''}">${r ? `${r.hit ? '✓' : '·'} ${esc(signed(r.error))}` : '—'}</td>`; }).join('')}</tr>`).join('');
   return `${cards ? `<div class="score-grid">${cards}</div>` : ''}${recent ? `<div class="score-table-wrap"><table class="score-table"><thead><tr><th>Fell asleep</th>${MODELS.map(m => `<th>${esc(m.name)}</th>`).join('')}</tr></thead><tbody>${recent}</tbody></table></div>` : ''}
-    <p class="tiny muted">Hubert’s and Mia’s guesses are recalculated for every wake-up using only the sleep logged before it, so backfilled naps get guesses too. SweetSpot is Huckleberry’s latest prediction captured while Frankie was awake; it stops updating once she falls asleep. A nap counts only when all three have a guess${score.skipped ? ` (${score.skipped} nap${score.skipped === 1 ? '' : 's'} skipped for a missing SweetSpot)` : ''}. Every model is judged on one time: SweetSpot’s time, or the middle of each window. Avg miss, hits (asleep within 15 minutes of that time) and “closest” all use it, so a wide window doesn’t earn easier hits; window widths are shown so a cautious guess is visible. “Late” means Frankie fell asleep after the guess.${score.scoredNaps < 3 ? ' A leader appears after three scored naps.' : ''}</p>`;
+    <p class="tiny muted">Hubert’s and Mia’s guesses are recalculated for every wake-up using only what was logged before it, so backfilled naps get guesses too. Each nap is judged by the model version that was live then: Mia’s naps before ${esc(new Date(MIA_V2_SINCE).toLocaleDateString([], { month:'short', day:'numeric', timeZone:timezone }))} keep the forecasts her first version made. SweetSpot is Huckleberry’s latest prediction captured while Frankie was awake; it stops updating once she falls asleep. A nap counts only when all three have a guess${score.skipped ? ` (${score.skipped} nap${score.skipped === 1 ? '' : 's'} skipped for a missing SweetSpot)` : ''}. Every model is judged on one time: SweetSpot’s time, or the middle of each window. Avg miss, hits (asleep within 15 minutes of that time) and “closest” all use it, so a wide window doesn’t earn easier hits; window widths are shown so a cautious guess is visible. “Late” means Frankie fell asleep after the guess.${score.scoredNaps < 3 ? ' A leader appears after three scored naps.' : ''}</p>`;
 }
 
+// "Bottles & sleep": what Frankie's own logs say, in plain words.
+export function bottleLinksHTML(links, ageDays = null) {
+  const name = { 'not-enough':'Not enough logs yet', none:'No clear link', slight:'A slight link', clear:'A clear link' };
+  const row = (title, link, explain) => `<div class="link-row link-${link.verdict}"><div><strong>${esc(title)}</strong><small>${esc(explain(link))}</small></div><span class="link-badge">${esc(name[link.verdict])}</span></div>`;
+  const per = (link, more, less, unit = 'minutes') => link.verdict === 'not-enough' ? `${link.n} of 8 days needed` : link.verdict === 'none' ? `Across ${link.n} times, ounces didn’t change it much` : `About ${Math.round(Math.abs(link.slope))} ${unit} ${link.slope >= 0 ? more : less} per extra ounce (${link.n} times)`;
+  const f = links.feedToSleep;
+  return `<div class="link-rows">
+    ${row('Bigger bottle before a nap → longer nap?', links.napLength, link => per(link, 'longer', 'shorter'))}
+    ${row('Bigger bottle → longer awake after?', links.window, link => per(link, 'longer awake', 'shorter awake'))}
+    ${row('More ounces in the evening → longer night?', links.night, link => per(link, 'more night sleep', 'less night sleep'))}
+    <div class="link-row"><div><strong>Bottle, then asleep</strong><small>${f.of ? `${f.share}% of her naps and bedtimes came within an hour of a bottle${f.typical != null ? `, usually ${f.typical} min after` : ''}` : 'No naps logged yet'}</small></div><span class="link-badge">${!f.of ? 'Watching' : f.share >= 60 ? 'Usually' : f.share >= 30 ? 'Sometimes' : 'Rarely'}</span></div>
+  </div><p class="tiny muted">${ageDays != null ? `Frankie is ${esc(ageLabel(ageDays))}; Mia uses her age to follow how her wake windows grow and how long her history stays relevant. ` : 'Mia uses Frankie’s age when Huckleberry shares her birthdate. '}A link is used in Mia’s forecast only when Frankie’s last four weeks show it clearly; “bottle, then asleep” counts once it’s her usual pattern and steadier than her wake windows. These are correlations in her own logs, not feeding advice.</p>`;
+}
 export function renderFrankie({ snapshot, timezone, predictions = [], demo = false, connected = false }) {
   shared = snapshot ? { snapshot, timezone, demo } : null;
   const share = $('frankieShare'); if (share) share.disabled = !snapshot;
@@ -123,7 +137,8 @@ export function renderFrankie({ snapshot, timezone, predictions = [], demo = fal
     renderHTML($('frankieAwards'), week.awards.length ? week.awards.map(award => `<article class="award"><span class="award-icon" aria-hidden="true">${award.icon}</span><div><small>${esc(award.title)}</small><strong>${esc(award.value)}</strong><span>${esc(award.detail)}</span></div></article>`).join('') : '<p class="tiny muted">Awards appear after a few days of logs.</p>');
     $('frankieAwardsRange').textContent = week.awards.length ? `${dayLabel(week.from, timezone)} – ${dayLabel(week.to, timezone)}` : '';
   }
-  const score = scorePredictions(predictions, sleeps, timer, timezone);
+  const score = scorePredictions(predictions, sleeps, timer, timezone, { bottles, birthdate:snapshot.birthdate });
+  if ($('frankieLinks')) renderHTML($('frankieLinks'), bottleLinksHTML(bottleSleepLinks({ sleeps, bottles, timezone }, now), ageInDays(snapshot.birthdate, now)));
   renderHTML($('frankieScore'), scoreboard(score, timezone));
   const width = id => Math.max(280, Math.round($(id).clientWidth || 720));
   renderHTML($('frankieTimeline'), timeline(timelineRows(sleeps, timezone, 14, now), timezone, width('frankieTimeline')) + legend([['night', 'Night sleep'], ['nap', 'Nap']]));

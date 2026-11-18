@@ -152,6 +152,19 @@ async function intervalHistory(client, path, from, now) {
   ]);
   return {docs:[...regular.docs,...batches.docs],complete:regular.size < HISTORY_LIMIT && batches.size < BATCH_LIMIT};
 }
+// Frankie's birthdate (YYYY-MM-DD) for Mia's age-aware forecast. Huckleberry's field
+// isn't documented, so a few likely names and shapes are accepted; anything else is null.
+export function readBirthdate(details = {}) {
+  for (const key of ['birthdate', 'birthDate', 'dob', 'birthday']) {
+    let value = details[key];
+    if (value == null || value === '') continue;
+    if (typeof value === 'object' && Number.isFinite(value.seconds)) value = value.seconds * 1000;
+    else if (typeof value === 'object' && typeof value.toDate === 'function') value = +value.toDate();
+    if (typeof value === 'number') value = new Date(value < 1e11 ? value * 1000 : value).toISOString().slice(0, 10);
+    if (typeof value === 'string') { const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/); if (match && Date.parse(`${match[0]}T12:00:00Z`) < Date.now()) return match[0]; }
+  }
+  return null;
+}
 // `light` (Siri) reuses cached history when there is any, so a voice log stays fast;
 // the app refreshes the full history on its next load.
 export async function huckleberrySnapshot(client, childId, timezone, cached, forceHistory = false, now = Date.now(), napPlan = DEFAULT_NAP_PLAN, light = false) {
@@ -173,7 +186,7 @@ export async function huckleberrySnapshot(client, childId, timezone, cached, for
   if (latestBottle) bottles = normalizeFeedHistory(bottles.map(item => ({mode:'bottle',start:Date.parse(item.start),amount:item.amount,units:item.units,bottleType:item.type})).concat({mode:'bottle',start:latestBottle.start,amount:latestBottle.bottleAmount,units:latestBottle.bottleUnits,bottleType:latestBottle.bottleType}),from,now);
   const sweetspot = chooseSweetspot(details.sweetspot || {}, napPlan);
   const bottle = feed.prefs?.lastBottle, change = diaper.prefs?.lastDiaper;
-  return {childId:child,name:String(details.childsName || 'Baby').slice(0,100),timezone,checkedAt:new Date(now).toISOString(),historyCheckedAt,historyComplete,feedsComplete,historyDays:HISTORY_DAYS,sleeps,bottles,
+  return {childId:child,name:String(details.childsName || 'Baby').slice(0,100),birthdate:readBirthdate(details),timezone,checkedAt:new Date(now).toISOString(),historyCheckedAt,historyComplete,feedsComplete,historyDays:HISTORY_DAYS,sleeps,bottles,
     timer:{active:sleep.timer?.active === true,paused:sleep.timer?.paused === true,start:iso(sleep.timer?.timerStartTime),end:iso(sleep.timer?.timerEndTime),uuid:String(sleep.timer?.uuid || '')},
     sweetspot,
     lastBottle:bottle ? {time:iso(bottle.start),amount:Number.isFinite(bottle.bottleAmount) ? bottle.bottleAmount : null,units:bottle.bottleUnits === 'oz' ? 'oz' : 'ml',type:String(bottle.bottleType || 'Bottle').slice(0,60)} : null,
