@@ -207,3 +207,23 @@ Where birthdays show up:
 - On Today's week strip.
 - In the morning email: today's birthdays at the top, and the rest of the week under "Around the house".
 - If that member's calendars are shared with the household, the birthdays are shared too.
+
+## 8. Litter-Robot (optional)
+
+To connect:
+- In **Settings → Litter-Robot**, sign in with the Whisker app's email and password.
+- The password is used once for Whisker's own (Amazon Cognito) sign-in. Only the encrypted session is stored, in the server-only `privateLitterRobot/household`.
+- If Whisker ends the session, Settings asks for a new sign-in.
+
+How it works:
+- `functions/litter-robot.js` follows the community library Home Assistant uses (pylitterbot): the Litter-Robot 4 GraphQL API, the Litter-Robot 3 REST API, and pet profiles.
+- This is unofficial, so a Whisker app update can interrupt it.
+- Readings are cached for 2 minutes.
+
+Where it shows up:
+- **Devices page:**
+  - waste drawer and litter level;
+  - **Clean now**;
+  - each cat's visits today and this week, latest weight and 30-day change, from SmartWeight pet profiles.
+- **Now & Next:** a note when the drawer is 90% or more full.
+- Litter-Robot 5 isn't supported yet.

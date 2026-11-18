@@ -55,3 +55,28 @@
   .device-icon { width:36px; height:36px; font-size:19px; }
   .devices-columns { gap:17px; }
 }
+/* Litter-Robot */
+.litter-card { margin-bottom:22px; }
+.lr-headline { margin:0 0 14px; font-weight:600; }
+.lr-robot { border:1px solid var(--border); border-radius:16px; padding:14px 16px; margin-bottom:12px; background:var(--card); }
+.lr-robot.needs-empty { border-color:#d9a24b; background:linear-gradient(135deg, rgba(240, 190, 90, .14), transparent 70%), var(--card); }
+.lr-robot header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
+.lr-robot h3 { margin:0; font-size:15px; letter-spacing:0; font-weight:600; }
+.lr-robot header small { color:var(--muted); font-size:12px; }
+.lr-meter { display:grid; grid-template-columns:96px 1fr 44px; align-items:center; gap:10px; margin:8px 0; font-size:13px; }
+.lr-meter strong { text-align:right; font-variant-numeric:tabular-nums; }
+.lr-bar { height:9px; border-radius:999px; background:var(--soft); overflow:hidden; }
+.lr-bar i { display:block; height:100%; border-radius:inherit; background:var(--accent); }
+.lr-meter.warn .lr-bar i { background:#d9a24b; }
+.lr-alerts { margin:6px 0 0; padding-left:18px; font-size:13px; color:#9a6a1f; }
+[data-theme="dark"] .lr-alerts { color:#e8c27a; }
+.lr-cats h3 { margin:6px 0 8px; font-size:13px; letter-spacing:.02em; }
+.lr-cat { display:grid; grid-template-columns:90px 1fr auto; grid-template-areas:"name visits weight" "name last last"; align-items:center; column-gap:12px; row-gap:2px; padding:10px 0; border-top:1px solid var(--border2, var(--border)); }
+.lr-cat-name { grid-area:name; font-family:var(--font-display, Georgia, serif); font-size:18px; }
+.lr-visits { grid-area:visits; position:relative; font-size:13px; padding-bottom:6px; }
+.lr-week { position:absolute; left:0; bottom:0; height:3px; border-radius:2px; background:var(--accent); opacity:.6; }
+.lr-weight { grid-area:weight; font-size:13px; text-align:right; }
+.lr-weight small { display:block; color:var(--muted); font-size:11px; }
+.lr-weight small.warn { color:#b86b2a; }
+.lr-cat > small { grid-area:last; font-size:11px; }
+@media (max-width:650px) { .lr-meter { grid-template-columns:84px 1fr 40px; } .lr-cat { grid-template-columns:70px 1fr auto; } }

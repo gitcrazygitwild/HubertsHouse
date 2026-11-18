@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@google-cloud/firestore": "7.11.6",
+    "amazon-cognito-identity-js": "^6.3.22",
     "fast-xml-parser": "^5.3.0",
     "firebase-admin": "^13.6.0",
     "firebase-functions": "^6.6.0",
