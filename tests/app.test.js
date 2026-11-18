@@ -63,6 +63,8 @@ async function fixture(options = {}) {
   await module('install-app.js',['detectDevice','STEPS','weblocFile','installHTML','initInstall'],'const esc=escapeHTML;');
   await module('devices-view.js',['DEVICE_APPS','appStoreSearch','safeDeviceLink','readDeviceLinks','deviceTiles','launcherHTML','hueHTML','sonosHTML','DEVICE_SETUP','deviceSettingsHTML','readConnectResult','stripConnectParams','sampleHue','sampleSonos','sampleDeviceStatus'],'const esc=escapeHTML;');
   await module('devices.js',['initDevices']);
+  await module('litter-view.js',['litterHeadline','litterHTML','litterSettingsHTML','sampleLitter'],'const esc=escapeHTML;');
+  await module('litter.js',['initLitter']);
   await module('birthdays.js',['sampleBirthdays','birthdayPanelHTML','initBirthdays'],'const esc=escapeHTML;');
   w.eval(clean(await read('app.js')) + ';window.__testApp={getDocs:()=>rawDocs,setCloudDocs:(records)=>{cloudDocs=records;rebuildEvents();},persistMovedEvent,redraw:()=>updateHouseholdEvents(expandedEvents)};'); await settle();
   return {dom,w,doc:w.document,errors};
@@ -440,6 +442,8 @@ test('Devices page: app tiles, Hue rooms and Sonos speakers work in the preview'
   doc.querySelector('[data-device-add]').click(); assert.equal(doc.querySelectorAll('[data-device-open]').length,w.DEVICE_APPS.length+1);
   assert.match(w.localStorage.getItem('hh_device_links'),/ring:\/\//);
   assert.match(doc.getElementById('devicesSettingsPanel').textContent,/Connected/);
+  assert.equal(doc.querySelectorAll('#litterPanel .lr-cat').length,3); assert.match(doc.getElementById('litterPanel').textContent,/Mack is today’s top visitor/);
+  assert.match(doc.getElementById('litterSettingsPanel').textContent,/Connected/);
   assert.deepEqual(errors,[]);
 });
 test('birthdays from Contacts show on Today and in Settings, and the calendar switch hides them', async t => {

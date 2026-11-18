@@ -13,7 +13,7 @@ const read = key => { try { return localStorage.getItem(key); } catch { return n
 const write = (key, value) => { try { localStorage.setItem(key, value); } catch { /* optional */ } };
 const clock = date => new Date(date).toLocaleTimeString([], { hour:'numeric', minute:'2-digit' });
 const dayName = date => new Date(date).toLocaleDateString([], { weekday:'short' });
-let ctx, baby = null, forecast = null, lastFlags = [];
+let ctx, baby = null, forecast = null, litter = null, lastFlags = [];
 
 // ---------- Quick add ----------
 function draftPayload(draft) {
@@ -139,6 +139,7 @@ function renderNowNext() {
     const nap = !baby.timer?.active && baby.mia?.available ? ` · ${baby.mia.kind === 'bedtime' ? 'bedtime' : 'nap'} ~${clock(baby.mia.target)}` : '';
     parts.push(`<span class="nn-item"><span aria-hidden="true">${baby.timer?.active ? '☾' : '☀'}</span><button type="button" class="nn-link" data-nn-view="frankie">${esc(baby.name)} <strong>${esc(status)}</strong></button><span class="nn-muted">${esc(nap)}${baby.lastBottle ? ` · bottle ${esc(hm(minutes(baby.lastBottle)))} ago` : ''}${baby.nextBottle?.available ? ` · next ~${esc(clock(baby.nextBottle.target))}` : ''}</span></span>`);
   }
+  if (litter) parts.push(`<span class="nn-item"><span aria-hidden="true">🐈</span><button type="button" class="nn-link" data-nn-view="devices"><strong>${esc(litter.name)}</strong></button><span class="nn-muted">${litter.full ? 'drawer full' : `drawer ${litter.drawer}% full`}</span></span>`);
   const flags = forecast ? weatherFlags(events, forecast.days, now) : [];
   if (flags.length) parts.push(`<span class="nn-item"><span aria-hidden="true">☔</span>${eventLink({ id:flags[0].id }, new Date(flags[0].start), `<strong>${esc(flags[0].title)}</strong>`)} <span class="nn-muted">${esc(dayName(flags[0].start))} · ${flags[0].rain == null ? esc(flags[0].label) : `${flags[0].rain}% rain`}</span></span>`);
   renderHTML(root, parts.join(''));
@@ -180,6 +181,7 @@ export function initUpgrades(options) {
   });
   window.addEventListener('hh:baby', event => { baby = event.detail; renderNowNext(); });
   window.addEventListener('hh:birthdays', () => renderNowNext());
+  window.addEventListener('hh:litter', event => { litter = event.detail; renderNowNext(); });
   window.addEventListener('hh:forecast', event => { forecast = event.detail; renderNowNext(); renderSky(); });
   window.addEventListener('hh:events', () => requestAnimationFrame(() => { renderNowNext(); renderFreeNights(); }));
   $('freeNights')?.addEventListener('click', event => { const button = event.target.closest('[data-free-night]'); if (button) ctx.openDraft(dateNightDraft(new Date(button.dataset.freeNight))); });

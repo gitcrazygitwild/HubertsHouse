@@ -11,6 +11,7 @@ import { encryptCredential, decryptCredential } from './crypto.js';
 import { HuckleberryError } from './huckleberry-provider.js';
 import { createHuckleberryHandler } from './huckleberry-service.js';
 import { createSmartHome, SmartHomeError } from './smart-home.js';
+import { createLitterRobot, LitterRobotError } from './litter-robot.js';
 initializeApp();
 const db = getFirestore();
 const assignments = createAssignmentStore(db);
@@ -26,7 +27,7 @@ function endpoint(handler, extra = {}) {
     catch (error) {
       if (error instanceof HttpsError) throw error;
       if(error instanceof HuckleberryError && error.details?.service==='huckleberry') warn('Huckleberry request rejected',{operation:error.details.operation || 'authentication',reason:error.details.reason,...(error.details.httpStatus !== undefined ? {httpStatus:error.details.httpStatus} : {}),...(error.details.grpcCode !== undefined ? {grpcCode:error.details.grpcCode} : {})});
-      if (error instanceof CalendarError || error instanceof HuckleberryError || error instanceof NewsletterError || error instanceof SmartHomeError) throw new HttpsError(error.code,error.message,error instanceof HuckleberryError ? error.details : undefined);
+      if (error instanceof CalendarError || error instanceof HuckleberryError || error instanceof NewsletterError || error instanceof SmartHomeError || error instanceof LitterRobotError) throw new HttpsError(error.code,error.message,error instanceof HuckleberryError ? error.details : undefined);
       // Never log request bodies, credentials, calendar data, or raw provider errors.
       throw new HttpsError('unavailable','The connected service is temporarily unavailable. Try again shortly.');
     }
@@ -397,4 +398,16 @@ export const birthdays = endpoint(async (uid, input = {}) => {
     catch (error) { await connectionRef(uid).update({ birthdays:false }); throw error; } // couldn't read Contacts: leave it off
   }
   return birthdaysFor(uid, { force:input.force === true });
+});
+
+// Litter-Robot (Whisker, unofficial API; functions/litter-robot.js). One household
+// connection: the password signs in once and only the encrypted session is kept.
+const litterRobotService = createLitterRobot({ db, key:() => encryptionKey.value(), encrypt:encryptCredential, decrypt:decryptCredential });
+export const litterRobot = endpoint(async (uid, input = {}) => {
+  if (input.action === 'status') return litterRobotService.status();
+  if (input.action === 'connect') return litterRobotService.connect(uid, { email:input.email, password:input.password });
+  if (input.action === 'disconnect') return litterRobotService.disconnect();
+  if (input.action === 'snapshot') return litterRobotService.snapshot({ force:input.force === true });
+  if (input.action === 'clean') return litterRobotService.clean(input.robotId);
+  throw new LitterRobotError('invalid-argument', 'Choose a Litter-Robot action.');
 });
