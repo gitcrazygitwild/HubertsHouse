@@ -10,6 +10,7 @@ import { resolveCalendarConnection, sharedView, sharesWithHousehold } from './ca
 import { encryptCredential, decryptCredential } from './crypto.js';
 import { HuckleberryError } from './huckleberry-provider.js';
 import { createHuckleberryHandler } from './huckleberry-service.js';
+import { createSmartHome, SmartHomeError } from './smart-home.js';
 initializeApp();
 const db = getFirestore();
 const assignments = createAssignmentStore(db);
@@ -25,7 +26,7 @@ function endpoint(handler, extra = {}) {
     catch (error) {
       if (error instanceof HttpsError) throw error;
       if(error instanceof HuckleberryError && error.details?.service==='huckleberry') warn('Huckleberry request rejected',{operation:error.details.operation || 'authentication',reason:error.details.reason,...(error.details.httpStatus !== undefined ? {httpStatus:error.details.httpStatus} : {}),...(error.details.grpcCode !== undefined ? {grpcCode:error.details.grpcCode} : {})});
-      if (error instanceof CalendarError || error instanceof HuckleberryError || error instanceof NewsletterError) throw new HttpsError(error.code,error.message,error instanceof HuckleberryError ? error.details : undefined);
+      if (error instanceof CalendarError || error instanceof HuckleberryError || error instanceof NewsletterError || error instanceof SmartHomeError) throw new HttpsError(error.code,error.message,error instanceof HuckleberryError ? error.details : undefined);
       // Never log request bodies, credentials, calendar data, or raw provider errors.
       throw new HttpsError('unavailable','The connected service is temporarily unavailable. Try again shortly.');
     }
@@ -334,4 +335,29 @@ export const siriSetup = endpoint(async (uid, input) => {
     return { hasKey:!!key, key, url:siriURL() };
   }
   throw new NewsletterError('invalid-argument', 'Choose a Siri action.');
+});
+
+// Devices page: Philips Hue and Sonos through their official cloud APIs (functions/smart-home.js).
+const smartHomeURL = () => `https://us-central1-${process.env.GCLOUD_PROJECT || 'huberts-house'}.cloudfunctions.net/smartHomeAuth`;
+const appURL = () => `https://${process.env.GCLOUD_PROJECT || 'huberts-house'}.web.app/`;
+const smartHomeService = createSmartHome({ db, key:() => encryptionKey.value(), encrypt:encryptCredential, decrypt:decryptCredential, redirectUri:smartHomeURL() });
+export const smartHome = endpoint(async (uid, input = {}) => {
+  const { action, provider } = input;
+  if (action === 'status') return smartHomeService.status();
+  if (action === 'saveApp') return smartHomeService.saveApp(uid, provider, input);
+  if (action === 'connect') return smartHomeService.startAuth(uid, provider);
+  if (action === 'disconnect') return smartHomeService.disconnect(provider);
+  if (action === 'devices') return smartHomeService.devices(provider);
+  if (action === 'control') return smartHomeService.control(provider, input.command);
+  throw new SmartHomeError('invalid-argument', 'Choose a device action.');
+});
+// Hue and Sonos send the browser back here after sign-in. It finishes the connection and
+// returns to the Devices page with a short result in the address (never a token).
+export const smartHomeAuth = onRequest({ region:'us-central1', secrets:[encryptionKey], timeoutSeconds:60, memory:'256MiB', cpu:'gcf_gen1', concurrency:1, minInstances:0, maxInstances:1, cors:false }, async (request, response) => {
+  if (request.method !== 'GET') { response.status(405).send('Method not allowed'); return; }
+  const { code, state, error } = request.query || {};
+  const result = await smartHomeService.finishAuth({ code:typeof code === 'string' ? code : '', state, error }).catch(() => ({ ok:false, message:'Something went wrong. Try connecting again.' }));
+  if (!result.ok) warn('Smart home sign-in did not finish', { provider:result.provider || 'unknown' });
+  const back = new URLSearchParams({ connected:result.provider || '', ok:result.ok ? '1' : '0', ...(result.ok ? {} : { message:result.message || '' }) });
+  response.redirect(302, `${appURL()}?${back}#devices`);
 });

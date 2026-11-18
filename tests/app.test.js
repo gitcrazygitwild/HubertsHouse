@@ -59,6 +59,8 @@ async function fixture(options = {}) {
   await module('world-view.js',['RANGES','briefingHTML','rangePoints','rangeChange','shortValue','fullValue','dateLabel','chartSVG','chartPanelHTML','sampleMarketHistory','sampleBriefing'],'const esc=escapeHTML;');
   await module('world-briefing.js',['initWorldBriefing']);
   await module('install-app.js',['detectDevice','STEPS','weblocFile','installHTML','initInstall'],'const esc=escapeHTML;');
+  await module('devices-view.js',['DEVICE_APPS','appStoreSearch','safeDeviceLink','readDeviceLinks','deviceTiles','launcherHTML','hueHTML','sonosHTML','DEVICE_SETUP','deviceSettingsHTML','readConnectResult','stripConnectParams','sampleHue','sampleSonos','sampleDeviceStatus'],'const esc=escapeHTML;');
+  await module('devices.js',['initDevices']);
   w.eval(clean(await read('app.js')) + ';window.__testApp={getDocs:()=>rawDocs,setCloudDocs:(records)=>{cloudDocs=records;rebuildEvents();},persistMovedEvent,redraw:()=>updateHouseholdEvents(expandedEvents)};'); await settle();
   return {dom,w,doc:w.document,errors};
 }
@@ -411,4 +413,27 @@ test('a failed newsletter test names the step it stopped at', async t => {
   assert.match(w.lastTestNote({ step:'sent', updatedAt:at, ms:31000, finished:true, ok:true }), /Last test sent .*\(31s\)/);
   assert.match(w.lastTestNote(null), /hidden/);
   assert.doesNotMatch(w.lastTestNote({ step:'<img src=x onerror=alert(1)>', updatedAt:at, finished:false }), /<img/);
+});
+test('Devices page: app tiles, Hue rooms and Sonos speakers work in the preview', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  doc.querySelector('[data-view="devices"]').click(); await settle();
+  assert.equal(doc.getElementById('view-devices').classList.contains('hidden'),false);
+  assert.equal(doc.getElementById('viewTitle').textContent,'Smart home');
+  assert.equal(doc.querySelectorAll('#deviceLauncher [data-device-open]').length,w.DEVICE_APPS.length);
+  assert.equal(doc.querySelectorAll('#huePanel .hue-room').length,4);
+  const nursery=[...doc.querySelectorAll('.hue-room')].find(room => room.textContent.includes('Nursery'));
+  const power=nursery.querySelector('[data-hue-power]'); power.checked=true; power.dispatchEvent(new w.Event('change',{bubbles:true}));
+  assert.match(doc.getElementById('huePanel').textContent,/3 of 4 rooms on/);
+  doc.querySelector('[data-hue-all="off"]').click();
+  assert.match(doc.getElementById('huePanel').textContent,/0 of 4 rooms on/);
+  const kitchen=doc.querySelector('[data-sonos="toggle"][data-group="gk"]'); assert.equal(kitchen.getAttribute('aria-label'),'Pause'); kitchen.click();
+  assert.equal(doc.querySelector('[data-sonos="toggle"][data-group="gk"]').getAttribute('aria-label'),'Play');
+  // A custom tile is saved on this device; unsafe links are refused.
+  const answers=['Ring','javascript:alert(1)']; w.prompt=() => answers.shift();
+  doc.querySelector('[data-device-add]').click(); assert.equal(doc.querySelectorAll('[data-device-open]').length,w.DEVICE_APPS.length);
+  const ok=['Ring','ring://']; w.prompt=() => ok.shift();
+  doc.querySelector('[data-device-add]').click(); assert.equal(doc.querySelectorAll('[data-device-open]').length,w.DEVICE_APPS.length+1);
+  assert.match(w.localStorage.getItem('hh_device_links'),/ring:\/\//);
+  assert.match(doc.getElementById('devicesSettingsPanel').textContent,/Connected/);
+  assert.deepEqual(errors,[]);
 });
