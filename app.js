@@ -7,6 +7,7 @@ import { initNewsletterSettings } from './newsletter-settings.js';
 import { initSiriSettings } from './siri-settings.js';
 import { initWorldBriefing } from './world-briefing.js';
 import { initInstall } from './install-app.js';
+import { initDevices } from './devices.js';
 import { initEventDateEditor } from './event-editor.js';
 import { holidayEvents, holidaysEnabled } from './holidays.js';
 import { checklistKey, eventChecklistKey } from './checklists.js';
@@ -491,7 +492,7 @@ async function initApp() {
     document.getElementById('accountLabel').textContent = 'Preview mode. No real household or Apple data is loaded.';
     startHousehold(demoStore()); localDocs = demoEvents(); rebuildEvents();
     setCalendarStatus('Sample calendar', 'ready');
-    initCloudCalendar(null,{demo:true,onEvents:() => {},onCalendars:() => {}}); startUpgrades(); initHuckleberry(null,{demo:true}); initNewsletterSettings(null); initSiriSettings(null); initWorldBriefing(null,{demo:true}); initInstall(); return;
+    initCloudCalendar(null,{demo:true,onEvents:() => {},onCalendars:() => {}}); startUpgrades(); initHuckleberry(null,{demo:true}); initNewsletterSettings(null); initSiriSettings(null); initWorldBriefing(null,{demo:true}); initInstall(); initDevices(null,{demo:true}); return;
   }
   onAuthStateChanged(auth,async user => {
     if (!user) { memberVerified = false; gate.classList.remove('hidden'); if (dataStarted) location.reload(); return; }
@@ -512,7 +513,7 @@ async function initApp() {
         setCalendarStatus('Sync unavailable', 'offline');
         showNotice('The calendar could not sync. Check your connection and household access.');
       });
-      startUpgrades(); initHuckleberry(app,{predictions:predictionStore()}); initNewsletterSettings(app); initSiriSettings(app); initWorldBriefing(app); initInstall();
+      startUpgrades(); initHuckleberry(app,{predictions:predictionStore()}); initNewsletterSettings(app); initSiriSettings(app); initWorldBriefing(app); initInstall(); initDevices(app);
       await initCloudCalendar(app,{
         onEvents:records => { cloudDocs = records.map(e => ({...e,end:e.editEnd,cloudEnd:e.end,owner:e.owner || 'both',type:'general',checklist:e.checklist || [],repeat:'none'})); rebuildEvents(); },
         onChecklists:records => {cloudChecklistDocs=records;},
@@ -569,6 +570,7 @@ function startUpgrades() {
       { group:'Go to', icon:'☺', label:'Frankie', keywords:'baby sleep bottles scoreboard charts', run:() => showView('frankie') },
       { group:'Go to', icon:'✓', label:'Chores & lists', keywords:'tasks checklists', run:() => showView('tasks') },
       { group:'Go to', icon:'🛒', label:'Groceries', keywords:'shopping list', run:() => showView('groceries') },
+      { group:'Go to', icon:'💡', label:'Devices', keywords:'smart home lights hue sonos music speakers litter robot feeder lock camera fan', run:() => showView('devices') },
       { group:'Go to', icon:'⚙', label:'Settings', keywords:'preferences huckleberry icloud', run:() => showView('settings') },
       { group:'Actions', icon:'＋', label:'New event', keywords:'add plan create', run:() => fab.click() },
       { group:'Actions', icon:'♡', label:'Plan a date night', keywords:'template romance', run:() => openEventModal(eventTemplate('date-night')) },

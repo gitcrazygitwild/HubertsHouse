@@ -7,7 +7,7 @@ let store, items = [], events = [], currentKind = 'chore', taskFocus = 'all', op
 let noticeTimer, wakeLock, displayMode = false, activeView = 'today', monitorFullscreen = false;
 let getEventRecords=()=>[],saveEventChecklist,editEventChecklist,taskSource='all';
 const pendingChecklists=new Set();
-const titles = { today: 'Today at home', calendar: 'Life, all together.', tasks: 'Chores & checklists', groceries: 'The grocery list', settings: 'Your house, your way', frankie: 'Frankie' };
+const titles = { today: 'Today at home', calendar: 'Life, all together.', tasks: 'Chores & checklists', groceries: 'The grocery list', settings: 'Your house, your way', frankie: 'Frankie', devices: 'Smart home' };
 export function showNotice(message, action) {
   const el = $('notice'); el.textContent = message; el.classList.remove('hidden');
   if (action) { const b = document.createElement('button'); b.textContent = action.label; b.onclick = () => { el.classList.add('hidden'); Promise.resolve(action.run()).catch(e => showNotice(e.message)); }; el.append(b); }

@@ -175,3 +175,18 @@ Treat the key like a password: anyone who has it can log entries for Frankie. Re
 ### Shared Apple Calendar
 
 `functions/calendar-share.js` lets a member without their own Apple connection use the one connection another active member shares (`shareWithHousehold`, default on; reconnecting keeps the choice). Every calendar endpoint resolves the connection through it. A borrowing member sees only the owner's selected calendars (no Apple URLs or credentials) and can read, create, edit and delete events and household assignments on them; `calendarSelect`, `calendarDisconnect` and `calendarShare` are owner-only. The Apple credential stays encrypted to its owner. If two members share connections, nothing is guessed: the member is asked to connect their own account. Turn sharing off in **Settings → Apple Calendar**.
+
+## 6. Devices page: Philips Hue and Sonos (optional)
+
+The Devices page works right away as an app launcher: each tile opens that company's own app (Litter-Robot, PetLibro, Schlage, eufy, Dreo and the rest), where each of you is already signed in. Tap ⋯ on a tile to point it at a different link, such as a Shortcut (`shortcuts://run-shortcut?name=Open%20Whisker`). Those links are saved on each device.
+
+Lights and music are controlled in the page itself through the official cloud APIs. Each company asks the household to register a free developer app once:
+
+1. **Philips Hue:** at <https://developers.meethue.com/my-apps/>, choose **Add new Hue Remote API app**. Set the **Callback URL** to `https://us-central1-huberts-house.cloudfunctions.net/smartHomeAuth`. Copy the ClientId and ClientSecret into **Settings → Philips Hue and Sonos**, save, then tap **Connect Philips Hue**. The Hue bridge must be online.
+2. **Sonos:** at <https://developer.sonos.com/>, create a **Control Integration** and add an API key whose **Redirect URI** is the same address. Copy the Key and Secret into Settings, save, then tap **Connect Sonos**.
+
+How it works (`functions/smart-home.js`):
+- App details and tokens are encrypted with `CALENDAR_ENCRYPTION_KEY` in `privateSmartHome/{hue|sonos}`.
+- Sign-in state lives in `privateSmartHomeState/{nonce}`. It is single-use and expires after 10 minutes.
+- Both collections are server-only under the catch-all rule.
+- Tokens refresh automatically. Because Secret Manager isn't used, a deploy never fails while these are unset.
