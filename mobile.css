@@ -62,3 +62,18 @@
   .smart-add .btn { width: auto !important; min-height: 40px; padding: 8px 14px; }
   .smart-add-preview { grid-column: 1 / -1; }
 }
+
+/* iPhone/iPad: Safari zooms the whole page when a text box under 16px is tapped,
+   and a home-screen app keeps that zoom the next time it opens. 16px stops it. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea { font-size: max(16px, 1em) !important; }
+}
+/* Never let the page be wider than the screen, and keep text from inflating when
+   the phone turns sideways. `clip` (unlike `hidden`) keeps sticky headers working. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+html, body { overflow-x: clip; max-width: 100%; }
+@media (max-width: 650px) {
+  input, select, textarea { min-width: 0; max-width: 100%; }
+  /* Safari's date and time pickers are wider than Chrome's: one per row on phones. */
+  .baby-form-row, .log-time-row, .item-dialog .row { grid-template-columns: 1fr !important; }
+}
