@@ -10,6 +10,8 @@ import { initInstall } from './install-app.js';
 import { initDevices } from './devices.js';
 import { initEventDateEditor } from './event-editor.js';
 import { holidayEvents, holidaysEnabled } from './holidays.js';
+import { birthdayEvents, birthdaysShown } from './birthdays-model.js';
+import { initBirthdays } from './birthdays.js';
 import { checklistKey, eventChecklistKey } from './checklists.js';
 // app.js — Hubert’s House
 // Household dashboard, authenticated Firebase sync and iCloud calendar integration.
@@ -492,7 +494,7 @@ async function initApp() {
     document.getElementById('accountLabel').textContent = 'Preview mode. No real household or Apple data is loaded.';
     startHousehold(demoStore()); localDocs = demoEvents(); rebuildEvents();
     setCalendarStatus('Sample calendar', 'ready');
-    initCloudCalendar(null,{demo:true,onEvents:() => {},onCalendars:() => {}}); startUpgrades(); initHuckleberry(null,{demo:true}); initNewsletterSettings(null); initSiriSettings(null); initWorldBriefing(null,{demo:true}); initInstall(); initDevices(null,{demo:true}); return;
+    initCloudCalendar(null,{demo:true,onEvents:() => {},onCalendars:() => {}}); startUpgrades(); initHuckleberry(null,{demo:true}); initNewsletterSettings(null); initSiriSettings(null); initWorldBriefing(null,{demo:true}); initInstall(); initDevices(null,{demo:true}); initBirthdays(null,{demo:true,onChange:() => { renderCalendarFromCache(); homeCalendar?.render(); }}); return;
   }
   onAuthStateChanged(auth,async user => {
     if (!user) { memberVerified = false; gate.classList.remove('hidden'); if (dataStarted) location.reload(); return; }
@@ -513,7 +515,7 @@ async function initApp() {
         setCalendarStatus('Sync unavailable', 'offline');
         showNotice('The calendar could not sync. Check your connection and household access.');
       });
-      startUpgrades(); initHuckleberry(app,{predictions:predictionStore()}); initNewsletterSettings(app); initSiriSettings(app); initWorldBriefing(app); initInstall(); initDevices(app);
+      startUpgrades(); initHuckleberry(app,{predictions:predictionStore()}); initNewsletterSettings(app); initSiriSettings(app); initWorldBriefing(app); initInstall(); initDevices(app); initBirthdays(app,{onChange:() => { renderCalendarFromCache(); homeCalendar?.render(); }});
       await initCloudCalendar(app,{
         onEvents:records => { cloudDocs = records.map(e => ({...e,end:e.editEnd,cloudEnd:e.end,owner:e.owner || 'both',type:'general',checklist:e.checklist || [],repeat:'none'})); rebuildEvents(); },
         onChecklists:records => {cloudChecklistDocs=records;},
@@ -676,6 +678,8 @@ function initUIHooks() {
   eventDateEditor = initEventDateEditor({onChange:updateEventOverlap});
   const holidays = document.getElementById('calendarHolidays'); holidays.checked=holidaysEnabled();
   holidays.addEventListener('change',()=>{try {localStorage.setItem('hh_holidays',holidays.checked?'1':'0');}catch{} renderCalendarFromCache();homeCalendar?.render();});
+  const birthdays = document.getElementById('calendarBirthdays'); birthdays.checked=birthdaysShown();
+  birthdays.addEventListener('change',()=>{try {localStorage.setItem('hh_birthdays',birthdays.checked?'1':'0');}catch{} renderCalendarFromCache();homeCalendar?.render();});
   document.querySelectorAll('[data-event-template]').forEach(button => button.addEventListener('click', () => {
     if (isUnlocked()) openEventModal(eventTemplate(button.dataset.eventTemplate));
   }));
@@ -816,7 +820,7 @@ function initCalendarUI() {
       ? localStorage.getItem('hh_calendar_view') : window.innerWidth < 650 ? 'listCustom' : 'dayGridMonth',
     headerToolbar: false,
     eventContent: calendarEventContent,
-    eventClassNames: arg => arg.event.extendedProps?.holiday ? ['calendar-holiday'] : [`owner-${normalizeOwner(arg.event.extendedProps?.owner)}`, ...(arg.event.extendedProps?.withFrankie ? ["with-frankie"] : [])],
+    eventClassNames: arg => arg.event.extendedProps?.holiday ? ['calendar-holiday', ...(arg.event.extendedProps.birthday ? ['calendar-birthday'] : [])] : [`owner-${normalizeOwner(arg.event.extendedProps?.owner)}`, ...(arg.event.extendedProps?.withFrankie ? ["with-frankie"] : [])],
     dayHeaderFormat: { weekday: 'short' },
     dayHeaderContent: info => {
       // Month headers use abstract UTC weekdays. FullCalendar's formatted text
@@ -885,12 +889,12 @@ function initCalendarUI() {
       calendar.unselect();
     },
     eventClick: info => {
-      if (info.event.extendedProps?.holiday) { showNotice(`${info.event.title} · ${info.event.extendedProps.federal ? 'U.S. federal holiday' : 'Calendar observance'}`); return; }
+      if (info.event.extendedProps?.holiday) { showNotice(`${info.event.title} · ${info.event.extendedProps.birthday ? 'From Apple Contacts' : info.event.extendedProps.federal ? 'U.S. federal holiday' : 'Calendar observance'}`); return; }
       openFromPanel(info.event.extendedProps?.sourceId || info.event.id,info.event.start?.toISOString(),false);
     },
 
     eventDidMount: (arg) => {
-      if (arg.event.extendedProps?.holiday) {arg.el.title=`${arg.event.title} · ${arg.event.extendedProps.federal?'U.S. federal holiday':'Observance'}`; return;}
+      if (arg.event.extendedProps?.holiday) {arg.el.title=`${arg.event.title} · ${arg.event.extendedProps.birthday?'From Apple Contacts':arg.event.extendedProps.federal?'U.S. federal holiday':'Observance'}`; return;}
       const show = shouldShowEvent(arg.event);
       if (!show) arg.el.style.display = "none";
 
@@ -999,6 +1003,7 @@ function renderCalendarFromCache() {
     calendar.removeAllEventSources();
     calendar.addEventSource(getVisibleEvents());
     calendar.addEventSource({id:'us-holidays',events:(info,success)=>success(holidayEvents(info.start,info.end))});
+    calendar.addEventSource({id:'birthdays',events:(info,success)=>success(birthdayEvents(info.start,info.end))});
   });
   calendarExperience?.render();
 }

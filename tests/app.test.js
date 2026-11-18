@@ -45,6 +45,7 @@ async function fixture(options = {}) {
   await module('baby.js',['initHuckleberry','logBabyFromText'],'const esc=escapeHTML;');
   await module('calendar-view.js',['initCalendarExperience','calendarEventContent'],'const esc=escapeHTML;');
   await module('weather-shared.js',['richmondDay','forecastCondition','weatherIcon']);
+  await module('birthdays-model.js',['birthdayList','setBirthdayList','birthdaysShown','birthdayTitle','birthdaysInRange','birthdayEvents','upcomingBirthdays']);
   await module('home-calendar.js',['initHomeCalendar','homeCalendarWeek','dayWeather','WEATHER_URL'],'const esc=escapeHTML;');
   await module('weather.js',['initWeather'],'const esc=escapeHTML;');
   await module('week-brief.js',['renderWeekBrief'],'const esc=escapeHTML;');
@@ -61,6 +62,7 @@ async function fixture(options = {}) {
   await module('install-app.js',['detectDevice','STEPS','weblocFile','installHTML','initInstall'],'const esc=escapeHTML;');
   await module('devices-view.js',['DEVICE_APPS','appStoreSearch','safeDeviceLink','readDeviceLinks','deviceTiles','launcherHTML','hueHTML','sonosHTML','DEVICE_SETUP','deviceSettingsHTML','readConnectResult','stripConnectParams','sampleHue','sampleSonos','sampleDeviceStatus'],'const esc=escapeHTML;');
   await module('devices.js',['initDevices']);
+  await module('birthdays.js',['sampleBirthdays','birthdayPanelHTML','initBirthdays'],'const esc=escapeHTML;');
   w.eval(clean(await read('app.js')) + ';window.__testApp={getDocs:()=>rawDocs,setCloudDocs:(records)=>{cloudDocs=records;rebuildEvents();},persistMovedEvent,redraw:()=>updateHouseholdEvents(expandedEvents)};'); await settle();
   return {dom,w,doc:w.document,errors};
 }
@@ -435,5 +437,17 @@ test('Devices page: app tiles, Hue rooms and Sonos speakers work in the preview'
   doc.querySelector('[data-device-add]').click(); assert.equal(doc.querySelectorAll('[data-device-open]').length,w.DEVICE_APPS.length+1);
   assert.match(w.localStorage.getItem('hh_device_links'),/ring:\/\//);
   assert.match(doc.getElementById('devicesSettingsPanel').textContent,/Connected/);
+  assert.deepEqual(errors,[]);
+});
+test('birthdays from Contacts show on Today and in Settings, and the calendar switch hides them', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  await settle();
+  const today=doc.querySelector('#homeWeek .home-week-day.is-today');
+  assert.match(today.querySelector('.home-birthday').textContent,/🎂 Grandma June turns \d+/);
+  assert.match(doc.getElementById('birthdayPanel').textContent,/4 birthdays found/);
+  assert.equal(doc.getElementById('birthdayToggle').checked,true);
+  const toggle=doc.getElementById('calendarBirthdays'); assert.equal(toggle.checked,true);
+  toggle.checked=false; toggle.dispatchEvent(new w.Event('change'));
+  assert.equal(doc.querySelectorAll('#homeWeek .home-birthday').length,0); assert.equal(w.localStorage.getItem('hh_birthdays'),'0');
   assert.deepEqual(errors,[]);
 });

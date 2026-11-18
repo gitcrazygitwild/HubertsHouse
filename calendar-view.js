@@ -8,7 +8,7 @@ const ownerNames = { hanry: 'hanry', karena: 'Karena', both: 'Together', custom:
 const ownerOf = event => Object.hasOwn(ownerNames, event.extendedProps?.owner) ? event.extendedProps.owner : 'custom';
 const time = date => localDate(date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 export function calendarEventContent({ event, view }) {
-  if(event.extendedProps?.holiday) {const label=document.createElement('span');label.className='holiday-label';label.textContent=`✦ ${event.title}`;return {domNodes:[label]};}
+  if(event.extendedProps?.holiday) {const label=document.createElement('span');label.className='holiday-label';label.textContent=event.extendedProps.birthday ? event.title : `✦ ${event.title}`;return {domNodes:[label]};}
   const p = event.extendedProps || {}, owner = ownerOf(event);
   const typeIcons = { trip: '→', wedding: '♡', appointment: '◷', party: '✦' };
   const icon = typeIcons[p.type] || '';
