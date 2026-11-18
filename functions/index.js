@@ -210,9 +210,11 @@ async function newsletterFor(uid, shared, progress = () => {}) {
   const now = new Date(), from = new Date(now); from.setHours(0, 0, 0, 0); const to = new Date(+from + 15 * 86400000);
   progress('reading Apple Calendar');
   const icloud = await icloudEvents(uid, from, to);
+  progress('reading birthdays');
+  const bdays = await withinTime(birthdaysFor(uid).catch(() => null), 15000);
   progress('writing the email');
   const skipped = [...shared.skipped, ...(icloud.late ? ['icloud'] : [])];
-  const digest = buildDigest({ name:prefs.name, now, household:shared.household, icloud:icloud.events, items:shared.items, forecast:shared.forecast, snapshot:shared.snapshot, predictions:shared.predictions, recent:shared.recent, briefing:shared.briefing, prefs, skipped });
+  const digest = buildDigest({ name:prefs.name, now, household:shared.household, icloud:icloud.events, items:shared.items, forecast:shared.forecast, snapshot:shared.snapshot, predictions:shared.predictions, recent:shared.recent, briefing:shared.briefing, birthdays:bdays.value?.birthdays || [], prefs, skipped });
   return { prefs, email:composeEmail(digest), skipped };
 }
 // Diapers aren't in the snapshot's history; the recent-logs list has them.
@@ -360,4 +362,39 @@ export const smartHomeAuth = onRequest({ region:'us-central1', secrets:[encrypti
   if (!result.ok) warn('Smart home sign-in did not finish', { provider:result.provider || 'unknown' });
   const back = new URLSearchParams({ connected:result.provider || '', ok:result.ok ? '1' : '0', ...(result.ok ? {} : { message:result.message || '' }) });
   response.redirect(302, `${appURL()}?${back}#devices`);
+});
+
+// Birthdays from the connected Apple account's Contacts (functions/carddav.js). The
+// member who connected Apple turns this on; it's shared with the household only when
+// their calendars are. Names and dates are cached server-side for 12 hours.
+import { CardDAV } from './carddav.js';
+const birthdayCache = ownerUid => db.doc(`privateBirthdays/${ownerUid}`);
+const BIRTHDAY_TTL = 12 * 3600000;
+async function birthdaysFor(uid, { force = false } = {}) {
+  let resolved;
+  try { resolved = await resolveCalendarConnection({ db, uid, members:activeMembers }); }
+  catch (error) { if (error instanceof CalendarError) return { connected:false, owner:false, enabled:false, birthdays:[] }; throw error; }
+  const { ownerUid, data, shared } = resolved, enabled = data.birthdays === true;
+  if (!enabled) return { connected:true, owner:!shared, enabled:false, birthdays:[] };
+  const cached = (await birthdayCache(ownerUid).get()).data();
+  if (!force && cached && Date.now() - Date.parse(cached.fetchedAt) < BIRTHDAY_TTL) return { connected:true, owner:!shared, enabled:true, birthdays:cached.birthdays, fetchedAt:cached.fetchedAt };
+  try {
+    const birthdays = await new CardDAV(decryptCredential(data.credential, encryptionKey.value(), ownerUid)).birthdays(), fetchedAt = new Date().toISOString();
+    await birthdayCache(ownerUid).set({ birthdays, fetchedAt });
+    return { connected:true, owner:!shared, enabled:true, birthdays, fetchedAt };
+  } catch (error) {
+    if (cached && !force) return { connected:true, owner:!shared, enabled:true, birthdays:cached.birthdays, fetchedAt:cached.fetchedAt, stale:true };
+    throw error;
+  }
+}
+export const birthdays = endpoint(async (uid, input = {}) => {
+  if (input.action === 'set') {
+    if (typeof input.enabled !== 'boolean') throw new CalendarError('invalid-argument', 'Choose whether to show birthdays.');
+    if (!(await connectionRef(uid).get()).exists) throw new CalendarError('permission-denied', 'Only the household member who connected Apple Calendar can turn on birthdays from their Contacts.');
+    await connectionRef(uid).update({ birthdays:input.enabled });
+    if (!input.enabled) { await birthdayCache(uid).delete(); return { connected:true, owner:true, enabled:false, birthdays:[] }; }
+    try { return await birthdaysFor(uid, { force:true }); }
+    catch (error) { await connectionRef(uid).update({ birthdays:false }); throw error; } // couldn't read Contacts: leave it off
+  }
+  return birthdaysFor(uid, { force:input.force === true });
 });

@@ -84,3 +84,8 @@
   .event-checklist-group header { padding:14px; flex-wrap:wrap; gap:8px; }
   .list-create-actions .btn { font-size:11px; }
 }
+/* Birthdays from Apple Contacts: drawn like holidays, in a soft pink. */
+.home-birthday { color:#a4506a; }
+.fc .fc-event.calendar-birthday:not(.fc-list-event) { background:#f8e6ec !important; color:#9a4862 !important; border-left-color:#d99aae !important; }
+[data-theme="dark"] .home-birthday { color:#eab0c2; }
+[data-theme="dark"] .fc .fc-event.calendar-birthday:not(.fc-list-event) { background:#45303a !important; color:#f0bfcf !important; border-color:#b07589 !important; --event-ink:#f0bfcf; }

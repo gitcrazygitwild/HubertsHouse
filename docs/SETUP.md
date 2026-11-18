@@ -190,3 +190,20 @@ How it works (`functions/smart-home.js`):
 - Sign-in state lives in `privateSmartHomeState/{nonce}`. It is single-use and expires after 10 minutes.
 - Both collections are server-only under the catch-all rule.
 - Tokens refresh automatically. Because Secret Manager isn't used, a deploy never fails while these are unset.
+
+## 7. Birthdays from Apple Contacts (optional)
+
+Apple's "Birthdays" calendar is generated on each device from Contacts, so it never appears in the iCloud calendar list.
+
+To turn birthdays on:
+- The member who connected Apple Calendar turns on **Settings → Birthdays from Apple Contacts**.
+- The server then reads the `BDAY` field from iCloud Contacts over CardDAV (`functions/carddav.js`), using the same app-specific password.
+
+How the data is handled:
+- Only names and dates are kept, cached for 12 hours in the server-only `privateBirthdays/{uid}`.
+
+Where birthdays show up:
+- On the calendar, with a "Birthdays" switch per device.
+- On Today's week strip.
+- In the morning email: today's birthdays at the top, and the rest of the week under "Around the house".
+- If that member's calendars are shared with the household, the birthdays are shared too.

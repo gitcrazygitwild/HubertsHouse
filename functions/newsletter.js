@@ -11,6 +11,7 @@ import { scorePredictions } from './shared/prediction-log.js';
 import { weatherFlags } from './shared/smart-home.js';
 import { frankieAwards } from './shared/awards.js';
 import { freeEvenings } from './shared/free-nights.js';
+import { upcomingBirthdays } from './shared/birthdays-model.js';
 
 export const HOUSE_TZ = 'America/New_York';
 export const APP_URL = 'https://huberts-house.web.app';
@@ -61,7 +62,7 @@ const startOfDay = date => { const d = new Date(date); d.setHours(0, 0, 0, 0); r
 const dateKey = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 const onDay = (events, day) => { const from = startOfDay(day), to = new Date(+from + DAY); return events.filter(e => e.start < to && e.end > from); };
 
-export function buildDigest({ name = '', now = new Date(), household = [], icloud = [], items = [], forecast = null, snapshot = null, predictions = [], recent = null, briefing = null, prefs = {}, skipped = [] }) {
+export function buildDigest({ name = '', now = new Date(), household = [], icloud = [], items = [], forecast = null, snapshot = null, predictions = [], recent = null, briefing = null, birthdays = [], prefs = {}, skipped = [] }) {
   const today = startOfDay(now), horizon = new Date(+today + 15 * DAY);
   const events = eventsInRange(household, icloud, today, horizon), tomorrow = new Date(+today + DAY);
   const week = Array.from({ length:7 }, (_, i) => { const day = new Date(+today + i * DAY); return { day, count:onDay(events, day).length }; });
@@ -76,7 +77,7 @@ export function buildDigest({ name = '', now = new Date(), household = [], iclou
     weather:fc[0] ? { ...fc[0], tomorrow:fc[1] || null } : null, outlook:fc.slice(0, 7),
     rain:weatherFlags(events.map(e => ({ ...e, start:e.start.toISOString(), end:e.end.toISOString() })), fc, now),
     today:onDay(events, today), tomorrow:onDay(events, tomorrow), week:{ plans:week.reduce((sum, d) => sum + d.count, 0), busiest:busiest?.count ? busiest : null },
-    freeNights:freeEvenings(events, now, 14, 3).map(n => n.date), chores, groceries, baby:null, skipped:[...new Set(skipped)].filter(key => SKIPPED_LABELS[key]),
+    freeNights:freeEvenings(events, now, 14, 3).map(n => n.date), birthdays:upcomingBirthdays(now, 7, birthdays), chores, groceries, baby:null, skipped:[...new Set(skipped)].filter(key => SKIPPED_LABELS[key]),
     world:briefing && (briefing.headlines?.length || briefing.markets?.length) ? { headlines:(briefing.headlines || []).slice(0, 6), goodNews:briefing.goodNews || null, markets:briefing.markets || [] } : null
   };
   if (snapshot?.sleeps) {
@@ -140,6 +141,7 @@ export function composeEmail(d) {
   const greeting = `${d.now.getHours() < 12 ? 'Good morning' : d.now.getHours() < 17 ? 'Good afternoon' : 'Good evening'}${d.name ? `, ${esc(d.name)}` : ''}`;
   const w = d.weather, sections = [];
   const subjectBits = [w ? `${Math.round(w.high)}°` : null, `${d.today.length} plan${d.today.length === 1 ? '' : 's'}`];
+  if (d.birthdays?.today.length) subjectBits.push(`🎂 ${d.birthdays.today.map(b => b.name).join(' & ')}`);
   if (d.baby) subjectBits.push(d.baby.timer?.active ? `${d.baby.name} asleep` : `${d.baby.name}’s day`);
   const subject = `☀ ${d.now.toLocaleDateString('en-US', { weekday:'long' })} at Hubert’s House · ${subjectBits.filter(Boolean).join(' · ')}`;
 
@@ -147,7 +149,7 @@ export function composeEmail(d) {
   const weatherLine = w ? p(`<strong>${Math.round(w.high)}° / ${Math.round(w.low)}°</strong> · ${esc(w.label || '')}${w.rain != null ? ` · ${Math.round(w.rain)}% rain` : ''}${w.tomorrow ? ` ${small(`· Tomorrow ${Math.round(w.tomorrow.high)}° ${esc(w.tomorrow.label || '')}`)}` : ''}`) : '';
   const rain = d.rain.length ? p(`☔ Rain may affect <strong>${esc(d.rain[0].title)}</strong> (${esc(shortDate(new Date(d.rain[0].start)))}${d.rain[0].rain != null ? `, ${d.rain[0].rain}%` : ''})${d.rain.length > 1 ? ` and ${d.rain.length - 1} more` : ''}.`, 'font-size:13px') : '';
   sections.push(section('Today in Richmond', `${d.today.length ? `${d.today.length} plan${d.today.length === 1 ? '' : 's'} today` : 'A wide-open day'}`,
-    weatherLine + (d.outlook?.length > 1 ? outlookRow(d.outlook) : '') + rain + (d.today.length ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0">${planRows(d.today)}</table>` : p('Nothing on the calendar. Make it your own.', `color:${C.muted}`))
+    (d.birthdays?.today.length ? `<div style="margin:0 0 12px;padding:10px 12px;border-radius:12px;background:#fbeef0">${p(d.birthdays.today.map(b => `<strong>${esc(b.title)}</strong>`).join(' · ') + ' today!', 'margin:0;font-size:14px')}</div>` : '') + weatherLine + (d.outlook?.length > 1 ? outlookRow(d.outlook) : '') + rain + (d.today.length ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0">${planRows(d.today)}</table>` : p('Nothing on the calendar. Make it your own.', `color:${C.muted}`))
     + (d.tomorrow.length ? p(`<strong>Tomorrow:</strong> ${d.tomorrow.slice(0, 4).map(e => `${esc(e.title)}${e.allDay ? '' : ` ${small(esc(clock(e.start)))}`}`).join(' · ')}${d.tomorrow.length > 4 ? ` +${d.tomorrow.length - 4}` : ''}`, 'margin-top:12px;font-size:13px') : '')));
 
   // Frankie
@@ -171,6 +173,7 @@ export function composeEmail(d) {
   if (d.chores.length) house.push(p(`<strong>To take care of:</strong> ${d.chores.slice(0, 6).map(c => `${esc(c.title)}${c.overdue ? ` ${small('(overdue)')}` : ''}`).join(' · ')}${d.chores.length > 6 ? ` +${d.chores.length - 6}` : ''}`, 'font-size:13px'));
   if (d.groceries) house.push(p(`🛒 <strong>${d.groceries}</strong> thing${d.groceries === 1 ? '' : 's'} on the grocery list.`, 'font-size:13px'));
   house.push(p(`📅 <strong>${d.week.plans}</strong> plan${d.week.plans === 1 ? '' : 's'} this week${d.week.busiest ? ` · busiest: ${esc(d.week.busiest.day.toLocaleDateString('en-US', { weekday:'long' }))}` : ''}.`, 'font-size:13px'));
+  if (d.birthdays?.soon.length) house.push(p(`🎂 <strong>Birthdays this week:</strong> ${d.birthdays.soon.slice(0, 6).map(b => `${esc(b.name)}${b.age ? ` (${b.age})` : ''} ${small(esc(shortDate(new Date(`${b.date}T12:00:00`))))}`).join(' · ')}${d.birthdays.soon.length > 6 ? ` +${d.birthdays.soon.length - 6}` : ''}`, 'font-size:13px'));
   if (d.freeNights.length) house.push(p(`♡ <strong>Free nights for a date:</strong> ${d.freeNights.map(n => esc(shortDate(n))).join(' · ')}`, 'font-size:13px'));
   sections.push(section('Around the house', 'The week at a glance', house.join('')));
 
@@ -190,11 +193,13 @@ ${d.skipped?.length ? `<tr><td style="padding:0 4px 10px;text-align:center;font:
 <tr><td style="padding:8px 4px 0;text-align:center;font:12px/1.6 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.muted}"><a href="${APP_URL}" style="color:${C.accent};font-weight:600">Open Hubert’s House</a> · <a href="${APP_URL}/#settings" style="color:${C.muted}">Newsletter settings</a><br>Made for hanry, Karena, Frankie, Hubert, Mack & Mia.</td></tr>
 </table></td></tr></table></body></html>`;
   const text = [`${greeting.replace(/&#39;|&amp;/g, m => m === '&amp;' ? '&' : "'")}. ${longDate(d.now)}`, w ? `Weather: ${Math.round(w.high)}°/${Math.round(w.low)}° ${w.label || ''}${d.outlook?.length > 1 ? `\nThis week: ${d.outlook.slice(1).map(day => `${new Date(`${day.date}T12:00:00`).toLocaleDateString('en-US', { weekday:'short' })} ${day.high == null ? '—' : Math.round(day.high)}°/${day.low == null ? '—' : Math.round(day.low)}°${day.rain != null && day.rain >= 30 ? ` ${Math.round(day.rain)}%` : ''}`).join(' · ')} (${WEATHER_URL})` : ''}` : '',
+    d.birthdays?.today.length ? `${d.birthdays.today.map(b => b.title).join(' · ')} today!` : '',
     `Today: ${d.today.length ? d.today.map(e => `${e.allDay ? 'All day' : clock(e.start)} ${e.title}`).join('; ') : 'nothing planned'}`,
     d.baby ? (storyText(d.baby) || `${d.baby.name}: yesterday ${hm(d.baby.yesterday.sleep?.total)} sleep, ${d.baby.yesterday.bottles?.ounces ?? 0} oz`) : '',
     d.world?.headlines.length ? `Top headlines:\n${d.world.headlines.map(h => `• ${h.title} (${h.source}) ${h.link}`).join('\n')}` : '',
     d.world?.goodNews ? `Good news: ${d.world.goodNews.title} ${d.world.goodNews.link}` : '',
     d.world?.markets.length ? `Markets: ${d.world.markets.map(marketLine).join(' · ')}` : '',
+    d.birthdays?.soon.length ? `Birthdays this week: ${d.birthdays.soon.map(b => `${b.name}${b.age ? ` (${b.age})` : ''} ${shortDate(new Date(`${b.date}T12:00:00`))}`).join(' · ')}` : '',
     `Dad joke: ${c.joke.setup} — ${c.joke.punchline}`, d.skipped?.length ? `Left out or older this time (slow to answer): ${d.skipped.map(key => SKIPPED_LABELS[key]).join(', ')}.` : '', APP_URL].filter(Boolean).join('\n\n');
   return { subject, html, text };
 }
