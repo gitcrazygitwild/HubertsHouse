@@ -108,7 +108,9 @@ export function createHuckleberryHandler({ db, key, api = provider, now = Date.n
       // Recheck provider account membership before accessing or mutating a child.
       const children = await providerCall('children',() => api.huckleberryChildren(client,session.userId));
       if (!children.some(item => item.id === child)) throw new provider.HuckleberryError('permission-denied','This child is no longer shared with the household Huckleberry account. Choose a profile in Settings.');
-      if (action === 'recent') return providerCall('recent',() => api.huckleberryRecent(client,child,now()));
+      // `return await`: a bare `return` would let the finally below close the client while
+      // the queries are still running ("The client has already been terminated").
+      if (action === 'recent') return await providerCall('recent',() => api.huckleberryRecent(client,child,now()));
       if (action === 'change') {
         // Edit or delete one recent entry. The entry's own version guards against
         // overwriting a change made meanwhile in the Huckleberry app.
