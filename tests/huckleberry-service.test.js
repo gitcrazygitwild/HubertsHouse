@@ -254,3 +254,15 @@ test('recent logs and changes go to the selected child only and clear the cached
   assert.equal(docs.has('privateBabySnapshots/household-home'),false,'The next refresh reloads history');
   await assert.rejects(handler('outsider',{action:'recent'}),e => e.code === 'permission-denied');
 });
+test('the Huckleberry connection stays open until a recent-logs read has finished', async () => {
+  // Reproduces the newsletter crash: "The client has already been terminated".
+  const {handler,api} = fixture();
+  let terminated = false;
+  api.huckleberryClient = () => ({terminate:async () => { terminated = true; }});
+  api.huckleberryRecent = async () => { await new Promise(resolve => setTimeout(resolve, 10)); if (terminated) throw new Error('The client has already been terminated'); return {days:7,entries:[]}; };
+  await handler('parent',{action:'connect',email:'test@example.com',password:'password',timezone:'America/New_York'});
+  await handler('parent',{action:'select',childId:'child-one',timezone:'America/New_York'});
+  terminated = false;
+  assert.deepEqual(await handler('parent',{action:'recent'}),{days:7,entries:[]});
+  assert.equal(terminated,true,'closed afterwards');
+});
