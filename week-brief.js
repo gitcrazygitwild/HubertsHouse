@@ -1,6 +1,7 @@
 import { dateKey, escapeHTML as esc } from './household-model.js';
 import { eventsOnDay, localDate, eventEnd } from './calendar-model.js';
 import { renderHTML } from './dom.js';
+import { birthdaysInRange, birthdaysShown } from './birthdays-model.js';
 
 function sharedPeople(a, b) {
   if (a.extendedProps?.withFrankie && b.extendedProps?.withFrankie) return true;
@@ -32,11 +33,22 @@ export function buildWeekBrief(events, items, now = new Date()) {
       if (overlapStart < overlapEnd && sharedPeople(timed[i], timed[j])) overlaps.push({ date: dateKey(overlapStart), titles: [timed[i].title, timed[j].title] });
     }
   }
-  return { plans: plans.length, due: due.length, overdue: overdue.length, busiest, openEvenings: openEvenings.map(dateKey), overlaps, from: dateKey(start), to: dateKey(days[6]) };
+  const birthdays = birthdaysShown() ? birthdaysInRange(start, end) : [];
+  return { birthdays, plans: plans.length, due: due.length, overdue: overdue.length, busiest, openEvenings: openEvenings.map(dateKey), overlaps, from: dateKey(start), to: dateKey(days[6]) };
 }
 
+let lastArgs = null;
+// Birthdays load after the calendar; redraw with the last plans when they arrive.
+globalThis.addEventListener?.('hh:birthdays', () => { if (lastArgs) renderWeekBrief(...lastArgs); });
+export function birthdayWeekText(birthdays, now = new Date()) {
+  const today = dateKey(now), tomorrow = dateKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1));
+  const when = date => date === today ? 'today' : date === tomorrow ? 'tomorrow' : new Date(`${date}T12:00:00`).toLocaleDateString([], { weekday: 'long' });
+  const label = b => b.age ? `${b.name} turns ${b.age}` : `${b.name}’s birthday`;
+  return birthdays.slice(0, 3).map(b => `${label(b)} ${when(b.date)}`).join(' · ') + (birthdays.length > 3 ? ` · +${birthdays.length - 3} more` : '');
+}
 export function renderWeekBrief(events, items, now = new Date()) {
   if (!document.getElementById('briefPlans')) return;
+  lastArgs = [events, items];
   const brief = buildWeekBrief(events, items, now);
   const dayName = day => new Date(`${day}T12:00:00`).toLocaleDateString([], { weekday: 'long' });
   document.getElementById('briefDates').textContent = `${new Date(`${brief.from}T12:00:00`).toLocaleDateString([], { month: 'short', day: 'numeric' })} – ${new Date(`${brief.to}T12:00:00`).toLocaleDateString([], { month: 'short', day: 'numeric' })}`;
@@ -50,6 +62,7 @@ export function renderWeekBrief(events, items, now = new Date()) {
     ? `<button type="button" class="brief-insight" data-week-day="${brief.busiest.date}"><span class="brief-insight-icon" aria-hidden="true">▦</span><span><strong>${esc(dayName(brief.busiest.date))} has the most going on</strong><small>${brief.busiest.count} plan${brief.busiest.count === 1 ? '' : 's'} · take a look at the day</small></span><span aria-hidden="true">→</span></button>`
     : '<div class="brief-insight"><span class="brief-insight-icon" aria-hidden="true">✳</span><span><strong>A little room to make plans</strong><small>Your next seven days are clear.</small></span></div>';
   const clashes = brief.overlaps.length ? `<button type="button" class="brief-insight has-overlap" data-week-day="${brief.overlaps[0].date}"><span class="brief-insight-icon" aria-hidden="true">!</span><span><strong>${brief.overlaps.length} schedule overlap${brief.overlaps.length === 1 ? '' : 's'} to check</strong><small>${esc(brief.overlaps[0].titles.join(' + '))}</small></span><span aria-hidden="true">→</span></button>` : '';
-  renderHTML(document.getElementById('briefInsights'), busiest + clashes);
+  const bdays = brief.birthdays.length ? `<button type="button" class="brief-insight has-birthday" data-week-day="${brief.birthdays[0].date}"><span class="brief-insight-icon" aria-hidden="true">🎂</span><span><strong>${brief.birthdays.length === 1 ? 'A birthday this week' : `${brief.birthdays.length} birthdays this week`}</strong><small>${esc(birthdayWeekText(brief.birthdays, now))}</small></span><span aria-hidden="true">→</span></button>` : '';
+  renderHTML(document.getElementById('briefInsights'), bdays + busiest + clashes);
   document.getElementById('briefDueNote').textContent = brief.overdue ? `${brief.overdue} overdue · includes chores & checklists` : 'Dated chores & checklists';
 }

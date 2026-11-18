@@ -4,6 +4,7 @@ import { escapeHTML as esc, dateKey } from './household-model.js';
 import { renderHTML } from './dom.js';
 import { parseQuickAdd, describeDraft, parseBabyLog, describeBabyLog } from './quick-add.js';
 import { weatherFlags, nextUp, untilText } from './smart-home.js';
+import { birthdaysInRange, birthdaysShown } from './birthdays-model.js';
 import { freeEvenings, dateNightDraft } from './free-nights.js';
 import { skyState, skyArt } from './sky.js';
 
@@ -122,6 +123,14 @@ function renderNowNext() {
   const now = new Date(), events = ctx.getEvents(), parts = [];
   const eventLink = (event, from, label) => `<button type="button" class="nn-link" data-nn-event="${esc(event.extendedProps?.sourceId || event.id)}" data-nn-occ="${esc(from.toISOString())}">${label}</button>`;
   const { current, next } = nextUp(events, now);
+  // Today's birthdays first; otherwise tomorrow's, so there's time to call or send a card.
+  if (birthdaysShown()) {
+    const start = new Date(now); start.setHours(0, 0, 0, 0); const dayAfter = new Date(start); dayAfter.setDate(dayAfter.getDate() + 2);
+    const soon = birthdaysInRange(start, dayAfter), todayKey = dateKey(start), today = soon.filter(b => b.date === todayKey), tomorrow = soon.filter(b => b.date !== todayKey);
+    const label = b => b.age ? `${b.name} turns ${b.age}` : `${b.name}’s birthday`;
+    if (today.length) parts.push(`<span class="nn-item nn-birthday"><span aria-hidden="true">🎂</span><button type="button" class="nn-link" data-nn-view="calendar"><strong>${esc(today.map(label).join(' · '))}</strong></button><span class="nn-muted">today</span></span>`);
+    else if (tomorrow.length) parts.push(`<span class="nn-item nn-birthday"><span aria-hidden="true">🎂</span><button type="button" class="nn-link" data-nn-view="calendar">Tomorrow: <strong>${esc(tomorrow.map(label).join(' · '))}</strong></button></span>`);
+  }
   if (current) parts.push(`<span class="nn-item"><span class="nn-live" aria-hidden="true"></span>${eventLink(current.event, current.from, `Now: <strong>${esc(current.event.title)}</strong>`)} <span class="nn-muted">${current.minutesLeft}m left</span></span>`);
   if (next) parts.push(`<span class="nn-item"><span aria-hidden="true">◷</span>${eventLink(next.event, next.from, `Next: <strong>${esc(next.event.title)}</strong>`)} <span class="nn-muted">${esc(next.minutesUntil < 1440 ? clock(next.from) : `${dayName(next.from)} ${clock(next.from)}`)} · ${esc(untilText(next.minutesUntil))}</span></span>`);
   if (baby) {
@@ -170,6 +179,7 @@ export function initUpgrades(options) {
     else ctx.showView(target.dataset.nnView);
   });
   window.addEventListener('hh:baby', event => { baby = event.detail; renderNowNext(); });
+  window.addEventListener('hh:birthdays', () => renderNowNext());
   window.addEventListener('hh:forecast', event => { forecast = event.detail; renderNowNext(); renderSky(); });
   window.addEventListener('hh:events', () => requestAnimationFrame(() => { renderNowNext(); renderFreeNights(); }));
   $('freeNights')?.addEventListener('click', event => { const button = event.target.closest('[data-free-night]'); if (button) ctx.openDraft(dateNightDraft(new Date(button.dataset.freeNight))); });

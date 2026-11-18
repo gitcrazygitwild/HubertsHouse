@@ -1,5 +1,6 @@
-// A transparent personal-history estimate. No age-based sleep prescription,
-// Huckleberry prediction, or population training data enters this calculation.
+// Personal-history estimates. Hubert's Purrfect Window uses no age-based sleep
+// prescription, Huckleberry prediction or population data. Mia's Catnap Forecast
+// may use Frankie's age as a light starting point (see typicalWindow).
 import { nightLine, sleepKind } from './baby-history.js';
 const MINUTE = 60000, DAY = 86400000;
 const stamp = value => typeof value === 'number' ? value : Date.parse(value);
@@ -87,19 +88,33 @@ export function huckleberryPrediction(snapshot, now = new Date()) {
     note:expired ? 'This prediction has passed. Open Huckleberry to refresh its calculation.' : staleRead ? 'Saved prediction; reconnect to check for updates.' : 'Last prediction shared by Huckleberry. Opening its app may be needed to recalculate.' };
 }
 
-// Mia's Catnap Forecast: a second, deliberately different estimate.
+// Mia's Catnap Forecast (version 2): a second, deliberately different estimate.
 // Purrfect Window pools recent wake gaps near the same clock time. Mia instead
 // (1) indexes wake windows by position in the day (wake→nap 1, nap 1→nap 2…),
-// (2) weights recent days more heavily (3-day half-life) with a small growth
-// trend, and (3) shortens or lengthens the window based on how the last nap
-// compared with that nap's usual length, learned from this baby's own history.
+// (2) weights recent days more heavily, trims logging outliers, and follows a growth
+//     trend. With Frankie's birthdate, the trend follows her age (windows grow fast
+//     in the early months and more slowly later), older babies' history counts for
+//     longer, and a light age-typical starting point helps when there is little data,
+// (3) shortens or lengthens the window based on the last nap, last night and the last
+//     bottle, each only as much as Frankie's own history shows it matters, and
+// (4) when a bottle has been given since she woke and she usually falls asleep a
+//     steady time after a bottle, leans on that.
 // Nap or night follows Frankie's own learned evening line (see nightLine), not a fixed hour.
+// Version 1 is frozen in mia-v1.js for the scoreboard (see prediction-log.js).
 const isNap = (sleep, timezone, line) => sleepKind(sleep, timezone, line) === 'nap';
 function weighted(values, weights) { const total = weights.reduce((a,b) => a + b, 0); return values.reduce((sum,value,index) => sum + value * weights[index], 0) / total; }
 function slope(xs, ys, weights) {
   const mx = weighted(xs,weights), my = weighted(ys,weights);
   let num = 0, den = 0; xs.forEach((x,i) => { num += weights[i] * (x - mx) * (ys[i] - my); den += weights[i] * (x - mx) ** 2; });
   return den > 0 ? num / den : 0;
+}
+// Weighted Pearson correlation.
+export function correlation(xs, ys, weights = xs.map(() => 1)) {
+  if (xs.length < 3) return 0;
+  const mx = weighted(xs, weights), my = weighted(ys, weights);
+  let sxy = 0, sxx = 0, syy = 0;
+  xs.forEach((x, i) => { sxy += weights[i] * (x - mx) * (ys[i] - my); sxx += weights[i] * (x - mx) ** 2; syy += weights[i] * (ys[i] - my) ** 2; });
+  return sxx > 0 && syy > 0 ? sxy / Math.sqrt(sxx * syy) : 0;
 }
 const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
 function mergeSleeps(sleeps, now, days) {
@@ -110,13 +125,44 @@ function mergeSleeps(sleeps, now, days) {
   for (const interval of intervals) { const previous = merged.at(-1); if (previous && interval.start <= previous.end) previous.end = Math.max(previous.end, interval.end); else merged.push({...interval}); }
   return merged;
 }
-// Wake windows labeled by their position in the day.
 const nextDay = day => new Date(Date.parse(`${day}T12:00:00Z`) + DAY).toISOString().slice(0, 10);
 const previousDay = day => new Date(Date.parse(`${day}T12:00:00Z`) - DAY).toISOString().slice(0, 10);
 // Minutes since local midnight; small hours count as late evening (25:00, not 1:00).
 const clockOf = (value, timezone) => { const {hour, minute} = localParts(value, timezone); return (hour < 6 ? hour + 24 : hour) * 60 + minute; };
-export function indexedWakeWindows(sleeps, timezone, now = new Date(), days = 21) {
-  const merged = mergeSleeps(sleeps, now, days), byDay = new Map(), line = nightLine(merged, timezone, now, days);
+
+// ---------- Age ----------
+// Frankie's age in days from her Huckleberry birthdate, or null.
+export function ageInDays(birthdate, now = new Date()) {
+  const born = typeof birthdate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(birthdate) ? Date.parse(`${birthdate}T12:00:00Z`) : stamp(birthdate);
+  if (!Number.isFinite(born)) return null;
+  const days = (+now - born) / DAY;
+  return days >= 0 && days <= 1500 ? days : null;
+}
+export const ageLabel = days => days == null ? '' : days < 14 ? `${Math.max(1, Math.round(days))} day${Math.round(days) === 1 ? '' : 's'} old` : days < 61 ? `${Math.round(days / 7)} weeks old` : `${Math.floor(days / 30.44)} month${Math.floor(days / 30.44) === 1 ? '' : 's'} old`;
+// How long history stays relevant: babies change fastest in the first months.
+export const halfLifeFor = days => days == null ? 3 : days < 90 ? 3 : days < 180 ? 4 : days < 365 ? 6 : 8;
+// A light, age-typical starting point for a wake window (minutes), from common
+// pediatric ranges. Used only to start a brand-new nap pattern (two logged windows),
+// at the weight of half a day of her data; from three windows on, her history alone
+// decides (in testing, any more pull toward "average" made forecasts worse).
+const AGE_WINDOWS = [[0,45],[30,60],[60,75],[90,90],[120,105],[150,120],[180,135],[240,165],[300,180],[365,210],[450,240],[540,300],[720,330]];
+export function typicalWindow(days, napIndex = 2) {
+  if (days == null) return null;
+  let i = AGE_WINDOWS.findIndex(([d]) => d > days); if (i === -1) i = AGE_WINDOWS.length; if (i === 0) i = 1;
+  const [[d0, m0], [d1, m1]] = i >= AGE_WINDOWS.length ? [AGE_WINDOWS.at(-2), AGE_WINDOWS.at(-1)] : [AGE_WINDOWS[i - 1], AGE_WINDOWS[i]];
+  const base = days >= d1 ? m1 : m0 + (m1 - m0) * (days - d0) / (d1 - d0);
+  return base * ([0.85, 1, 1.1, 1.15][Math.min(3, Math.max(0, napIndex - 1))]);
+}
+
+// ---------- Bottles ----------
+const bottleList = (bottles, now) => (bottles || []).map(bottle => ({ t:stamp(bottle.start), oz:toOz(bottle) })).filter(bottle => Number.isFinite(bottle.t) && bottle.t <= +now).sort((a, b) => a.t - b.t);
+const toOz = bottle => { const amount = Number(bottle.amount); if (!Number.isFinite(amount) || amount <= 0) return null; return bottle.units === 'ml' ? amount / 29.57 : amount; };
+const lastBefore = (list, t) => { let found = null; for (const bottle of list) { if (bottle.t > t) break; found = bottle; } return found; };
+const between = (list, from, to) => list.filter(bottle => bottle.t > from && bottle.t <= to);
+
+// Wake windows labeled by their position in the day, with what came before each.
+export function indexedWakeWindows(sleeps, timezone, now = new Date(), days = 21, bottles = []) {
+  const merged = mergeSleeps(sleeps, now, days), byDay = new Map(), line = nightLine(merged, timezone, now, days), feeds = bottleList(bottles, now);
   const entryFor = day => { if (!byDay.has(day)) byDay.set(day, {wake:null,naps:[],bed:null,night:0}); return byDay.get(day); };
   for (const sleep of merged) {
     if (isNap(sleep, timezone, line)) { entryFor(localParts(sleep.start, timezone).day).naps.push(sleep); continue; }
@@ -129,6 +175,10 @@ export function indexedWakeWindows(sleeps, timezone, now = new Date(), days = 21
     if (end.hour < 12 && end.day === morning) entryFor(morning).wake = sleep.end; // the night ended this morning
   }
   const today = localParts(+now, timezone).day, samples = [], bedtimes = [];
+  const context = (from, to) => {
+    const before = lastBefore(feeds, from), during = between(feeds, from, to), last = during.at(-1);
+    return { lastOz:before && from - before.t <= 4 * 3600000 ? before.oz : null, feedGap:last ? (to - last.t) / MINUTE : null };
+  };
   for (const [day, {wake, naps, bed, night}] of byDay) {
     const daysAgo = Math.round((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${day}T12:00:00Z`)) / DAY);
     naps.forEach((nap, index) => {
@@ -136,48 +186,89 @@ export function indexedWakeWindows(sleeps, timezone, now = new Date(), days = 21
       if (!from || from >= nap.start) return;
       const minutes = (nap.start - from) / MINUTE;
       if (minutes < 20 || minutes > 360) return; // logging gaps, not real windows
-      samples.push({index:index + 1, minutes, previousNap:index === 0 ? null : (naps[index - 1].end - naps[index - 1].start) / MINUTE,
-        lastNight:index === 0 && wake && night >= 240 ? night : null, daysAgo, day});
+      samples.push({index:index + 1, minutes, from, to:nap.start, napLength:(nap.end - nap.start) / MINUTE, previousNap:index === 0 ? null : (naps[index - 1].end - naps[index - 1].start) / MINUTE,
+        lastNight:index === 0 && wake && night >= 240 ? night : null, wakeClock:index === 0 ? clockOf(from, timezone) : null, daysAgo, day, ...context(from, nap.start)});
     });
     // Bedtime: the last nap's end → the night's first sleep.
     const lastNap = naps.at(-1);
     if (bed != null && lastNap && lastNap.end < bed) {
       const minutes = (bed - lastNap.end) / MINUTE;
-      if (minutes >= 30 && minutes <= 420) bedtimes.push({minutes, naps:naps.length, previousNap:(lastNap.end - lastNap.start) / MINUTE, clock:clockOf(bed, timezone), daysAgo, day});
+      if (minutes >= 30 && minutes <= 420) bedtimes.push({minutes, from:lastNap.end, to:bed, naps:naps.length, previousNap:(lastNap.end - lastNap.start) / MINUTE, clock:clockOf(bed, timezone), daysAgo, day, ...context(lastNap.end, bed)});
     }
   }
   return {samples, bedtimes, byDay, today, line};
 }
+const weightsFor = (pool, halfLife) => pool.map(sample => 0.5 ** (sample.daysAgo / halfLife));
 // One learned adjustment: β is the slope of window vs. the factor in Frankie's history
-// (with enough samples), scaled by how far today's value is from her usual.
-function learnedEffect(pool, field, value, {fallback, low, high, cap}) {
+// (with enough samples), scaled by how far today's value is from her usual. With
+// `gate`, it only applies once her history shows a real link (|r| ≥ gate, n ≥ 8).
+function learnedEffect(pool, field, value, {fallback, low, high, cap, halfLife = 3, gate = 0}) {
   const known = pool.filter(sample => sample[field] != null);
-  if (value == null || known.length < 3) return {effect:0, typical:null};
-  const weights = known.map(sample => 0.5 ** (sample.daysAgo / 3));
-  const typical = weighted(known.map(sample => sample[field]), weights);
-  const beta = known.length >= 6 ? clamp(slope(known.map(s => s[field]), known.map(s => s.minutes), weights), low, high) : fallback;
-  return {effect:clamp(beta * (value - typical), -cap, cap), typical};
+  if (value == null || known.length < 3) return {effect:0, typical:null, r:null};
+  const weights = weightsFor(known, halfLife), xs = known.map(s => s[field]), ys = known.map(s => s.minutes);
+  const typical = weighted(xs, weights), r = known.length >= 6 ? correlation(xs, ys, weights) : null;
+  if (gate && (known.length < 8 || r == null || Math.abs(r) < gate)) return {effect:0, typical, r};
+  const beta = known.length >= 6 ? clamp(slope(xs, ys, weights), low, high) : fallback;
+  return {effect:clamp(beta * (value - typical), -cap, cap), typical, r};
 }
-// Recency-weighted average, capped growth trend and weighted spread of a pool of windows.
-function windowStats(pool) {
-  const weights = pool.map(sample => 0.5 ** (sample.daysAgo / 3)), minutes = pool.map(sample => sample.minutes);
-  const base = weighted(minutes, weights);
-  // Growth trend, capped so one odd day cannot run away with the forecast.
+// Drop logging outliers (a forgotten nap makes a 5-hour "window"): beyond 3 robust SDs.
+function trimmed(pool) {
+  if (pool.length < 6) return pool;
+  const values = pool.map(s => s.minutes), median = quantile(values, .5), mad = quantile(values.map(v => Math.abs(v - median)), .5) * 1.4826;
+  if (!(mad > 0)) return pool;
+  const kept = pool.filter(s => Math.abs(s.minutes - median) <= 3 * Math.max(mad, 8));
+  return kept.length >= 3 ? kept : pool;
+}
+// Recency-weighted average (with the light age prior), growth trend and spread.
+function windowStats(pool, { age = null, halfLife = 3, prior = null } = {}) {
+  const weights = weightsFor(pool, halfLife), minutes = pool.map(sample => sample.minutes);
+  const own = weighted(minutes, weights), total = weights.reduce((a, b) => a + b, 0);
+  // The age prior only helps while a nap pattern is new; with real history it just pulls toward average.
+  const priorWeight = prior == null || pool.length >= 3 ? 0 : 0.5;
+  const base = (own * total + (prior ?? 0) * priorWeight) / (total + priorWeight);
+  // Growth trend, capped so one odd day cannot run away with the forecast. With her age,
+  // windows grow with log(age): fast early on, gently later.
   const spanDays = Math.max(...pool.map(s => s.daysAgo)) - Math.min(...pool.map(s => s.daysAgo));
-  const perDay = pool.length >= 5 && spanDays >= 4 ? clamp(slope(pool.map(s => -s.daysAgo), minutes, weights), -3, 3) : 0;
-  const trend = clamp(perDay * weighted(pool.map(s => s.daysAgo), weights), -20, 20);
-  const sd = Math.sqrt(weighted(minutes.map(value => (value - base) ** 2), weights));
-  return {weights, base, trend, sd};
+  let trend = 0;
+  if (pool.length >= 5 && spanDays >= 4) {
+    if (age != null && age > 21) {
+      const logs = pool.map(s => Math.log(Math.max(14, age - s.daysAgo)));
+      const perLog = clamp(slope(logs, minutes, weights), 0, 400);
+      trend = clamp(perLog * (Math.log(age) - weighted(logs, weights)), -20, 20);
+    } else {
+      const perDay = clamp(slope(pool.map(s => -s.daysAgo), minutes, weights), -3, 3);
+      trend = clamp(perDay * weighted(pool.map(s => s.daysAgo), weights), -20, 20);
+    }
+  }
+  const sd = Math.sqrt(weighted(minutes.map(value => (value - own) ** 2), weights));
+  return {weights, base, own, trend, sd};
 }
-export function miaForecast({ sleeps = [], timer = null, timezone = 'America/New_York', complete = true } = {}, now = new Date()) {
+// Falling asleep after a bottle: how steady is "bottle → asleep" for her, and when
+// would that put this nap? Used only if the gap is steadier than the wake window.
+// Only a real habit counts: most windows end within an hour of a bottle, the gap is
+// much steadier than the wake window itself, and today's bottle is recent enough.
+function feedTiming(pool, halfLife, lastWake, lastFeed, now, windowSD) {
+  const fed = pool.filter(s => s.feedGap != null && s.feedGap <= 60);
+  if (!lastFeed || lastFeed.t <= lastWake || +now - lastFeed.t > 60 * MINUTE || fed.length < 6 || new Set(fed.map(s => s.day)).size < 3 || fed.length < pool.length * 0.6) return null;
+  const weights = weightsFor(fed, halfLife), gaps = fed.map(s => s.feedGap), typical = weighted(gaps, weights);
+  const sd = Math.sqrt(weighted(gaps.map(g => (g - typical) ** 2), weights));
+  if (!(sd < windowSD * 0.6)) return null;
+  // Only the bottle that usually comes last before sleep: one given much earlier in
+  // the window than her pre-sleep bottle usually is (a mid-window top-up) doesn't count.
+  const leads = fed.map(s => s.minutes - s.feedGap), lead = weighted(leads, weights), leadSD = Math.sqrt(weighted(leads.map(l => (l - lead) ** 2), weights));
+  if ((lastFeed.t - lastWake) / MINUTE < lead - Math.max(30, 1.5 * leadSD)) return null;
+  return { minutes:(lastFeed.t - lastWake) / MINUTE + typical, typical, sd, n:fed.length, at:lastFeed.t };
+}
+export function miaForecast({ sleeps = [], bottles = [], birthdate = null, timer = null, timezone = 'America/New_York', complete = true } = {}, now = new Date()) {
   const empty = reason => ({ available:false, reason });
   if (!complete) return empty('Sleep history is incomplete. Refresh before forecasting.');
   if (timer?.active) return empty('Sleeping now. Mia will forecast after wake-up.');
-  const merged = mergeSleeps(sleeps, now, 21), last = merged.at(-1);
+  const age = ageInDays(birthdate, now), halfLife = halfLifeFor(age), lookback = age != null && age >= 180 ? 28 : 21;
+  const merged = mergeSleeps(sleeps, now, lookback), last = merged.at(-1);
   if (!last || +now - last.end > 8 * 3600000) return empty('Log a recent sleep and wake-up for a forecast.');
   const current = localParts(+now, timezone);
   if (current.hour >= 1 && current.hour < 5) return empty('Overnight is outside Mia’s forecast.');
-  const {samples, bedtimes, byDay, today, line} = indexedWakeWindows(sleeps, timezone, now);
+  const {samples, bedtimes, byDay, today, line} = indexedWakeWindows(sleeps, timezone, now, lookback, bottles);
   const todays = byDay.get(today) || {naps:[]}, lastWasNap = isNap(last, timezone, line), lastEnd = localParts(last.end, timezone).hour;
   // After night sleep, only a morning wake-up (4 AM–noon) starts a new day; anything else is a night waking.
   if (!lastWasNap && (lastEnd < 4 || lastEnd >= 12)) return empty('Overnight is outside Mia’s forecast. A sleep that starts after Frankie’s usual evening line counts as night sleep.');
@@ -185,58 +276,103 @@ export function miaForecast({ sleeps = [], timer = null, timezone = 'America/New
   const napNumber = lastWasNap ? napsToday + 1 : 1;
   const previousNap = lastWasNap ? (last.end - last.start) / MINUTE : null;
   const lastNight = !lastWasNap && todays.night >= 240 ? todays.night : null;
+  const feeds = bottleList(bottles, now), before = lastBefore(feeds, last.end), lastFeed = between(feeds, last.end, +now).at(-1) || null;
+  const lastOz = before && last.end - before.t <= 4 * 3600000 ? before.oz : null;
   const days = pool => new Set(pool.map(sample => sample.day)).size;
   let pool = samples.filter(sample => sample.index === napNumber), matched = 'exact';
   const exactDays = days(pool);
   if (exactDays < 3) { pool = samples.filter(sample => Math.abs(sample.index - napNumber) <= 1); matched = 'nearby'; }
-  const napReady = pool.length >= 3 && days(pool) >= 3;
+  pool = trimmed(pool);
+  // With her age as a starting point, two days of history are enough to begin.
+  const napReady = (pool.length >= 3 && days(pool) >= 3) || (age != null && pool.length >= 2 && days(pool) >= 2);
   let nap = null;
   if (napReady) {
-    const stats = windowStats(pool);
-    // Nap 2+: a short or long previous nap. Nap 1: a short or long night.
-    const napAdjust = learnedEffect(pool, 'previousNap', previousNap, {fallback:0.25, low:0, high:0.5, cap:25});
-    const nightAdjust = learnedEffect(pool, 'lastNight', lastNight, {fallback:0.05, low:0, high:0.15, cap:20});
-    nap = {...stats, napAdjust, nightAdjust, target:stats.base + stats.trend + napAdjust.effect + nightAdjust.effect};
+    const stats = windowStats(pool, { age, halfLife, prior:typicalWindow(age, napNumber) });
+    // Nap 2+: a short or long previous nap. Nap 1: a short or long night, and an early or late wake-up.
+    const napAdjust = learnedEffect(pool, 'previousNap', previousNap, {fallback:0.25, low:0, high:0.5, cap:25, halfLife});
+    const nightAdjust = learnedEffect(pool, 'lastNight', lastNight, {fallback:0.05, low:0, high:0.15, cap:20, halfLife});
+    const wakeAdjust = napNumber === 1 ? learnedEffect(pool, 'wakeClock', clockOf(last.end, timezone), {fallback:0, low:-0.4, high:0.4, cap:20, halfLife, gate:0.3}) : {effect:0, typical:null, r:null};
+    const bottleAdjust = learnedEffect(pool, 'lastOz', lastOz, {fallback:0, low:-15, high:15, cap:15, halfLife, gate:0.3});
+    nap = {...stats, napAdjust, nightAdjust, wakeAdjust, bottleAdjust, target:stats.base + stats.trend + napAdjust.effect + nightAdjust.effect + wakeAdjust.effect + bottleAdjust.effect};
   }
   // Bedtime comes next once Frankie has had her usual number of naps (unless her history
   // has days with another nap and it still fits), or when another nap would run into
   // her usual bedtime.
   let bed = null;
-  if (lastWasNap && bedtimes.length >= 3 && days(bedtimes) >= 3) {
-    const weights = bedtimes.map(sample => 0.5 ** (sample.daysAgo / 3));
-    const usualNaps = weighted(bedtimes.map(sample => sample.naps), weights), usualClock = weighted(bedtimes.map(sample => sample.clock), weights);
+  const beds = trimmed(bedtimes);
+  if (lastWasNap && beds.length >= 3 && days(beds) >= 3) {
+    const weights = weightsFor(beds, halfLife);
+    const usualNaps = weighted(beds.map(sample => sample.naps), weights), usualClock = weighted(beds.map(sample => sample.clock), weights);
     const napClock = nap ? clockOf(last.end + nap.target * MINUTE, timezone) : Infinity;
     if (napNumber <= Math.round(usualNaps)) { if (nap && napClock >= usualClock - 45) bed = {usualNaps, usualClock}; }
     else if (!(exactDays >= 3 && napClock < usualClock - 60)) bed = {usualNaps, usualClock};
   }
+  const feedNote = feed => feed ? {feedTypical:Math.round(feed.typical), lastFeed:new Date(feed.at).toISOString()} : {};
   if (bed) {
-    const stats = windowStats(bedtimes);
-    const napAdjust = learnedEffect(bedtimes, 'previousNap', previousNap, {fallback:0.25, low:0, high:0.5, cap:25});
+    const stats = windowStats(beds, { age, halfLife });
+    const napAdjust = learnedEffect(beds, 'previousNap', previousNap, {fallback:0.25, low:0, high:0.5, cap:25, halfLife});
     const byWindow = stats.base + stats.trend + napAdjust.effect;
-    // Bedtime is partly a wake window and partly a clock routine. Blend the two by how
-    // steady each has been for Frankie: the steadier one gets more say.
-    const clockSD = Math.sqrt(weighted(bedtimes.map(s => (s.clock - bed.usualClock) ** 2), stats.weights));
+    // Bedtime is partly a wake window and partly a clock routine (and, for many babies,
+    // the last bottle). Blend them by how steady each has been for Frankie.
+    const clockSD = Math.sqrt(weighted(beds.map(s => (s.clock - bed.usualClock) ** 2), stats.weights));
     const byClock = bed.usualClock - clockOf(last.end, timezone);
-    const windowWeight = 1 / Math.max(stats.sd, 5) ** 2, clockWeight = 1 / Math.max(clockSD, 5) ** 2;
-    const share = clockWeight / (windowWeight + clockWeight);
-    const target = Math.max(20, byWindow * (1 - share) + byClock * share);
-    const spread = clamp(1 / Math.sqrt(windowWeight + clockWeight), 10, 25);
-    return finish({kind:'bedtime', target, spread, pool:bedtimes, matched:'bedtime', base:stats.base, trend:stats.trend, napAdjust, nightAdjust:{effect:0, typical:null},
-      extra:{usualNaps:Math.round(bed.usualNaps), usualBedtime:new Date(last.end + byClock * MINUTE).toISOString(), clockShare:Math.round(share * 100)}});
+    const feed = feedTiming(beds, halfLife, last.end, lastFeed, now, stats.sd);
+    const parts = [[byWindow, 1 / Math.max(stats.sd, 5) ** 2], [byClock, 1 / Math.max(clockSD, 5) ** 2], ...(feed ? [[feed.minutes, 1 / Math.max(feed.sd, 5) ** 2]] : [])];
+    const total = parts.reduce((sum, [, w]) => sum + w, 0);
+    const target = Math.max(20, parts.reduce((sum, [value, w]) => sum + value * w, 0) / total);
+    const spread = clamp(1 / Math.sqrt(total), 10, 25);
+    return finish({kind:'bedtime', target, spread, pool:beds, matched:'bedtime', base:stats.base, trend:stats.trend, napAdjust, nightAdjust:{effect:0, typical:null}, bottleAdjust:{effect:0},
+      extra:{usualNaps:Math.round(bed.usualNaps), usualBedtime:new Date(last.end + byClock * MINUTE).toISOString(), clockShare:Math.round(parts[1][1] / total * 100), feedShare:feed && parts[2] ? Math.round(parts[2][1] / total * 100) : 0, ...(parts[2] ? feedNote(feed) : {})}});
   }
-  if (!nap) return empty(`Learning: Mia needs wake windows before nap ${napNumber} on at least three days.`);
-  return finish({kind:'nap', target:nap.target, spread:clamp(nap.sd, 10, 25), pool, matched, base:nap.base, trend:nap.trend, napAdjust:nap.napAdjust, nightAdjust:nap.nightAdjust, extra:{}});
+  if (!nap) return empty(`Learning: Mia needs wake windows before nap ${napNumber} on at least ${age != null ? 'two' : 'three'} days.`);
+  // A bottle since she woke: if "bottle → asleep" is steadier than the wake window, blend it in.
+  const feed = feedTiming(pool, halfLife, last.end, lastFeed, now, nap.sd);
+  let target = nap.target, spread = clamp(nap.sd, 10, 25), feedShare = 0;
+  if (feed) {
+    const wWindow = 1 / Math.max(nap.sd, 5) ** 2, wFeed = 1 / Math.max(feed.sd, 5) ** 2;
+    feedShare = wFeed / (wWindow + wFeed); target = nap.target * (1 - feedShare) + feed.minutes * feedShare;
+    spread = clamp(1 / Math.sqrt(wWindow + wFeed), 10, 25);
+  }
+  return finish({kind:'nap', target, spread, pool, matched, base:nap.base, trend:nap.trend, napAdjust:nap.napAdjust, nightAdjust:nap.nightAdjust, bottleAdjust:nap.bottleAdjust,
+    extra:{wakeMinutes:Math.round(nap.wakeAdjust.effect) || 0, feedShare:Math.round(feedShare * 100), ...(feedShare ? feedNote(feed) : {})}});
 
-  function finish({kind, target, spread, pool, matched, base, trend, napAdjust, nightAdjust, extra}) {
+  function finish({kind, target, spread, pool, matched, base, trend, napAdjust, nightAdjust, bottleAdjust, extra}) {
     const start = last.end + Math.max(5, target - spread) * MINUTE, end = last.end + (target + spread) * MINUTE;
     const round = value => value == null ? null : Math.round(value);
-    return { available:true, kind, start:new Date(start).toISOString(), end:new Date(end).toISOString(), target:new Date(last.end + target * MINUTE).toISOString(),
+    return { available:true, version:2, kind, start:new Date(start).toISOString(), end:new Date(end).toISOString(), target:new Date(last.end + target * MINUTE).toISOString(),
       lastWake:new Date(last.end).toISOString(), napNumber, napsToday, matched, samples:pool.length, days:days(pool),
       baseMinutes:Math.round(base) || 0, trendMinutes:Math.round(trend) || 0, napMinutes:Math.round(napAdjust.effect) || 0, previousNap:round(previousNap), typicalNap:round(napAdjust.typical),
-      nightMinutes:Math.round(nightAdjust.effect) || 0, lastNight:round(lastNight), typicalNight:round(nightAdjust.typical), ...extra,
+      nightMinutes:Math.round(nightAdjust.effect) || 0, lastNight:round(lastNight), typicalNight:round(nightAdjust.typical),
+      bottleMinutes:Math.round(bottleAdjust.effect) || 0, lastOz:lastOz == null ? null : Math.round(lastOz * 10) / 10, ageDays:age == null ? null : Math.floor(age), halfLife, ...extra,
       confidence:spread >= 22 ? 'Varied' : pool.length < 6 ? 'Learning' : 'Steady',
       phase:+now > end ? 'passed' : +now >= start ? 'within' : 'upcoming' };
   }
+}
+
+// Bottles and sleep: does anything in Frankie's own logs link them? Plain
+// correlations over the last four weeks, reported honestly ("no clear link yet").
+export function bottleSleepLinks({ sleeps = [], bottles = [], timezone = 'America/New_York' } = {}, now = new Date()) {
+  const {samples, bedtimes, byDay} = indexedWakeWindows(sleeps, timezone, now, 28, bottles), feeds = bottleList(bottles, now);
+  const verdict = (r, n) => n < 8 ? 'not-enough' : Math.abs(r) < 0.2 ? 'none' : Math.abs(r) < 0.4 ? 'slight' : 'clear';
+  const link = (pairs, unit) => {
+    const xs = pairs.map(p => p[0]), ys = pairs.map(p => p[1]), r = correlation(xs, ys), n = pairs.length;
+    return { n, r:Math.round(r * 100) / 100, slope:n >= 3 ? Math.round(slope(xs, ys, xs.map(() => 1)) * 10) / 10 : 0, unit, verdict:verdict(r, n) };
+  };
+  const windows = [...samples, ...bedtimes];
+  // 1. Bottle in the hour before a nap → that nap's length (minutes per oz).
+  const napPairs = samples.map(s => { const fed = between(feeds, s.to - 60 * MINUTE, s.to).filter(b => b.oz != null); return fed.length ? [fed.reduce((sum, b) => sum + b.oz, 0), s.napLength] : null; }).filter(Boolean);
+  // 2. The last bottle before a wake window → how long she stays awake.
+  const windowPairs = windows.filter(s => s.lastOz != null).map(s => [s.lastOz, s.minutes]);
+  // 3. Evening ounces (4 PM to bedtime) → the night's sleep.
+  const nightPairs = bedtimes.map(s => {
+    const night = byDay.get(nextDay(s.day))?.night;
+    const evening = feeds.filter(b => b.oz != null && b.t <= s.to && clockOf(b.t, timezone) >= 16 * 60 && b.t > s.to - 6 * 3600000);
+    return night >= 240 && evening.length ? [evening.reduce((sum, b) => sum + b.oz, 0), night] : null;
+  }).filter(Boolean);
+  // 4. Falling asleep after a bottle: how often, and how soon.
+  const fed = windows.filter(s => s.feedGap != null && s.feedGap <= 60), gaps = fed.map(s => s.feedGap);
+  return { napLength:link(napPairs, 'min per oz'), window:link(windowPairs, 'min per oz'), night:link(nightPairs, 'min per oz'),
+    feedToSleep:{ n:fed.length, of:windows.length, share:windows.length ? Math.round(100 * fed.length / windows.length) : 0, typical:gaps.length ? Math.round(quantile(gaps, .5)) : null } };
 }
 
 // Next bottle: the median gap between Frankie's recent bottles that started around

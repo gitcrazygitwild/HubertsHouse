@@ -679,7 +679,7 @@ function initUIHooks() {
   const holidays = document.getElementById('calendarHolidays'); holidays.checked=holidaysEnabled();
   holidays.addEventListener('change',()=>{try {localStorage.setItem('hh_holidays',holidays.checked?'1':'0');}catch{} renderCalendarFromCache();homeCalendar?.render();});
   const birthdays = document.getElementById('calendarBirthdays'); birthdays.checked=birthdaysShown();
-  birthdays.addEventListener('change',()=>{try {localStorage.setItem('hh_birthdays',birthdays.checked?'1':'0');}catch{} renderCalendarFromCache();homeCalendar?.render();});
+  birthdays.addEventListener('change',()=>{try {localStorage.setItem('hh_birthdays',birthdays.checked?'1':'0');}catch{} renderCalendarFromCache();homeCalendar?.render();window.dispatchEvent(new Event('hh:birthdays'));});
   document.querySelectorAll('[data-event-template]').forEach(button => button.addEventListener('click', () => {
     if (isUnlocked()) openEventModal(eventTemplate(button.dataset.eventTemplate));
   }));

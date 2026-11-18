@@ -135,3 +135,14 @@ rect.is-hovered.mark-night,rect.is-hovered.mark-nap { stroke:var(--card); stroke
 .frankie-share-note { font-size: 12px; color: var(--muted); margin: -12px 0 14px; white-space: pre-line; }
 .frankie-share-note:empty { display: none; }
 .frankie-share-note.is-fallback { padding: 12px 14px; border: 1px dashed var(--border); border-radius: 12px; color: var(--text); user-select: all; }
+/* Bottles & sleep */
+.link-rows { display:grid; gap:10px; margin-bottom:12px; }
+.link-row { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:12px 14px; border:1px solid var(--border); border-radius:14px; background:var(--card); }
+.link-row strong { display:block; font-size:14px; font-weight:600; }
+.link-row small { display:block; color:var(--muted); font-size:12px; margin-top:2px; }
+.link-badge { flex-shrink:0; font-size:11px; padding:4px 10px; border-radius:999px; background:var(--soft); color:var(--soft-ink, var(--text)); white-space:nowrap; }
+.link-clear .link-badge { background:#e6eddd; color:#4d6e3c; }
+.link-slight .link-badge { background:#f5ecd9; color:#86672f; }
+[data-theme="dark"] .link-clear .link-badge { background:#2f4430; color:#bfe0b0; }
+[data-theme="dark"] .link-slight .link-badge { background:#463d2b; color:#e8d3a2; }
+@media (max-width:650px) { .link-row { align-items:flex-start; flex-direction:column; gap:8px; } }
