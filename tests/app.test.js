@@ -65,6 +65,8 @@ async function fixture(options = {}) {
   await module('devices.js',['initDevices']);
   await module('litter-view.js',['litterHeadline','litterHTML','litterSettingsHTML','sampleLitter'],'const esc=escapeHTML;');
   await module('litter.js',['initLitter']);
+  await module('feeders-view.js',['feederAlerts','feedersHTML','FEEDER_STEPS','feederSettingsHTML','sampleFeeders'],'const esc=escapeHTML;');
+  await module('feeders.js',['initFeeders']);
   await module('birthdays.js',['sampleBirthdays','birthdayPanelHTML','initBirthdays'],'const esc=escapeHTML;');
   w.eval(clean(await read('app.js')) + ';window.__testApp={getDocs:()=>rawDocs,setCloudDocs:(records)=>{cloudDocs=records;rebuildEvents();},persistMovedEvent,redraw:()=>updateHouseholdEvents(expandedEvents)};'); await settle();
   return {dom,w,doc:w.document,errors};
@@ -442,8 +444,10 @@ test('Devices page: app tiles, Hue rooms and Sonos speakers work in the preview'
   doc.querySelector('[data-device-add]').click(); assert.equal(doc.querySelectorAll('[data-device-open]').length,w.DEVICE_APPS.length+1);
   assert.match(w.localStorage.getItem('hh_device_links'),/ring:\/\//);
   assert.match(doc.getElementById('devicesSettingsPanel').textContent,/Connected/);
-  assert.equal(doc.querySelectorAll('#litterPanel .lr-cat').length,3); assert.match(doc.getElementById('litterPanel').textContent,/Mack is today’s top visitor/);
+  assert.equal(doc.querySelectorAll('#litterPanel .lr-cat').length,3); assert.doesNotMatch(doc.getElementById('litterPanel').textContent,/top visitor|this week/);
   assert.match(doc.getElementById('litterSettingsPanel').textContent,/Connected/);
+  assert.equal(doc.querySelectorAll('#feederPanel .feeder').length,2); assert.match(doc.getElementById('feederPanel').textContent,/Food is running low/);
+  assert.match(doc.getElementById('nowNext').textContent,/Mia’s Dinerfood low/);
   assert.deepEqual(errors,[]);
 });
 test('birthdays from Contacts show on Today and in Settings, and the calendar switch hides them', async t => {

@@ -71,12 +71,15 @@
 .lr-alerts { margin:6px 0 0; padding-left:18px; font-size:13px; color:#9a6a1f; }
 [data-theme="dark"] .lr-alerts { color:#e8c27a; }
 .lr-cats h3 { margin:6px 0 8px; font-size:13px; letter-spacing:.02em; }
-.lr-cat { display:grid; grid-template-columns:90px 1fr auto; grid-template-areas:"name visits weight" "name last last"; align-items:center; column-gap:12px; row-gap:2px; padding:10px 0; border-top:1px solid var(--border2, var(--border)); }
-.lr-cat-name { grid-area:name; font-family:var(--font-display, Georgia, serif); font-size:18px; }
-.lr-visits { grid-area:visits; position:relative; font-size:13px; padding-bottom:6px; }
-.lr-week { position:absolute; left:0; bottom:0; height:3px; border-radius:2px; background:var(--accent); opacity:.6; }
-.lr-weight { grid-area:weight; font-size:13px; text-align:right; }
+.lr-cat { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; border-top:1px solid var(--border2, var(--border)); }
+.lr-cat-name { font-family:var(--font-display, Georgia, serif); font-size:18px; }
+.lr-weight { font-size:13px; text-align:right; }
 .lr-weight small { display:block; color:var(--muted); font-size:11px; }
 .lr-weight small.warn { color:#b86b2a; }
-.lr-cat > small { grid-area:last; font-size:11px; }
-@media (max-width:650px) { .lr-meter { grid-template-columns:84px 1fr 40px; } .lr-cat { grid-template-columns:70px 1fr auto; } }
+@media (max-width:650px) { .lr-meter { grid-template-columns:84px 1fr 40px; } }
+/* PetLibro feeders */
+.feeder-card { margin-bottom:22px; }
+.feeder-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+.feeder-actions select { border:1px solid var(--border); border-radius:10px; padding:9px 10px; background:var(--soft); color:var(--text); min-height:40px; }
+.feeder-today { margin:4px 0 0; font-size:14px; }
+@media (max-width:650px) { .lr-robot.feeder header { flex-direction:column; align-items:stretch; } .feeder-actions { flex-wrap:nowrap; justify-content:flex-start; } .feeder-actions select { flex:1; min-width:0; } }

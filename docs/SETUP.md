@@ -227,3 +227,23 @@ Where it shows up:
   - each cat's visits today and this week, latest weight and 30-day change, from SmartWeight pet profiles.
 - **Now & Next:** a note when the drawer is 90% or more full.
 - Litter-Robot 5 isn't supported yet.
+
+## 9. PetLibro feeders (optional)
+
+Before connecting:
+- PetLibro allows one signed-in session per account. Make a second PetLibro account (for example `you+house@gmail.com`) and share the feeders with it from the main app.
+- Then connect that second account in **Settings → PetLibro feeders**.
+
+How the login is kept:
+- PetLibro tokens expire with no refresh token, so the password's MD5 (what PetLibro's login takes) is stored encrypted to sign in again.
+- The plain password is never stored.
+- Everything lives in the server-only `privatePetLibro/household`.
+
+How it works:
+- `functions/petlibro.js` follows the community clients (Home Assistant's PETLIBRO integration, `petlibro-api`).
+- Endpoints: `/member/auth/login`, `/device/device/list`, `/device/device/realInfo`, `/device/data/grainStatus` and `/device/device/manualFeeding`.
+- This is unofficial and unverified from CI. Only field names (never values) are logged as "PetLibro fields", so the parser can be adjusted.
+
+Where it shows up:
+- **Devices page:** food low, outlet blocked, battery, today's portions and meals, and **Feed now** (1–4 portions).
+- **Now & Next:** a note when food is low or the outlet is blocked.
