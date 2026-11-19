@@ -150,3 +150,12 @@ rect.is-hovered.mark-night,rect.is-hovered.mark-nap { stroke:var(--card); stroke
 .challenge-calls { margin:0 0 12px; padding:10px 14px; border-radius:12px; background:var(--soft); font-size:14px; }
 .morning-calls { grid-column:1 / -1; margin:2px 0 0; padding:10px 14px; border-radius:12px; background:var(--soft); font-size:13px; }
 .mack-excuse { display:block; margin-top:6px; font-style:italic; color:var(--muted); }
+/* Missed-nap recovery */
+.missed-naps { margin:14px 0; padding:12px 14px; border:1px dashed var(--border); border-radius:12px; }
+.missed-naps summary { cursor:pointer; font-weight:600; font-size:14px; }
+.missed-list { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+.missed-list .btn { min-height:36px; padding:6px 12px; font-size:12px; }
+#rewindPanel { margin:0 0 14px; padding:14px 16px; border-radius:14px; border:1px solid #d9a24b; background:linear-gradient(135deg, rgba(240,190,90,.16), transparent 70%), var(--card); }
+#rewindPanel h3 { margin:0 0 6px; font-size:15px; letter-spacing:0; }
+#rewindPanel p { margin:0 0 10px; font-size:14px; }
+#rewindPanel .connection-actions { margin-top:8px; }

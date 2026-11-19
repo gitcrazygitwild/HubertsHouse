@@ -364,3 +364,42 @@ export async function changeHuckleberry(client, childId, input, timezone, now = 
     }
   }
 }
+
+// ---------- Missed-nap recovery ("rewind") ----------
+// To capture the SweetSpot Huckleberry would have shown after a past wake-up, the sleeps
+// logged after it are removed for a moment and then put back exactly (same document IDs
+// and fields). The service saves the copies before anything is deleted.
+const plain = value => JSON.parse(JSON.stringify(value ?? {}));
+export async function sleepsAfter(client, childId, afterMs, now = Date.now()) {
+  const child = id(childId);
+  if (!Number.isFinite(afterMs) || afterMs > now || afterMs < now - 30 * 86400000) fail('invalid-argument', 'Choose a nap from the past 30 days.');
+  const parent = client.doc(`sleep/${child}`), [state, result] = await Promise.all([parent.get(), parent.collection('intervals').where('start', '>=', afterMs / 1000).orderBy('start', 'asc').limit(25).get()]);
+  if (state.data()?.timer?.active) fail('failed-precondition', 'A sleep timer is running. Try this once Frankie is awake and the timer is stopped.');
+  if (result.docs.some(doc => doc.data()?.multi)) fail('failed-precondition', 'Some of those sleeps are archived in Huckleberry, so that nap is too far back to recover.');
+  if (result.docs.length > 20) fail('failed-precondition', 'Too many sleeps were logged after that nap to do this safely. Pick a more recent one.');
+  return result.docs.map(doc => ({ id:doc.id, data:plain(doc.data()) }));
+}
+// Remove the copied sleeps, and point prefs.lastSleep (the summary the Huckleberry app
+// reads) at the newest sleep that remains, so the app recalculates from that wake-up.
+export async function removeSleeps(client, childId, saved, now = Date.now()) {
+  const child = id(childId), parent = client.doc(`sleep/${child}`), batch = client.batch(), gone = new Set(saved.map(item => item.id));
+  for (const item of saved) batch.delete(parent.collection('intervals').doc(id(item.id)));
+  const newest = await parent.collection('intervals').orderBy('start', 'desc').limit(gone.size + 4).get();
+  const keep = newest.docs.filter(doc => !gone.has(doc.id)).map(doc => doc.data() || {}).filter(value => !value.multi && Number(value.duration) > 0).sort((a, b) => Number(b.start) - Number(a.start))[0];
+  const seconds = now / 1000;
+  batch.update(parent, { 'prefs.lastSleep':keep ? lastSummary('sleep', keep) : FieldValue.delete(), 'prefs.timestamp':{ seconds }, 'prefs.local_timestamp':seconds });
+  await batch.commit();
+  return { removed:saved.length };
+}
+export async function restoreSleeps(client, childId, saved, now = Date.now()) {
+  const child = id(childId), parent = client.doc(`sleep/${child}`), refs = saved.map(item => parent.collection('intervals').doc(id(item.id)));
+  const existing = await Promise.all(refs.map(ref => ref.get())), batch = client.batch();
+  let restored = 0;
+  saved.forEach((item, index) => { if (!existing[index].exists) { batch.set(refs[index], item.data); restored++; } });
+  const [state, newest] = await Promise.all([parent.get(), parent.collection('intervals').orderBy('start', 'desc').limit(4).get()]);
+  const latest = newest.docs.map(doc => doc.data() || {}).concat(saved.map(item => item.data)).filter(value => !value.multi && Number(value.duration) > 0).sort((a, b) => Number(b.start) - Number(a.start))[0];
+  const current = state.data()?.prefs?.lastSleep;
+  if (latest && (!current || Number(latest.start) >= Number(current.start))) { const seconds = now / 1000; batch.update(parent, { 'prefs.lastSleep':lastSummary('sleep', latest), 'prefs.timestamp':{ seconds }, 'prefs.local_timestamp':seconds }); }
+  await batch.commit();
+  return { restored, alreadyThere:saved.length - restored };
+}

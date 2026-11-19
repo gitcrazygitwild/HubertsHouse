@@ -57,6 +57,14 @@ export function sweetspotPatch(existing, incoming) {
   if (!existing) return incoming;
   return existing.sweetspot?.target === incoming.sweetspot.target ? null : { sweetspot:incoming.sweetspot };
 }
+// A SweetSpot recovered for a missed nap (see baby.js recovery): Huckleberry's answer
+// once the later sleeps were taken out. It must fall after that wake-up, within the
+// usual 8 hours, and differ from what Huckleberry showed before (or it didn't recalculate).
+export function recoveredEntry({ lastWake, childId, sweetspot, before = null, now = new Date() }) {
+  const wake = ms(lastWake), target = ms(sweetspot);
+  if (!Number.isFinite(wake) || !Number.isFinite(target) || target <= wake || target - wake > MAX_WAIT || (before && ms(before) === target)) return null;
+  return { id:predictionId(lastWake), lastWake:new Date(wake).toISOString(), childId:String(childId || ''), sweetspot:{ target:new Date(target).toISOString(), loggedAt:new Date(+now).toISOString() } };
+}
 export function previousSweetspot(entries = [], lastWake) {
   const wake = ms(lastWake);
   return entries.filter(entry => ms(entry.lastWake) < wake && entry.sweetspot?.target).sort((a, b) => ms(b.lastWake) - ms(a.lastWake))[0]?.sweetspot.target || null;
@@ -97,13 +105,13 @@ function computeScores(entries, sleeps, timer, timezone, extra) {
   const since = Math.min(...entries.map(entry => ms(entry.lastWake)).filter(Number.isFinite));
   const latest = Math.max(0, ...sleeps.map(sleep => ms(sleep.end)).filter(Number.isFinite)), line = nightLine(sleeps, timezone, latest, 60);
   const wakes = [...new Set(sleeps.map(sleep => sleep.end))].filter(end => ms(end) >= since && isDaytimeWake(end, timezone, sleeps, line));
-  const results = []; let skipped = 0;
+  const results = [], missed = []; let skipped = 0;
   for (const lastWake of wakes) {
     const actual = actualSleepStart(lastWake, sleeps, timer);
     if (!actual) continue;
     // Without a saved SweetSpot a nap can never be scored, so skip the replay.
     const sweetspot = saved.get(predictionId(lastWake))?.sweetspot;
-    if (!sweetspot) { skipped++; continue; }
+    if (!sweetspot) { skipped++; if (ms(lastWake) >= Date.now() - 7 * 86400000) missed.push({ lastWake, actual:new Date(actual).toISOString() }); continue; }
     const replay = replayGuesses(sleeps, lastWake, timezone, extra);
     const guesses = { sweetspot:sweetspot ? { target:sweetspot.target } : null, purrfect:replay.purrfect, mia:replay.mia };
     if (!MODELS.every(model => guesses[model.key])) { skipped++; continue; }
@@ -128,5 +136,6 @@ function computeScores(entries, sleeps, timer, timezone, extra) {
       avgWidth:n && scored.every(value => value.width != null) ? Math.round(scored.reduce((sum, value) => sum + value.width, 0) / n) : null };
   });
   const leader = n >= 3 ? [...summary].sort((a, b) => a.mae - b.mae || b.hitRate - a.hitRate)[0].key : null;
-  return { results, summary, leader, scoredNaps:n, skipped };
+  missed.sort((a, b) => ms(b.lastWake) - ms(a.lastWake));
+  return { results, summary, leader, scoredNaps:n, skipped, missed:missed.slice(0, 6) };
 }

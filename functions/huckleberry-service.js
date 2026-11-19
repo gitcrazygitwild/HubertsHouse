@@ -68,11 +68,14 @@ export function createHuckleberryHandler({ db, key, api = provider, now = Date.n
     const member = await db.doc(`households/home/members/${uid}`).get();
     if (!member.exists || member.data().active !== true) throw new provider.HuckleberryError('permission-denied','This account is not a member of the household.');
     const action = input.action;
-    if (!['status','connect','select','snapshot','write','recent','change','disconnect'].includes(action)) throw new provider.HuckleberryError('invalid-argument','Choose a Huckleberry action.');
+    if (!['status','connect','select','snapshot','write','recent','change','disconnect','rewind','rewind-status','restore'].includes(action)) throw new provider.HuckleberryError('invalid-argument','Choose a Huckleberry action.');
     const connectTimezone = action === 'connect' ? api.validTimezone(input.timezone) : null;
     const connection = await loadShared(!['connect','disconnect'].includes(action)), cacheRef = sharedCache();
     if (input.connectionVersion !== undefined && input.connectionVersion !== (connection?.version || null)) throw changed();
     if (action === 'status') return publicState(connection);
+    // Missed-nap recovery: the copies of removed sleeps live here until they're put back.
+    const rewindRef = db.doc('privateBabyRewind/household');
+    if (action === 'rewind-status') { const saved = (await rewindRef.get()).data(); return saved ? { active:true, wake:saved.wake, count:saved.sleeps.length, createdAt:saved.createdAt } : { active:false }; }
     if (action === 'disconnect') {
       const data = {version:randomUUID(),disconnected:true,updatedBy:uid};
       await change(connection,(tx,ref) => { tx.set(ref,data); tx.delete(cacheRef); });
@@ -111,6 +114,26 @@ export function createHuckleberryHandler({ db, key, api = provider, now = Date.n
       // `return await`: a bare `return` would let the finally below close the client while
       // the queries are still running ("The client has already been terminated").
       if (action === 'recent') return await providerCall('recent',() => api.huckleberryRecent(client,child,now()));
+      if (action === 'rewind') {
+        // Copy first, then remove: if removing fails, the copies are still here to restore.
+        if ((await rewindRef.get()).exists) throw new provider.HuckleberryError('failed-precondition','A missed-nap recovery is already in progress. Finish it or put the sleeps back first.');
+        const wake = Date.parse(input.wake);
+        const sleeps = await providerCall('recent',() => api.sleepsAfter(client,child,wake,now()));
+        if (!sleeps.length) throw new provider.HuckleberryError('failed-precondition','No sleeps were logged after that nap, so Huckleberry already shows it as the latest.');
+        await rewindRef.create({ childId:child, wake:new Date(wake).toISOString(), sleeps, createdAt:new Date(now()).toISOString(), createdBy:uid });
+        await providerCall('write',() => api.removeSleeps(client,child,sleeps,now()));
+        await change(connection,tx => tx.delete(cacheRef)).catch(() => {});
+        return { active:true, wake:new Date(wake).toISOString(), count:sleeps.length };
+      }
+      if (action === 'restore') {
+        const saved = (await rewindRef.get()).data();
+        if (!saved) return { active:false, restored:0 };
+        if (saved.childId !== child) throw new provider.HuckleberryError('failed-precondition','The selected child changed. Choose the original child in Settings, then put the sleeps back.');
+        const result = await providerCall('write',() => api.restoreSleeps(client,child,saved.sleeps,now()));
+        await rewindRef.delete();
+        await change(connection,tx => tx.delete(cacheRef)).catch(() => {});
+        return { active:false, ...result };
+      }
       if (action === 'change') {
         // Edit or delete one recent entry. The entry's own version guards against
         // overwriting a change made meanwhile in the Huckleberry app.
