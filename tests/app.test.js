@@ -39,7 +39,7 @@ async function fixture(options = {}) {
   await module('baby-model.js',['purrfectWindow','huckleberryPrediction','miaForecast','indexedWakeWindows','bottleForecast','correlation','ageInDays','ageLabel','halfLifeFor','typicalWindow','bottleSleepLinks']);
   await module('mia-v1.js',['miaForecastV1']);
   await module('cat-challenges.js',['CHALLENGES','MACK_EXCUSE','nightsFrom','currentBedtime','morningPicks','bottlePicks','scoreMornings','scoreBottles']);
-  await module('prediction-log.js',['MODELS','predictionId','isDaytimeWake','sweetspotEntry','sweetspotPatch','previousSweetspot','actualSleepStart','replayGuesses','scorePredictions','MIA_V2_SINCE','miaVersionAt']);
+  await module('prediction-log.js',['MODELS','predictionId','isDaytimeWake','sweetspotEntry','sweetspotPatch','previousSweetspot','actualSleepStart','replayGuesses','scorePredictions','MIA_V2_SINCE','miaVersionAt','recoveredEntry']);
   await module('baby-sample.js',['sampleHistory','samplePredictions']);
   await module('awards.js',['frankieAwards']);
   await module('frankie.js',['renderFrankie','initFrankie','frankieDayText','bottleLinksHTML','challengeHTML'],'const esc=escapeHTML;');
@@ -466,5 +466,20 @@ test('birthdays from Contacts show on Today and in Settings, and the calendar sw
   toggle.checked=false; toggle.dispatchEvent(new w.Event('change'));
   assert.equal(doc.querySelectorAll('#homeWeek .home-birthday').length,0); assert.equal(w.localStorage.getItem('hh_birthdays'),'0');
   assert.equal(doc.querySelector('#briefInsights .has-birthday'),null); assert.doesNotMatch(doc.getElementById('nowNext').textContent,/Grandma/);
+  assert.deepEqual(errors,[]);
+});
+test('a missed nap can be recovered from the scoreboard in the preview', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  doc.querySelector('[data-view="frankie"]').click(); await settle();
+  const missed=[...doc.querySelectorAll('#frankieScore [data-rewind-wake]')];
+  if (!missed.length) { t.skip('the sample week has no missed naps'); return; }
+  const before=doc.querySelectorAll('#frankieScore [data-rewind-wake]').length;
+  missed[0].click(); await settle();
+  const panel=doc.getElementById('rewindPanel'); assert.equal(panel.hidden,false); assert.match(panel.textContent,/out of Huckleberry for the moment/);
+  panel.querySelector('[data-recover="check"]').click(); await settle();
+  assert.match(panel.textContent,/Huckleberry now says/);
+  panel.querySelector('[data-recover="save"]').click(); await settle();
+  assert.equal(panel.hidden,true); assert.match(doc.getElementById('notice').textContent,/Mack’s pick is saved/);
+  assert.equal(doc.querySelectorAll('#frankieScore [data-rewind-wake]').length,before-1);
   assert.deepEqual(errors,[]);
 });
