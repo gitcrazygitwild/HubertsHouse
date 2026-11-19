@@ -45,10 +45,11 @@ test('Litter-Robot 4 and 3 readings become one simple shape', () => {
   assert.equal(lr3.drawer, 90); assert.equal(lr3.status, 'Drawer almost full'); assert.equal(lr3.model, 'Litter-Robot 3');
 });
 
-test('each cat’s visits today and this week come from SmartWeight readings', () => {
-  const cats = readPets(PETS, { now:NOW, timezone:'America/New_York' });
-  assert.deepEqual(cats.map(c => [c.name, c.today, c.week, c.weight]), [['Hubert', 0, 1, 12.4], ['Mack', 2, 3, 11.2]], 'the dog is left out; 1 AM ET readings count as today');
-  assert.equal(view.litterHeadline({ robots:[readLR4(LR4_ROBOT)], cats }), 'Mack is today’s top visitor with 2 visits.');
+test('each cat shows a weight (no visit counts), and the dog is left out', () => {
+  const cats = readPets(PETS, { now:NOW });
+  assert.deepEqual(cats.map(c => [c.name, c.weight]), [['Hubert', 12.4], ['Mack', 11.2]]);
+  assert.ok(cats.every(cat => !('today' in cat) && !('week' in cat) && !('lastVisit' in cat)));
+  assert.equal(view.litterHeadline({ robots:[readLR4(LR4_ROBOT)], cats }), '');
   assert.equal(view.litterHeadline({ robots:[readLR4({ ...LR4_ROBOT, DFILevelPercent:95 })], cats }), 'Throne’s waste drawer is almost full.');
 });
 
@@ -122,9 +123,9 @@ test('sign-in uses Whisker’s SRP flow and explains a wrong password', async ()
 test('the card and Settings explain each state', () => {
   assert.match(view.litterHTML({ connected:false }), /Litter-Robot isn’t connected yet/);
   const html = view.litterHTML(view.sampleLitter(NOW), { now:NOW });
-  assert.match(html, /Mack is today’s top visitor with 4 visits/); assert.match(html, /The Royal Throne/); assert.match(html, /aria-valuenow="72"/);
-  assert.match(html, /▲ 0.6 lb \/ 30d/);
+  assert.doesNotMatch(html, /visit(s|or)? (today|this week)|top visitor/); assert.match(html, /The Royal Throne/); assert.match(html, /aria-valuenow="72"/);
+  assert.match(html, /▲ 0.6 lb in 30 days/);
   assert.match(view.litterSettingsHTML({ connected:false }), /never your password/);
   assert.match(view.litterSettingsHTML({ connected:true, needsReconnect:true }), /signed this house out/);
-  assert.ok(!/<script/.test(view.litterHTML({ connected:true, robots:[], cats:[{ id:'x', name:'<script>', weight:1, today:1, week:1, lastVisit:null, change30:null }], checkedAt:new Date(NOW).toISOString() })));
+  assert.ok(!/<script/.test(view.litterHTML({ connected:true, robots:[], cats:[{ id:'x', name:'<script>', weight:1, change30:null }], checkedAt:new Date(NOW).toISOString() })));
 });

@@ -12,6 +12,7 @@ import { HuckleberryError } from './huckleberry-provider.js';
 import { createHuckleberryHandler } from './huckleberry-service.js';
 import { createSmartHome, SmartHomeError } from './smart-home.js';
 import { createLitterRobot, LitterRobotError } from './litter-robot.js';
+import { createPetLibro, PetLibroError } from './petlibro.js';
 initializeApp();
 const db = getFirestore();
 const assignments = createAssignmentStore(db);
@@ -27,7 +28,7 @@ function endpoint(handler, extra = {}) {
     catch (error) {
       if (error instanceof HttpsError) throw error;
       if(error instanceof HuckleberryError && error.details?.service==='huckleberry') warn('Huckleberry request rejected',{operation:error.details.operation || 'authentication',reason:error.details.reason,...(error.details.httpStatus !== undefined ? {httpStatus:error.details.httpStatus} : {}),...(error.details.grpcCode !== undefined ? {grpcCode:error.details.grpcCode} : {})});
-      if (error instanceof CalendarError || error instanceof HuckleberryError || error instanceof NewsletterError || error instanceof SmartHomeError || error instanceof LitterRobotError) throw new HttpsError(error.code,error.message,error instanceof HuckleberryError ? error.details : undefined);
+      if (error instanceof CalendarError || error instanceof HuckleberryError || error instanceof NewsletterError || error instanceof SmartHomeError || error instanceof LitterRobotError || error instanceof PetLibroError) throw new HttpsError(error.code,error.message,error instanceof HuckleberryError ? error.details : undefined);
       // Never log request bodies, credentials, calendar data, or raw provider errors.
       throw new HttpsError('unavailable','The connected service is temporarily unavailable. Try again shortly.');
     }
@@ -410,4 +411,16 @@ export const litterRobot = endpoint(async (uid, input = {}) => {
   if (input.action === 'snapshot') return litterRobotService.snapshot({ force:input.force === true });
   if (input.action === 'clean') return litterRobotService.clean(input.robotId);
   throw new LitterRobotError('invalid-argument', 'Choose a Litter-Robot action.');
+});
+
+// PetLibro feeders (unofficial API; functions/petlibro.js), on a second PetLibro
+// account the feeders are shared with, so the phone app stays signed in.
+const petLibroService = createPetLibro({ db, key:() => encryptionKey.value(), encrypt:encryptCredential, decrypt:decryptCredential, log:(message, data) => info(message, data) });
+export const petLibro = endpoint(async (uid, input = {}) => {
+  if (input.action === 'status') return petLibroService.status();
+  if (input.action === 'connect') return petLibroService.connect(uid, { email:input.email, password:input.password });
+  if (input.action === 'disconnect') return petLibroService.disconnect();
+  if (input.action === 'snapshot') return petLibroService.snapshot({ force:input.force === true });
+  if (input.action === 'feed') return petLibroService.feed(input.feederId, input.portions);
+  throw new PetLibroError('invalid-argument', 'Choose a PetLibro action.');
 });

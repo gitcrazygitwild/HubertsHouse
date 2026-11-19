@@ -73,19 +73,16 @@ export function readLR3(robot) {
     drawer:pct(count / capacity * 100), drawerFull:['DFS', 'SDF'].includes(code), litter:null, lastWeight:null, cycles:count, sleeping:robot.sleepModeActive === '1' || robot.sleepModeActive === true,
     battery:robot.powerStatus === 'DC', laserDirty:false, lastSeen:robot.lastSeen || null, canClean:!['OFFLINE', 'OFF'].includes(code) };
 }
-// Each cat's visits come from Whisker's pet profiles (SmartWeight readings). Today
-// means since local midnight in `timezone`.
-export function readPets(pets = [], { now = Date.now(), timezone = 'America/New_York' } = {}) {
-  const day = value => new Intl.DateTimeFormat('en-CA', { timeZone:timezone, year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date(value));
-  const today = day(now);
+// Each cat's latest weight and 30-day change, from Whisker's pet profiles. Visit
+// counts were removed: SmartWeight often credits a visit to the wrong cat.
+export function readPets(pets = [], { now = Date.now() } = {}) {
   return pets.filter(pet => pet && pet.isActive !== false && (!pet.type || /cat/i.test(pet.type))).map(pet => {
     const history = (pet.weightHistory || []).map(entry => ({ t:Date.parse(entry.timestamp), w:Number(entry.weight) })).filter(entry => Number.isFinite(entry.t) && entry.w > 0 && entry.t <= now).sort((a, b) => a.t - b.t);
-    const recent = history.filter(entry => entry.t >= now - 7 * DAY), month = history.filter(entry => entry.t >= now - 30 * DAY);
+    const month = history.filter(entry => entry.t >= now - 30 * DAY);
     const latest = history.at(-1)?.w ?? (Number(pet.lastWeightReading) || Number(pet.weight) || null);
     const firstMonth = month.length >= 4 ? month.slice(0, Math.ceil(month.length / 4)).reduce((s, e) => s + e.w, 0) / Math.ceil(month.length / 4) : null;
     const lastMonth = month.length >= 4 ? month.slice(-Math.ceil(month.length / 4)).reduce((s, e) => s + e.w, 0) / Math.ceil(month.length / 4) : null;
     return { id:text(pet.petId, 80), name:text(pet.name || 'Cat', 40), weight:latest == null ? null : Math.round(latest * 10) / 10,
-      today:history.filter(entry => day(entry.t) === today).length, week:recent.length, lastVisit:history.length ? new Date(history.at(-1).t).toISOString() : null,
       change30:firstMonth != null && lastMonth != null ? Math.round((lastMonth - firstMonth) * 10) / 10 : null };
   }).sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -120,7 +117,7 @@ export function createLitterRobot({ db, key, encrypt, decrypt, fetch = globalThi
       graph(tokens, PETS, `query GetPetsByUser($userId: String!) { getPetsByUser(userId: $userId) { ${PET_FIELDS} } }`, { userId:tokens.userId }).then(r => r?.data?.getPetsByUser || []).catch(error => { if (error.code === 'unauthenticated') throw error; return []; })
     ]);
     const robots = [...lr4.filter(r => r?.serial).map(readLR4), ...lr3.filter(r => r?.litterRobotSerial).map(readLR3)].slice(0, 6);
-    return { robots, cats:readPets(pets, { now:now(), timezone }).slice(0, 8), checkedAt:new Date(now()).toISOString() };
+    return { robots, cats:readPets(pets, { now:now() }).slice(0, 8), checkedAt:new Date(now()).toISOString() };
   }
   return {
     async status() {
