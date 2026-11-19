@@ -19,9 +19,10 @@ import { miaForecastV1 } from './mia-v1.js';
 import { nightLine, sleepKind } from './baby-history.js';
 
 export const MODELS = [
-  { key:'sweetspot', name:'SweetSpot (borrowed)', owner:'Mack' }, // Mack copies Huckleberry's SweetSpot (see MACK_EXCUSE)
+  // Same order everywhere: Hubert, Mia, Mack.
   { key:'purrfect', name:'Purrfect Window', owner:'Hubert' },
-  { key:'mia', name:'Catnap Forecast', owner:'Mia' }
+  { key:'mia', name:'Catnap Forecast', owner:'Mia' },
+  { key:'sweetspot', name:'SweetSpot (borrowed)', owner:'Mack' } // Mack copies Huckleberry's SweetSpot (see MACK_EXCUSE)
 ];
 const MINUTE = 60000, MAX_WAIT = 8 * 3600000;
 export const HIT_MINUTES = 15;

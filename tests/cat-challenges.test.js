@@ -67,7 +67,8 @@ test('scores, leaders and winners for both challenges', () => {
 });
 
 test('Mack borrows SweetSpot in the nap challenge, with an excuse', () => {
-  assert.deepEqual(MODELS.map(m => m.owner), ['Mack', 'Hubert', 'Mia']);
+  assert.deepEqual(MODELS.map(m => m.owner), ['Hubert', 'Mia', 'Mack']);
+  assert.deepEqual(CHALLENGES.bottle.map(m => m.owner), ['Hubert', 'Mia', 'Mack'], 'every challenge lists the cats in the same order');
   assert.match(MACK_EXCUSE, /laundry basket/);
   assert.deepEqual(CHALLENGES.morning.map(m => m.owner), ['Hubert', 'Mia', 'Mack']);
 });
