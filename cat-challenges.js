@@ -1,0 +1,147 @@
+// The cats' other two Frankie challenges (the nap challenge lives in prediction-log.js).
+// - Morning wake-up: at bedtime, each cat calls when Frankie will wake up for the day.
+// - The Bottle Bet: at midnight, each cat guesses how many ounces she'll drink that day.
+// Every method is deterministic and uses only what was logged before the call, so past
+// nights and days are replayed honestly. If a method ever changes, freeze the old one
+// (as mia-v1.js does for naps) so past scores keep the guesses actually made.
+// No imports beyond the app's own pure modules, so the newsletter can share this file.
+import { nightLine, sleepKind, localDay, clockAt, dailyBottles, dayStart } from './baby-history.js';
+import { ageInDays, halfLifeFor } from './baby-model.js';
+
+const MINUTE = 60000, HOUR = 3600000, DAY = 86400000;
+const toStamp = value => typeof value === 'number' ? value : Date.parse(value);
+const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
+const median = values => { const s = [...values].sort((a, b) => a - b), m = (s.length - 1) / 2; return (s[Math.floor(m)] + s[Math.ceil(m)]) / 2; };
+const quantile = (values, q) => { const s = [...values].sort((a, b) => a - b), p = (s.length - 1) * q, lo = Math.floor(p); return s[lo] + (s[Math.ceil(p)] - s[lo]) * (p - lo); };
+const wmean = (values, weights) => values.reduce((sum, v, i) => sum + v * weights[i], 0) / weights.reduce((a, b) => a + b, 0);
+const wsd = (values, weights) => { const m = wmean(values, weights); return Math.sqrt(wmean(values.map(v => (v - m) ** 2), weights)); };
+const evening = clock => clock < 6 * 60 ? clock + 1440 : clock; // 1 AM bedtime → 25:00
+
+export const CHALLENGES = {
+  morning:[
+    { key:'hubert', owner:'Hubert', name:'Bedtime Twins', how:'Finds recent nights that started about when tonight did and takes the middle of their wake-up times.' },
+    { key:'mia', owner:'Mia', name:'Sunrise Forecast', how:'Blends how long Frankie’s nights usually last with her usual wake-up time, trusting whichever has been steadier, with recent nights counting most.' },
+    { key:'mack', owner:'Mack', name:'Groundhog Day', how:'Assumes this morning will go exactly like yesterday’s, nudged half as much as tonight’s bedtime moved (a full nudge was too much effort).' }
+  ],
+  bottle:[
+    { key:'hubert', owner:'Hubert', name:'The Middle Day', how:'Takes the middle of her last seven days of ounces.' },
+    { key:'mia', owner:'Mia', name:'Growth Spurt', how:'Weights the last few days most and adds the trend, because babies keep getting hungrier.' },
+    { key:'mack', owner:'Mack', name:'Bottomless Bowl', how:'Picks her biggest day of the last three, because Mack assumes everyone is as hungry as he is.' }
+  ]
+};
+export const MACK_EXCUSE = 'Mack was asleep in the laundry basket while the others built their models, so he copies Huckleberry’s SweetSpot and takes full credit.';
+
+// ---------- Nights: bedtime → the morning wake-up that starts her day ----------
+export function nightsFrom(sleeps, timezone, now = Date.now(), days = 35) {
+  const list = sleeps.map(s => ({ start:toStamp(s.start), end:toStamp(s.end) })).filter(s => Number.isFinite(s.start) && s.end > s.start && s.end <= +now && s.start >= +now - days * DAY).sort((a, b) => a.start - b.start);
+  const line = nightLine(list, timezone, now, Math.min(days, 21)), byKey = new Map();
+  for (const sleep of list) {
+    if (sleepKind(sleep, timezone, line) !== 'night') continue;
+    const key = localDay(sleep.start - 6 * HOUR, timezone); // a 3 AM stretch belongs to the night before
+    const night = byKey.get(key) || { key, bedtime:Infinity, morning:null };
+    night.bedtime = Math.min(night.bedtime, sleep.start);
+    const endClock = clockAt(sleep.end, timezone);
+    if (endClock >= 4 * 60 && endClock < 12 * 60) night.morning = Math.max(night.morning ?? 0, sleep.end);
+    byKey.set(key, night);
+  }
+  return [...byKey.values()].filter(n => { const b = evening(clockAt(n.bedtime, timezone)); return b >= 17 * 60 && b <= 27 * 60; })
+    .map(n => ({ ...n, bedClock:evening(clockAt(n.bedtime, timezone)), wakeClock:n.morning ? clockAt(n.morning, timezone) : null })).sort((a, b) => a.bedtime - b.bedtime);
+}
+// Tonight's bedtime: the first night stretch of the night now in progress.
+export function currentBedtime(sleeps, timer, timezone, now = Date.now()) {
+  if (!timer?.active || timer.paused) return null;
+  const began = toStamp(timer.start); if (!Number.isFinite(began)) return null;
+  const line = nightLine(sleeps, timezone, now);
+  if (sleepKind({ start:began, end:began + MINUTE }, timezone, line) !== 'night') return null;
+  const key = localDay(began - 6 * HOUR, timezone);
+  const earlier = nightsFrom(sleeps, timezone, now, 2).find(n => n.key === key);
+  return Math.min(began, earlier?.bedtime ?? Infinity);
+}
+const at = (bedtime, clock, timezone) => bedtime + (((clock - clockAt(bedtime, timezone)) % 1440 + 1440) % 1440) * MINUTE;
+const pick = (target, start, end) => ({ target:new Date(target).toISOString(), start:new Date(start).toISOString(), end:new Date(end).toISOString() });
+// Each cat's call, made at `bedtime` from nights that had ended before it.
+export function morningPicks(sleeps, timezone, bedtime, { birthdate = null } = {}) {
+  const known = sleeps.filter(s => toStamp(s.end) <= bedtime);
+  const past = nightsFrom(known, timezone, bedtime, 35).filter(n => n.morning && n.morning < bedtime).slice(-21);
+  const tonight = evening(clockAt(bedtime, timezone)), out = { hubert:null, mia:null, mack:null };
+  if (!past.length) return out;
+  // Mack: yesterday again, half-adjusted for bedtime. ±20 minutes, because precision is effort.
+  const last = past.at(-1), mackClock = last.wakeClock + (tonight - last.bedClock) / 2, mack = at(bedtime, ((Math.round(mackClock) % 1440) + 1440) % 1440, timezone);
+  out.mack = pick(mack, mack - 20 * MINUTE, mack + 20 * MINUTE);
+  if (past.length < 3) return out;
+  // Hubert: nights that began like tonight; the middle of their wake-ups.
+  let twins = past.filter(n => Math.abs(n.bedClock - tonight) <= 45);
+  if (twins.length < 3) twins = past.filter(n => Math.abs(n.bedClock - tonight) <= 90);
+  if (twins.length < 3) twins = past;
+  twins = twins.slice(-14);
+  const clocks = twins.map(n => n.wakeClock), mid = median(clocks), lo = Math.min(quantile(clocks, .25), mid - 10), hi = Math.max(quantile(clocks, .75), mid + 10);
+  const hubert = at(bedtime, Math.round(mid), timezone);
+  out.hubert = pick(hubert, hubert - (mid - lo) * MINUTE, hubert + (hi - mid) * MINUTE);
+  // Mia: usual night length vs usual wake-up clock, blended by steadiness, recent nights first.
+  const halfLife = halfLifeFor(ageInDays(birthdate, new Date(bedtime))), weights = past.map(n => 0.5 ** ((bedtime - n.bedtime) / DAY / halfLife));
+  const lengths = past.map(n => (n.morning - n.bedtime) / MINUTE), wakes = past.map(n => n.wakeClock);
+  const byLength = bedtime + wmean(lengths, weights) * MINUTE, byClock = at(bedtime, Math.round(wmean(wakes, weights)), timezone);
+  const wL = 1 / Math.max(wsd(lengths, weights), 5) ** 2, wC = 1 / Math.max(wsd(wakes, weights), 5) ** 2;
+  const mia = (byLength * wL + byClock * wC) / (wL + wC), spread = clamp(0.6 / Math.sqrt(wL + wC), 6, 15) * MINUTE;
+  out.mia = { ...pick(mia, mia - spread, mia + spread), clockShare:Math.round(100 * wC / (wL + wC)) };
+  return out;
+}
+
+// ---------- The Bottle Bet ----------
+// Daily ounces before `dayKey`, oldest first, skipping days with no bottles logged.
+function ounceHistory(bottles, timezone, dayKey, days = 14) {
+  return dailyBottles(bottles, timezone, days, dayStart(dayKey, timezone) - 1).filter(row => row.count > 0);
+}
+export function bottlePicks(bottles, timezone, dayKey, { birthdate = null } = {}) {
+  const rows = ounceHistory(bottles, timezone, dayKey), out = { hubert:null, mia:null, mack:null };
+  if (rows.length < 3) return out;
+  const oz = rows.map(r => r.ounces), round = value => Math.round(value * 2) / 2;
+  out.hubert = round(median(oz.slice(-7)));
+  out.mack = round(Math.max(...oz.slice(-3)));
+  const halfLife = halfLifeFor(ageInDays(birthdate, new Date(dayStart(dayKey, timezone)))), ago = rows.map((_, i) => rows.length - i);
+  const weights = ago.map(a => 0.5 ** (a / halfLife)), base = wmean(oz, weights);
+  const mx = wmean(ago, weights), slope = -ago.reduce((s, a, i) => s + weights[i] * (a - mx) * (oz[i] - base), 0) / Math.max(1e-9, ago.reduce((s, a, i) => s + weights[i] * (a - mx) ** 2, 0));
+  out.mia = round(base + clamp(slope * mx, -2, 2));
+  return out;
+}
+
+// ---------- Scoring (both challenges) ----------
+function summarize(rows, models, hit) {
+  const n = rows.length;
+  const summary = models.map(model => {
+    const errors = rows.map(row => row.errors[model.key]);
+    return { ...model, n, mae:n ? Math.round(10 * errors.reduce((s, e) => s + Math.abs(e), 0) / n) / 10 : null, bias:n ? Math.round(10 * errors.reduce((s, e) => s + e, 0) / n) / 10 : null,
+      hitRate:n ? Math.round(100 * errors.filter(e => Math.abs(e) <= hit).length / n) : null, wins:rows.filter(row => row.winners.length === 1 && row.winners[0] === model.key).length };
+  });
+  const leader = n >= 3 ? [...summary].sort((a, b) => a.mae - b.mae || b.hitRate - a.hitRate)[0].key : null;
+  return { summary, leader, scored:n };
+}
+const winnersOf = errors => { const best = Math.min(...Object.values(errors).map(Math.abs)); return Object.keys(errors).filter(key => Math.abs(errors[key]) === best); };
+let morningMemo = { key:null, value:null }, bottleMemo = { key:null, value:null };
+export function scoreMornings(sleeps, timezone, now = Date.now(), { birthdate = null, days = 30 } = {}) {
+  const key = JSON.stringify([timezone, birthdate, days, sleeps.length, sleeps.at(-1)?.end, sleeps[0]?.start, Math.floor(+now / HOUR)]);
+  if (morningMemo.key === key) return morningMemo.value;
+  const rows = [];
+  for (const night of nightsFrom(sleeps, timezone, now, days + 1).filter(n => n.morning && n.bedtime >= +now - days * DAY)) {
+    const picks = morningPicks(sleeps, timezone, night.bedtime, { birthdate });
+    if (!picks.hubert || !picks.mia || !picks.mack) continue;
+    const errors = Object.fromEntries(Object.entries(picks).map(([cat, p]) => [cat, Math.round((night.morning - Date.parse(p.target)) / MINUTE)]));
+    rows.push({ key:night.key, bedtime:new Date(night.bedtime).toISOString(), actual:new Date(night.morning).toISOString(), picks, errors, winners:winnersOf(errors) });
+  }
+  rows.reverse();
+  const value = { results:rows, ...summarize(rows, CHALLENGES.morning, 15) }; morningMemo = { key, value }; return value;
+}
+export function scoreBottles(bottles, timezone, now = Date.now(), { birthdate = null, days = 30 } = {}) {
+  const key = JSON.stringify([timezone, birthdate, days, bottles.length, bottles.at(-1)?.start, localDay(+now, timezone)]);
+  if (bottleMemo.key === key) return bottleMemo.value;
+  // Completed days only, with a believable number of bottles logged.
+  const rows = [];
+  for (const day of dailyBottles(bottles, timezone, days + 1, now).slice(0, -1).filter(row => row.count >= 3)) {
+    const picks = bottlePicks(bottles, timezone, day.key, { birthdate });
+    if (picks.hubert == null || picks.mia == null || picks.mack == null) continue;
+    const errors = Object.fromEntries(Object.entries(picks).map(([cat, oz]) => [cat, Math.round((day.ounces - oz) * 10) / 10]));
+    rows.push({ key:day.key, actual:day.ounces, picks, errors, winners:winnersOf(errors) });
+  }
+  rows.reverse();
+  const value = { results:rows, ...summarize(rows, CHALLENGES.bottle, 2) }; bottleMemo = { key, value }; return value;
+}
