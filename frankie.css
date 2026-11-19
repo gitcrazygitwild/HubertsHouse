@@ -146,3 +146,7 @@ rect.is-hovered.mark-night,rect.is-hovered.mark-nap { stroke:var(--card); stroke
 [data-theme="dark"] .link-clear .link-badge { background:#2f4430; color:#bfe0b0; }
 [data-theme="dark"] .link-slight .link-badge { background:#463d2b; color:#e8d3a2; }
 @media (max-width:650px) { .link-row { align-items:flex-start; flex-direction:column; gap:8px; } }
+/* Cat challenges */
+.challenge-calls { margin:0 0 12px; padding:10px 14px; border-radius:12px; background:var(--soft); font-size:14px; }
+.morning-calls { grid-column:1 / -1; margin:2px 0 0; padding:10px 14px; border-radius:12px; background:var(--soft); font-size:13px; }
+.mack-excuse { display:block; margin-top:6px; font-style:italic; color:var(--muted); }

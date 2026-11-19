@@ -262,8 +262,8 @@ function feedTiming(pool, halfLife, lastWake, lastFeed, now, windowSD) {
 export function miaForecast({ sleeps = [], bottles = [], birthdate = null, timer = null, timezone = 'America/New_York', complete = true } = {}, now = new Date()) {
   const empty = reason => ({ available:false, reason });
   if (!complete) return empty('Sleep history is incomplete. Refresh before forecasting.');
-  if (timer?.active) return empty('Sleeping now. Mia will forecast after wake-up.');
   const age = ageInDays(birthdate, now), halfLife = halfLifeFor(age), lookback = age != null && age >= 180 ? 28 : 21;
+  if (timer?.active) return napWake();
   const merged = mergeSleeps(sleeps, now, lookback), last = merged.at(-1);
   if (!last || +now - last.end > 8 * 3600000) return empty('Log a recent sleep and wake-up for a forecast.');
   const current = localParts(+now, timezone);
@@ -336,8 +336,29 @@ export function miaForecast({ sleeps = [], bottles = [], birthdate = null, timer
   return finish({kind:'nap', target, spread, pool, matched, base:nap.base, trend:nap.trend, napAdjust:nap.napAdjust, nightAdjust:nap.nightAdjust, bottleAdjust:nap.bottleAdjust,
     extra:{wakeMinutes:Math.round(nap.wakeAdjust.effect) || 0, feedShare:Math.round(feedShare * 100), ...(feedShare ? feedNote(feed) : {})}});
 
+  // Asleep: when she'll wake from this nap, from how long this nap of the day usually
+  // lasts (recent days count most). Night sleep is the morning challenge (cat-challenges.js).
+  function napWake() {
+    const began = stamp(timer.start);
+    if (timer.paused || !Number.isFinite(began) || +now - began > 6 * 3600000) return empty('Sleeping now. Mia will forecast after wake-up.');
+    const {samples, byDay, today, line} = indexedWakeWindows(sleeps, timezone, now, lookback, bottles);
+    if (!isNap({start:began, end:began + MINUTE}, timezone, line)) return empty('Asleep for the night: see the morning wake-up calls.');
+    const napNumber = (byDay.get(today)?.naps || []).filter(nap => nap.end <= began).length + 1;
+    let pool = samples.filter(s => s.index === napNumber && s.napLength >= 10), matched = 'exact';
+    if (new Set(pool.map(s => s.day)).size < 3) { pool = samples.filter(s => Math.abs(s.index - napNumber) <= 1 && s.napLength >= 10); matched = 'nearby'; }
+    pool = trimmed(pool.map(s => ({ ...s, minutes:s.napLength })));
+    if (pool.length < 3) return empty(`Learning: Mia needs nap ${napNumber} logged on a few more days to call the wake-up.`);
+    const weights = weightsFor(pool, halfLife), typical = weighted(pool.map(s => s.minutes), weights);
+    const sd = Math.sqrt(weighted(pool.map(s => (s.minutes - typical) ** 2), weights)), spread = clamp(sd * 0.6, 6, 15);
+    const target = Math.max(+now + MINUTE, began + typical * MINUTE);
+    return { available:true, version:2, kind:'wake', napNumber, matched, samples:pool.length, sleepStart:new Date(began).toISOString(), typicalMinutes:Math.round(typical),
+      target:new Date(target).toISOString(), start:new Date(target - spread * MINUTE).toISOString(), end:new Date(target + spread * MINUTE).toISOString(),
+      confidence:sd >= 30 ? 'Varied' : pool.length < 6 ? 'Learning' : 'Steady', phase:+now > target + spread * MINUTE ? 'passed' : +now >= target - spread * MINUTE ? 'within' : 'upcoming' };
+  }
   function finish({kind, target, spread, pool, matched, base, trend, napAdjust, nightAdjust, bottleAdjust, extra}) {
-    const start = last.end + Math.max(5, target - spread) * MINUTE, end = last.end + (target + spread) * MINUTE;
+    // A tight window: about 60% of her usual spread, 6–15 minutes either side. (Scores use the center.)
+    const shown = clamp(spread * 0.6, 6, 15);
+    const start = last.end + Math.max(5, target - shown) * MINUTE, end = last.end + (target + shown) * MINUTE;
     const round = value => value == null ? null : Math.round(value);
     return { available:true, version:2, kind, start:new Date(start).toISOString(), end:new Date(end).toISOString(), target:new Date(last.end + target * MINUTE).toISOString(),
       lastWake:new Date(last.end).toISOString(), napNumber, napsToday, matched, samples:pool.length, days:days(pool),

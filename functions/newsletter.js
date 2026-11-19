@@ -12,6 +12,7 @@ import { weatherFlags } from './shared/smart-home.js';
 import { frankieAwards } from './shared/awards.js';
 import { freeEvenings } from './shared/free-nights.js';
 import { upcomingBirthdays } from './shared/birthdays-model.js';
+import { scoreMornings, scoreBottles, bottlePicks, CHALLENGES } from './shared/cat-challenges.js';
 
 export const HOUSE_TZ = 'America/New_York';
 export const APP_URL = 'https://huberts-house.web.app';
@@ -90,6 +91,10 @@ export function buildDigest({ name = '', now = new Date(), household = [], iclou
     digest.baby = { name:snapshot.name || 'Frankie', tz, timer:snapshot.timer, lastWake:snapshot.sleeps.at(-1)?.end || null, lastBottle:snapshot.bottles?.at(-1) || null, summary, yesterday,
       predictions:{ huck, purr, mia }, leader:score.leader ? score.summary.find(m => m.key === score.leader) : null, scored:score.scoredNaps,
       awards:now.getDay() === 1 ? frankieAwards(snapshot, tz, +now).awards.slice(0, 4) : [] };
+    // The cats' other challenges: who leads, and today's Bottle Bet guesses.
+    const owner = (kind, key) => CHALLENGES[kind].find(m => m.key === key)?.owner;
+    const mornings = scoreMornings(snapshot.sleeps, tz, +now, { birthdate:snapshot.birthdate }), bottles = scoreBottles(snapshot.bottles || [], tz, +now, { birthdate:snapshot.birthdate });
+    digest.baby.challenges = { morning:owner('morning', mornings.leader) || null, bottle:owner('bottle', bottles.leader) || null, bet:bottlePicks(snapshot.bottles || [], tz, localDay(+now, tz), { birthdate:snapshot.birthdate }) };
   }
   return digest;
 }
@@ -156,14 +161,16 @@ export function composeEmail(d) {
   if (d.baby) {
     const b = d.baby, now = d.now, y = b.yesterday;
     const status = b.timer?.active ? `asleep for ${ago(b.timer.start, now)}` : b.lastWake ? `awake for ${ago(b.lastWake, now)}` : 'no sleep logged yet';
-    const nap = [b.predictions.huck?.available && !b.predictions.huck.expired ? `SweetSpot ${clock(b.predictions.huck.time, b.tz)}` : '', b.predictions.purr?.available ? `Hubert${b.predictions.purr.kind === 'bedtime' ? ' (bedtime)' : b.predictions.purr.kind === 'wake' ? ' (next wake-up)' : ''} ${clock(b.predictions.purr.start, b.tz)}–${clock(b.predictions.purr.end, b.tz)}` : '', b.predictions.mia?.available ? `Mia${b.predictions.mia.kind === 'bedtime' ? ' (bedtime)' : ''} ${clock(b.predictions.mia.start, b.tz)}–${clock(b.predictions.mia.end, b.tz)}` : ''].filter(Boolean);
+    const nap = [b.predictions.huck?.available && !b.predictions.huck.expired ? `SweetSpot ${clock(b.predictions.huck.time, b.tz)}` : '', b.predictions.purr?.available ? `Hubert${b.predictions.purr.kind === 'bedtime' ? ' (bedtime)' : b.predictions.purr.kind === 'wake' ? ' (next wake-up)' : ''} ${clock(b.predictions.purr.start, b.tz)}–${clock(b.predictions.purr.end, b.tz)}` : '', b.predictions.mia?.available ? `Mia${b.predictions.mia.kind === 'bedtime' ? ' (bedtime)' : b.predictions.mia.kind === 'wake' ? ' (wake-up)' : ''} ${clock(b.predictions.mia.start, b.tz)}–${clock(b.predictions.mia.end, b.tz)}` : ''].filter(Boolean);
     const stats = [['Slept yesterday', hm(y.sleep?.total), y.sleep ? `${hm(y.sleep.night)} night · ${y.sleep.naps} nap${y.sleep.naps === 1 ? '' : 's'}` : ''], ['Bottles yesterday', y.bottles?.count ? `${y.bottles.ounces} oz` : '—', y.bottles?.count ? `${y.bottles.count} bottles` : ''], ['7-day average', b.summary.avgOunces ? `${Math.round(b.summary.avgOunces * 10) / 10} oz` : '—', b.summary.avgSleep ? `${hm(b.summary.avgSleep)} sleep/day` : '']];
     const tiles = `<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>${stats.map(([label, value, note]) => `<td style="width:33%;padding:10px 8px 10px 0;vertical-align:top"><div style="font:11px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.muted}">${esc(label)}</div><div style="font:400 20px/1.3 Georgia,serif;color:${C.ink}">${esc(value)}</div><div style="font:11px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.muted}">${esc(note)}</div></td>`).join('')}</tr></table>`;
     const awards = b.awards.length ? `<div style="margin-top:10px;padding:10px 12px;border-radius:12px;background:#fbf3df">${p(`<strong>🏆 Last week’s awards:</strong> ${b.awards.map(a => `${a.icon} ${esc(a.title)} <strong>${esc(a.value)}</strong>`).join(' · ')}`, 'margin:0;font-size:13px')}</div>` : '';
     sections.push(section('Little moments, big love', `${esc(b.name)} is ${esc(status)}`,
       (b.yesterday.story ? p(esc(storyText(b)), 'margin-bottom:10px') : '') + tiles + (nap.length ? p(`<strong>Next nap:</strong> ${esc(nap.join(' · '))}`, 'font-size:13px;margin-top:6px') : '')
       + (b.lastBottle ? p(small(`Last bottle ${esc(ago(b.lastBottle.start, now))} ago · ${esc(b.lastBottle.amount)} ${esc(b.lastBottle.units)}`)) : '')
-      + (b.leader ? p(`🏆 <strong>${esc(b.leader.owner)}’s ${esc(b.leader.name)}</strong> leads the nap challenge · ±${b.leader.mae} min over ${b.leader.n} naps`, 'font-size:13px') : '') + awards));
+      + (b.leader ? p(`🏆 <strong>${esc(b.leader.owner)}’s ${esc(b.leader.name)}</strong> leads the nap challenge · ±${b.leader.mae} min over ${b.leader.n} naps`, 'font-size:13px') : '')
+      + (b.challenges?.morning || b.challenges?.bottle ? p(`🐾 ${[b.challenges.morning ? `<strong>${esc(b.challenges.morning)}</strong> leads the morning wake-up challenge` : '', b.challenges.bottle ? `<strong>${esc(b.challenges.bottle)}</strong> leads the Bottle Bet` : ''].filter(Boolean).join(' · ')}`, 'font-size:13px') : '')
+      + (b.challenges?.bet?.hubert != null ? p(`🍼 <strong>Today’s Bottle Bet:</strong> Hubert ${b.challenges.bet.hubert} · Mia ${b.challenges.bet.mia} · Mack ${b.challenges.bet.mack} oz`, 'font-size:13px') : '') + awards));
   }
 
   if (d.world) sections.push(worldSection(d.world));

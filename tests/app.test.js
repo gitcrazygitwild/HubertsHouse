@@ -38,10 +38,11 @@ async function fixture(options = {}) {
   await module('baby-history.js',['toOunces','localDay','dayStart','dayKeys','sleepKind','dayStory','dayStoryText','nightLine','clockAt','DEFAULT_NIGHT_LINE','dailySleep','dailyBottles','timelineRows','babySummary']);
   await module('baby-model.js',['purrfectWindow','huckleberryPrediction','miaForecast','indexedWakeWindows','bottleForecast','correlation','ageInDays','ageLabel','halfLifeFor','typicalWindow','bottleSleepLinks']);
   await module('mia-v1.js',['miaForecastV1']);
+  await module('cat-challenges.js',['CHALLENGES','MACK_EXCUSE','nightsFrom','currentBedtime','morningPicks','bottlePicks','scoreMornings','scoreBottles']);
   await module('prediction-log.js',['MODELS','predictionId','isDaytimeWake','sweetspotEntry','sweetspotPatch','previousSweetspot','actualSleepStart','replayGuesses','scorePredictions','MIA_V2_SINCE','miaVersionAt']);
   await module('baby-sample.js',['sampleHistory','samplePredictions']);
   await module('awards.js',['frankieAwards']);
-  await module('frankie.js',['renderFrankie','initFrankie','frankieDayText','bottleLinksHTML'],'const esc=escapeHTML;');
+  await module('frankie.js',['renderFrankie','initFrankie','frankieDayText','bottleLinksHTML','challengeHTML'],'const esc=escapeHTML;');
   await module('baby-logs.js',['LOG_FILTERS','describeLog','logKey','logsHTML'],'const esc=escapeHTML;');
   await module('baby.js',['initHuckleberry','logBabyFromText'],'const esc=escapeHTML;');
   await module('calendar-view.js',['initCalendarExperience','calendarEventContent'],'const esc=escapeHTML;');
@@ -105,7 +106,7 @@ test('sample baby logs support bottles, diapers and sleep without calling a conn
   assert.equal(doc.getElementById('babyLogDialog').open,false); assert.match(doc.getElementById('babyStats').textContent,/5 oz/);
   doc.querySelector('[data-baby-log="diaper"]').click(); doc.getElementById('babyLogDiaper').value='poo'; doc.getElementById('babyLogForm').dispatchEvent(new w.Event('submit',{cancelable:true})); await settle();
   assert.match(doc.getElementById('babyStats').textContent,/Dirty/);
-  doc.getElementById('babySleep').click(); await settle(); assert.match(doc.getElementById('babySleep').textContent,/Finish sleep/); assert.match(doc.getElementById('babyPredictions').textContent,/Sleeping now/);
+  doc.getElementById('babySleep').click(); await settle(); assert.match(doc.getElementById('babySleep').textContent,/Finish sleep/); assert.match(doc.getElementById('babyPredictions').textContent,/Sleep in progress/);
   doc.getElementById('babySleep').click(); await settle(); assert.match(doc.getElementById('babySleep').textContent,/Start sleep/);
   assert.deepEqual(errors,[]);
 });
