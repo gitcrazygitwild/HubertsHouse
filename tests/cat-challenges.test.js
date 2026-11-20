@@ -30,11 +30,11 @@ test('each cat calls the morning differently', () => {
   const bedtime = today + 21 * H, picks = morningPicks(sleeps, zone, bedtime);
   const clock = iso8601 => { const d = new Date(iso8601); return d.getUTCHours() * 60 + d.getUTCMinutes(); };
   // Mack: yesterday's 6:40, plus half of tonight's hour-later bedtime (21:00 vs 20:00) → 7:10.
-  assert.equal(clock(picks.mack.target), 430); assert.equal(Date.parse(picks.mack.end) - Date.parse(picks.mack.target), 20 * M);
+  assert.equal(clock(picks.mack.target), 430); assert.equal(Date.parse(picks.mack.end) - Date.parse(picks.mack.target), 12 * M);
   // Hubert: nights that started at 21:00 (d even → bed 21): wakes 6.25, 6.5, 6.1 → median 6:15.
   assert.equal(clock(picks.hubert.target), 375);
   // Mia: somewhere sensible in between, with a tight window.
-  assert.ok(clock(picks.mia.target) >= 360 && clock(picks.mia.target) <= 420); assert.ok(Date.parse(picks.mia.end) - Date.parse(picks.mia.target) <= 15 * M);
+  assert.ok(clock(picks.mia.target) >= 360 && clock(picks.mia.target) <= 420); assert.ok(Date.parse(picks.mia.end) - Date.parse(picks.mia.target) <= 10 * M);
   // With one night logged, only Mack is brave enough to call it.
   const one = morningPicks(iso(history(1)), zone, today + 20 * H);
   assert.ok(one.mack && !one.hubert && !one.mia);
@@ -80,7 +80,7 @@ test('Mia calls the wake-up from a nap, with a tight window', () => {
   const mia = miaForecast({ sleeps, timer, timezone:zone }, new Date(today + 12.75 * H));
   assert.equal(mia.kind, 'wake'); assert.equal(mia.napNumber, 2); assert.equal(mia.typicalMinutes, 90);
   assert.equal(Date.parse(mia.target), today + 14 * H);
-  assert.ok(Date.parse(mia.end) - Date.parse(mia.target) <= 15 * M && Date.parse(mia.end) - Date.parse(mia.target) >= 6 * M);
+  assert.ok(Date.parse(mia.end) - Date.parse(mia.target) <= 10 * M && Date.parse(mia.end) - Date.parse(mia.target) >= 5 * M);
   const night = miaForecast({ sleeps, timer:{ active:true, start:new Date(today + 20 * H).toISOString() }, timezone:zone }, new Date(today + 21 * H));
   assert.equal(night.available, false); assert.match(night.reason, /morning wake-up calls/);
 });

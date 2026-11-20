@@ -31,11 +31,14 @@ export function purrfectWindow({ sleeps = [], timer = null, timezone = 'America/
   const nightsOf = list => new Set(list.map(sample => sample.day)).size;
   const finish = (kind, anchor, selected, matchedTime, extra = {}) => {
     const values = selected.map(sample => sample.minutes), median = quantile(values, .5);
-    const low = Math.min(quantile(values, .25), median - 10), high = Math.max(quantile(values, .75), median + 10);
+    // A tight window around the median: a quarter of her middle-half spread, 5–12 minutes
+    // either side. (Scores use the center; the spread still decides "Varied pattern".)
+    const spreadIQR = quantile(values, .75) - quantile(values, .25), half = Math.min(12, Math.max(5, spreadIQR / 4));
+    const low = median - half, high = median + half;
     const start = anchor + Math.max(1, low) * MINUTE, end = anchor + high * MINUTE;
     return { available:true, kind, start:new Date(start).toISOString(), end:new Date(end).toISOString(), target:new Date(anchor + median * MINUTE).toISOString(),
       ...extra, samples:values.length, days:nightsOf(selected), matchedTime, typicalMinutes:Math.round(median),
-      pattern:high - low > 60 ? 'Varied pattern' : values.length < 7 ? 'Early pattern' : 'Personal pattern',
+      pattern:spreadIQR > 60 ? 'Varied pattern' : values.length < 7 ? 'Early pattern' : 'Personal pattern',
       phase:+now > end ? 'passed' : +now >= start ? 'within' : 'upcoming' };
   };
   if (timer?.active) {
@@ -349,15 +352,15 @@ export function miaForecast({ sleeps = [], bottles = [], birthdate = null, timer
     pool = trimmed(pool.map(s => ({ ...s, minutes:s.napLength })));
     if (pool.length < 3) return empty(`Learning: Mia needs nap ${napNumber} logged on a few more days to call the wake-up.`);
     const weights = weightsFor(pool, halfLife), typical = weighted(pool.map(s => s.minutes), weights);
-    const sd = Math.sqrt(weighted(pool.map(s => (s.minutes - typical) ** 2), weights)), spread = clamp(sd * 0.6, 6, 15);
+    const sd = Math.sqrt(weighted(pool.map(s => (s.minutes - typical) ** 2), weights)), spread = clamp(sd * 0.4, 5, 10);
     const target = Math.max(+now + MINUTE, began + typical * MINUTE);
     return { available:true, version:2, kind:'wake', napNumber, matched, samples:pool.length, sleepStart:new Date(began).toISOString(), typicalMinutes:Math.round(typical),
       target:new Date(target).toISOString(), start:new Date(target - spread * MINUTE).toISOString(), end:new Date(target + spread * MINUTE).toISOString(),
       confidence:sd >= 30 ? 'Varied' : pool.length < 6 ? 'Learning' : 'Steady', phase:+now > target + spread * MINUTE ? 'passed' : +now >= target - spread * MINUTE ? 'within' : 'upcoming' };
   }
   function finish({kind, target, spread, pool, matched, base, trend, napAdjust, nightAdjust, bottleAdjust, extra}) {
-    // A tight window: about 60% of her usual spread, 6–15 minutes either side. (Scores use the center.)
-    const shown = clamp(spread * 0.6, 6, 15);
+    // A tight window: about 40% of her usual spread, 5–10 minutes either side. (Scores use the center.)
+    const shown = clamp(spread * 0.4, 5, 10);
     const start = last.end + Math.max(5, target - shown) * MINUTE, end = last.end + (target + shown) * MINUTE;
     const round = value => value == null ? null : Math.round(value);
     return { available:true, version:2, kind, start:new Date(start).toISOString(), end:new Date(end).toISOString(), target:new Date(last.end + target * MINUTE).toISOString(),

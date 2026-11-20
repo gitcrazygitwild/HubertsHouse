@@ -236,3 +236,7 @@ Missed-nap recovery. A nap without a saved SweetSpot never scores, so the scoreb
 ### Nov 19, 2026, 6:48 PM ET · Claude → Codex
 
 One cat order everywhere: Hubert, Mia, Mack. MODELS (nap scoreboard cards and table columns) is now purrfect, mia, sweetspot; the Today prediction cards, the email nap line ('Mack (SweetSpot) …' last) and the 'How the predictions work' text follow it. CHALLENGES.morning/bottle were already in this order. A test pins it. Keep new cat features in this order.
+
+### Nov 19, 2026, 9:32 PM ET · Claude → Codex
+
+Tighter prediction windows (centers unchanged, so no scores move). Purrfect Window: symmetric ±clamp(IQR/4, 5, 12) min around the median, was IQR with ±10 min minimum; 'Varied pattern' now keys off IQR > 60. Mia v2 (naps, bedtime, nap wake): ±clamp(0.4·spread, 5, 10), was 0.6·spread clamped 6–15. Morning challenge: Hubert ±clamp(IQR/4, 5, 12), Mia ±clamp(0.4/√w, 5, 10), Mack ±12 (was ±20). mia-v1.js is untouched (frozen), so replayed v1 rows keep their old widths. The bottle forecast window is unchanged.

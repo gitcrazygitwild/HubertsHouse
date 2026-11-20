@@ -65,16 +65,16 @@ export function morningPicks(sleeps, timezone, bedtime, { birthdate = null } = {
   const past = nightsFrom(known, timezone, bedtime, 35).filter(n => n.morning && n.morning < bedtime).slice(-21);
   const tonight = evening(clockAt(bedtime, timezone)), out = { hubert:null, mia:null, mack:null };
   if (!past.length) return out;
-  // Mack: yesterday again, half-adjusted for bedtime. ±20 minutes, because precision is effort.
+  // Mack: yesterday again, half-adjusted for bedtime. ±12 minutes, because precision is effort.
   const last = past.at(-1), mackClock = last.wakeClock + (tonight - last.bedClock) / 2, mack = at(bedtime, ((Math.round(mackClock) % 1440) + 1440) % 1440, timezone);
-  out.mack = pick(mack, mack - 20 * MINUTE, mack + 20 * MINUTE);
+  out.mack = pick(mack, mack - 12 * MINUTE, mack + 12 * MINUTE);
   if (past.length < 3) return out;
   // Hubert: nights that began like tonight; the middle of their wake-ups.
   let twins = past.filter(n => Math.abs(n.bedClock - tonight) <= 45);
   if (twins.length < 3) twins = past.filter(n => Math.abs(n.bedClock - tonight) <= 90);
   if (twins.length < 3) twins = past;
   twins = twins.slice(-14);
-  const clocks = twins.map(n => n.wakeClock), mid = median(clocks), lo = Math.min(quantile(clocks, .25), mid - 10), hi = Math.max(quantile(clocks, .75), mid + 10);
+  const clocks = twins.map(n => n.wakeClock), mid = median(clocks), half = clamp((quantile(clocks, .75) - quantile(clocks, .25)) / 4, 5, 12), lo = mid - half, hi = mid + half;
   const hubert = at(bedtime, Math.round(mid), timezone);
   out.hubert = pick(hubert, hubert - (mid - lo) * MINUTE, hubert + (hi - mid) * MINUTE);
   // Mia: usual night length vs usual wake-up clock, blended by steadiness, recent nights first.
@@ -82,7 +82,7 @@ export function morningPicks(sleeps, timezone, bedtime, { birthdate = null } = {
   const lengths = past.map(n => (n.morning - n.bedtime) / MINUTE), wakes = past.map(n => n.wakeClock);
   const byLength = bedtime + wmean(lengths, weights) * MINUTE, byClock = at(bedtime, Math.round(wmean(wakes, weights)), timezone);
   const wL = 1 / Math.max(wsd(lengths, weights), 5) ** 2, wC = 1 / Math.max(wsd(wakes, weights), 5) ** 2;
-  const mia = (byLength * wL + byClock * wC) / (wL + wC), spread = clamp(0.6 / Math.sqrt(wL + wC), 6, 15) * MINUTE;
+  const mia = (byLength * wL + byClock * wC) / (wL + wC), spread = clamp(0.4 / Math.sqrt(wL + wC), 5, 10) * MINUTE;
   out.mia = { ...pick(mia, mia - spread, mia + spread), clockShare:Math.round(100 * wC / (wL + wC)) };
   return out;
 }
