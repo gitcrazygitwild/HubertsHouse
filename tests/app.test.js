@@ -484,3 +484,14 @@ test('a missed nap can be recovered from the scoreboard in the preview', async t
   assert.equal(doc.querySelectorAll('#frankieScore [data-rewind-wake]').length,before-1);
   assert.deepEqual(errors,[]);
 });
+test('a failing extra never blanks the prediction cards, and says what broke', async t => {
+  const {dom,w,doc}=await fixture(); t.after(() => dom.window.close());
+  w.dayStripSVG=() => { throw new Error('strip exploded'); };
+  doc.getElementById('babyRefresh').click(); await settle();
+  assert.equal(doc.querySelectorAll('#babyPredictions .nap-card').length,3);
+  assert.match(doc.getElementById('babyPredictions').textContent,/Part of the forecast couldn’t be drawn \(Day strip: strip exploded\)/);
+  assert.equal(doc.getElementById('babyStrip').hidden,true);
+  w.purrfectWindow=() => { throw new Error('hubert tripped'); };
+  doc.getElementById('babyRefresh').click(); await settle();
+  assert.match(doc.getElementById('babyPredictions').textContent,/The predictions couldn’t be drawn: hubert tripped/);
+});
