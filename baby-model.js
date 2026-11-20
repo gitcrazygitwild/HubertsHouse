@@ -12,6 +12,12 @@ function localParts(value, timezone) {
   const get = type => parts.find(part => part.type === type).value;
   return { day:`${get('year')}-${get('month')}-${get('day')}`, hour:Number(get('hour')), minute:Number(get('minute')) };
 }
+// When nothing has been logged for a while, say since when, so a missed log is obvious.
+function staleReason(lastEnd, timezone, who) {
+  if (!Number.isFinite(lastEnd)) return `Log a sleep and wake-up so ${who} can forecast.`;
+  const { hour, minute } = localParts(lastEnd, timezone), clock = `${hour % 12 || 12}:${String(minute).padStart(2, '0')} ${hour < 12 ? 'AM' : 'PM'}`;
+  return `Nothing logged since she woke at ${clock}, over 8 hours ago. Log today’s naps and ${who} will forecast again.`;
+}
 function quantile(values, q) {
   const sorted = [...values].sort((a,b) => a - b), position = (sorted.length - 1) * q;
   const low = Math.floor(position), weight = position - low;
@@ -56,7 +62,7 @@ export function purrfectWindow({ sleeps = [], timer = null, timezone = 'America/
     return finish('wake', began, selected, matchedTime, {sleepStart:new Date(began).toISOString()});
   }
   const last = merged.at(-1), lastWake = last?.end;
-  if (!lastWake || +now - lastWake > 8 * 3600000) return empty('Log a recent sleep and wake-up to find the next window.');
+  if (!lastWake || +now - lastWake > 8 * 3600000) return empty(staleReason(lastWake, timezone, 'Hubert'));
   const current = localParts(+now, timezone), wake = localParts(lastWake, timezone), lastNight = isNight(last);
   if ((current.hour >= 1 && current.hour < 5) || wake.hour < 5 || (lastNight && wake.hour >= 12)) return empty('Awake in the night. Hubert forecasts her next wake-up once she’s back asleep (start the sleep timer).');
   const samples = [];
@@ -268,7 +274,7 @@ export function miaForecast({ sleeps = [], bottles = [], birthdate = null, timer
   const age = ageInDays(birthdate, now), halfLife = halfLifeFor(age), lookback = age != null && age >= 180 ? 28 : 21;
   if (timer?.active) return napWake();
   const merged = mergeSleeps(sleeps, now, lookback), last = merged.at(-1);
-  if (!last || +now - last.end > 8 * 3600000) return empty('Log a recent sleep and wake-up for a forecast.');
+  if (!last || +now - last.end > 8 * 3600000) return empty(staleReason(last?.end, timezone, 'Mia'));
   const current = localParts(+now, timezone);
   if (current.hour >= 1 && current.hour < 5) return empty('Overnight is outside Mia’s forecast.');
   const {samples, bedtimes, byDay, today, line} = indexedWakeWindows(sleeps, timezone, now, lookback, bottles);

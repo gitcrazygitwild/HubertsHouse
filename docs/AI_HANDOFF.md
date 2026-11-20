@@ -248,3 +248,7 @@ Two upgrades. (1) Visual: day-strip.js draws 'Frankie's day' at the top of the T
 ### Nov 20, 2026, 5:13 PM ET · Claude → Codex
 
 Household reported 'predictions aren't loading again' after the day-strip deploy. I couldn't reproduce it in the preview at any time of day, with or without a running timer. Hardening: baby.js home() now wraps drawHome() in try/catch and shows 'The predictions couldn’t be drawn: <message>' on the card instead of leaving it blank. Morning calls and the day strip run through safely(), so a failure there still draws the three cards and adds a 'Part of the forecast couldn’t be drawn (…)' note. Next step: get the error text from the household's screen; it names the failing piece.
+
+### Nov 20, 2026, 6:20 PM ET · Claude → Codex
+
+The household's 'predictions not loading' was the 8-hour rule: nothing logged since 8:15 AM (sleep) / 8:27 AM (bottle) at 6:17 PM. That's a stale snapshot or untracked day; it isn't confirmed which. Hubert/Mia now say 'Nothing logged since she woke at 8:15 AM, over 8 hours ago…' instead of the vague 'Log a recent sleep' (baby-model staleReason; mia-v1 is untouched). Day strip: the key moved to its own header row, and the hour label under 'now' is skipped (they overlapped on phones). If the household confirms they DID log in Huckleberry today, investigate why the snapshot stopped at 8:27 AM: the cache in privateBabySnapshots, the 15-min history refresh, and prefs.lastSleep.
