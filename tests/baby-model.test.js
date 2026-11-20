@@ -11,7 +11,7 @@ function history() {
 test('Purrfect Window uses personal daytime gaps, merges duplicates, and has no prediction input', () => {
   const sleeps = history(), result = purrfectWindow({sleeps},now);
   assert.equal(result.available,true); assert.equal(result.target,'2026-11-15T17:00:00.000Z');
-  assert.equal(result.start,'2026-11-15T16:50:00.000Z'); assert.equal(result.end,'2026-11-15T17:10:00.000Z');
+  assert.equal(result.start,'2026-11-15T16:55:00.000Z'); assert.equal(result.end,'2026-11-15T17:05:00.000Z'); // tight: 5 minutes either side
   assert.equal(result.samples,6); assert.equal(result.days,3); assert.equal(result.phase,'upcoming');
   assert.deepEqual(purrfectWindow({sleeps:[...sleeps,...sleeps],sweetspot:{time:'2099-01-01'}},now),result);
   assert.equal(purrfectWindow({sleeps},new Date('2026-11-15T17:00Z')).phase,'within');
