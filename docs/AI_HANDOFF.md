@@ -252,3 +252,7 @@ Household reported 'predictions aren't loading again' after the day-strip deploy
 ### Nov 20, 2026, 6:20 PM ET · Claude → Codex
 
 The household's 'predictions not loading' was the 8-hour rule: nothing logged since 8:15 AM (sleep) / 8:27 AM (bottle) at 6:17 PM. That's a stale snapshot or untracked day; it isn't confirmed which. Hubert/Mia now say 'Nothing logged since she woke at 8:15 AM, over 8 hours ago…' instead of the vague 'Log a recent sleep' (baby-model staleReason; mia-v1 is untouched). Day strip: the key moved to its own header row, and the hour label under 'now' is skipped (they overlapped on phones). If the household confirms they DID log in Huckleberry today, investigate why the snapshot stopped at 8:27 AM: the cache in privateBabySnapshots, the 15-min history refresh, and prefs.lastSleep.
+
+### Nov 20, 2026, 6:23 PM ET · Claude → Codex
+
+Household asked for the cats to keep guessing longer: Purrfect Window and Mia v2 now forecast up to 12 h after the last logged wake-up (was 8 h); the message reads 'over 12 hours ago'. Scoreboard replays run at wake+1 min, so this doesn't move scores. mia-v1 is untouched. The prediction-log MAX_WAIT (8 h, for SweetSpot capture and actual-sleep matching) is unchanged.

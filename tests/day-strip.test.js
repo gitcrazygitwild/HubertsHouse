@@ -22,7 +22,16 @@ test('the strip shows today’s sleeps, local hour marks, each cat’s window an
 test('with nothing logged for 8+ hours, Hubert and Mia say since when', async () => {
   const { purrfectWindow, miaForecast } = await import('../baby-model.js');
   const sleeps = [{ start:'2026-11-19T04:00:00Z', end:'2026-11-19T13:15:00Z' }]; // woke 8:15 AM Eastern
-  const now = new Date('2026-11-19T23:17:00Z'); // 6:17 PM
-  assert.match(purrfectWindow({ sleeps, timezone:'America/New_York' }, now).reason, /Nothing logged since she woke at 8:15 AM, over 8 hours ago\. Log today’s naps and Hubert will forecast again\./);
+  const now = new Date('2026-11-20T02:17:00Z'); // 9:17 PM, 13 hours later
+  assert.match(purrfectWindow({ sleeps, timezone:'America/New_York' }, now).reason, /Nothing logged since she woke at 8:15 AM, over 12 hours ago\. Log today’s naps and Hubert will forecast again\./);
   assert.match(miaForecast({ sleeps, timezone:'America/New_York' }, now).reason, /since she woke at 8:15 AM.*Mia will forecast again/);
+});
+test('10 hours after her last logged wake-up, Hubert and Mia still guess', async () => {
+  const { purrfectWindow, miaForecast } = await import('../baby-model.js');
+  const zone = 'UTC', H = 3600000, DAY = 86400000, base = Date.parse('2026-11-19T00:00:00Z'), sleeps = [];
+  for (let d = 8; d >= 0; d--) { const b = base - d * DAY; sleeps.push({ start:b - 5 * H, end:b + 7 * H }); if (d) for (const [a, z] of [[9, 10], [12.5, 14], [16, 16.75]]) sleeps.push({ start:b + a * H, end:b + z * H }); }
+  const iso = sleeps.map(s => ({ start:new Date(s.start).toISOString(), end:new Date(s.end).toISOString() }));
+  const now = new Date(base + 17 * H); // woke at 7:00, nothing logged since
+  assert.equal(purrfectWindow({ sleeps:iso, timezone:zone }, now).available, true);
+  assert.equal(miaForecast({ sleeps:iso, timezone:zone }, now).available, true);
 });
