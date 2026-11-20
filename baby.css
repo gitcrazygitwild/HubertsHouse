@@ -81,3 +81,18 @@ html.night-open { overflow: hidden; }
 .night-actions button:disabled { opacity: .5; }
 .night-tip { font-size: 12px; color: #7a4e3d; margin: 0; }
 @media (max-width: 420px) { .night-clock { font-size: 64px; } .night-stats strong { font-size: 18px; } }
+/* Frankie's day strip */
+.baby-strip { margin:0 0 14px; }
+.day-strip { width:100%; height:auto; display:block; overflow:visible; }
+.strip-sleep { fill:#c9bfe3; } .strip-sleep.night { fill:#7d72a8; } .strip-sleep.live { opacity:.75; }
+.strip-tick { stroke:var(--border); stroke-width:1; stroke-dasharray:2 3; }
+.strip-hour, .strip-now-label { font:10px var(--font-ui, system-ui); fill:var(--muted); }
+.strip-cat { font:600 10px var(--font-ui, system-ui); fill:var(--muted); }
+.strip-band.hubert { fill:#8fae7b; opacity:.45; } .strip-dot.hubert { fill:#5f8a4a; }
+.strip-band.mia { fill:#86a9cf; opacity:.45; } .strip-dot.mia { fill:#4a78a8; }
+.strip-band.mack { fill:#a99ad1; opacity:.45; } .strip-dot.mack { fill:#7a63b5; }
+.strip-dot { stroke:var(--card); stroke-width:1.5; }
+.strip-now { stroke:#d9a24b; stroke-width:2; }
+.strip-now-label { fill:#b9822c; font-weight:600; }
+[data-theme="dark"] .strip-sleep { fill:#5c5480; } [data-theme="dark"] .strip-sleep.night { fill:#8f84c0; }
+.strip-key text { font:10px var(--font-ui, system-ui); fill:var(--muted); }
