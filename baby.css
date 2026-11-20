@@ -96,3 +96,5 @@ html.night-open { overflow: hidden; }
 .strip-now-label { fill:#b9822c; font-weight:600; }
 [data-theme="dark"] .strip-sleep { fill:#5c5480; } [data-theme="dark"] .strip-sleep.night { fill:#8f84c0; }
 .strip-key text { font:10px var(--font-ui, system-ui); fill:var(--muted); }
+.forecast-problem { grid-column:1 / -1; margin:6px 0 0; padding:10px 14px; border-radius:12px; background:#fbeee6; color:#9a4f2a; font-size:13px; }
+[data-theme="dark"] .forecast-problem { background:#45322a; color:#f0c3a8; }

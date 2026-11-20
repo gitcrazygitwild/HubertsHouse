@@ -28,7 +28,15 @@ function adoptConnection(next) {
   connection = next; snapshot = null; pendingTimer = null;
   settings();
 }
+// Whatever goes wrong in the forecast code, say so on the card instead of leaving it blank.
 function home() {
+  try { drawHome(); }
+  catch (e) {
+    console.error('Frankie’s card failed', e);
+    renderHTML($('babyPredictions'), `<p class="forecast-problem" role="alert">The predictions couldn’t be drawn: ${esc(e?.message || String(e))}. Tap Refresh; if it keeps happening, send a screenshot to Claude.</p>`);
+  }
+}
+function drawHome() {
   if ($('huckNapPlanHint')) $('huckNapPlanHint').textContent = napPlanHint();
   $('babyTitle').textContent = snapshot ? `${snapshot.name}’s little rhythm.` : 'Little rhythms, together.';
   $('babyBadge').textContent = demo ? 'Sample data' : error ? 'Needs attention' : connection.connected ? 'Connected' : 'Connect Huckleberry';
@@ -52,7 +60,9 @@ function home() {
   const score = scorePredictions(predictions, snapshot.sleeps, snapshot.timer, zone(), { bottles:snapshot.bottles || [], birthdate:snapshot.birthdate }), leader = score.summary.find(model => model.key === score.leader);
   const hmText = minutes => `${Math.floor(minutes / 60)}h ${minutes % 60}m`, signed = minutes => `${minutes > 0 ? '+' : '−'}${Math.abs(minutes)}m`;
   // Asleep for the night: the three cats' morning wake-up calls.
-  const bedtime = currentBedtime(snapshot.sleeps, snapshot.timer, zone()), morning = bedtime ? morningPicks(snapshot.sleeps, zone(), bedtime, { birthdate:snapshot.birthdate }) : null;
+  // Extras (morning calls, the day strip) must never stop the three cards from drawing.
+  const problems = [], safely = (name, work, fallback = null) => { try { return work(); } catch (e) { console.error(`${name} failed`, e); problems.push(`${name}: ${e?.message || e}`); return fallback; } };
+  const morning = safely('Morning calls', () => { const bedtime = currentBedtime(snapshot.sleeps, snapshot.timer, zone()); return bedtime ? morningPicks(snapshot.sleeps, zone(), bedtime, { birthdate:snapshot.birthdate }) : null; });
   const morningLine = morning && (morning.hubert || morning.mia || morning.mack) ? `<p class="morning-calls">☀ <strong>Morning wake-up calls:</strong> ${[['Hubert', morning.hubert], ['Mia', morning.mia], ['Mack', morning.mack]].filter(([, p]) => p).map(([cat, p]) => `${cat} ${esc(time(p.target))}`).join(' · ')}</p>` : '';
   const miaShown = mia.available ? mia : morning?.mia ? { available:true, kind:'morning', ...morning.mia, confidence:'Sunrise Forecast' } : mia;
   const miaWhy = !miaShown.available ? '' : miaShown.kind === 'morning' ? `blending how long her nights usually last with her usual wake-up time (${miaShown.clockShare}% on the clock)`
@@ -76,10 +86,13 @@ function home() {
     : [own.available ? { key:'hubert', cat:'Hubert', start:own.start, end:own.end, target:own.target, label:label(own) } : null, miaShown.available ? { key:'mia', cat:'Mia', start:miaShown.start, end:miaShown.end, target:miaShown.target, label:label(miaShown) } : null,
       huck.available && !huck.expired && !huck.sleeping ? { key:'mack', cat:'Mack', target:huck.time, label:'SweetSpot' } : null].filter(Boolean);
   const strip = $('babyStrip');
-  if (strip) { strip.hidden = false; renderHTML(strip, dayStripSVG({ sleeps:snapshot.sleeps, timer:snapshot.timer, picks:stripPicks, timezone:zone(), now:Date.now(), width:Math.max(320, Math.round(strip.clientWidth || 640)) })); }
+  if (strip) {
+    safely('Day strip', () => { renderHTML(strip, dayStripSVG({ sleeps:snapshot.sleeps, timer:snapshot.timer, picks:stripPicks, timezone:zone(), now:Date.now(), width:Math.max(320, Math.round(strip.clientWidth || 640)) })); });
+    strip.hidden = problems.some(p => p.startsWith('Day strip'));
+  }
   renderHTML($('babyPredictions'), `<article class="nap-card purr-nap"><div class="nap-label"><span>HUBERT’S PURRFECT WINDOW</span><span aria-hidden="true">🐾</span></div><h3>${own.available ? `${esc(time(own.start))} – ${esc(time(own.end))}` : 'Learning your rhythm'}</h3><span class="nap-state">${outdated ? 'Saved history · refresh needed' : own.available ? `${esc(own.pattern)} · ${esc(purrWhat)}` : 'Your own sleep-history estimate'}</span><p>${own.available ? esc(purrWhy) : esc(own.reason)}</p></article>
     <article class="nap-card mia-nap"><div class="nap-label"><span>MIA’S CATNAP FORECAST</span><span aria-hidden="true">🌤</span></div><h3>${miaShown.available ? `${esc(time(miaShown.start))} – ${esc(time(miaShown.end))}` : 'Gathering clues'}</h3><span class="nap-state">${outdated ? 'Saved history · refresh needed' : miaShown.available ? `${esc(miaShown.confidence)} · ${esc(miaWhat)}${miaShown.phase ? ` · ${miaShown.phase === 'passed' ? 'window passed' : miaShown.phase === 'within' ? 'in the window' : 'up next'}` : ''}` : 'Naps, bedtime and wake-ups'}</span><p>${miaShown.available ? `${esc(miaWhy.charAt(0).toUpperCase() + miaWhy.slice(1))}. Best guess: ${esc(time(miaShown.target))}.` : esc(mia.reason)}</p></article>
-    <article class="nap-card huck-nap"><div class="nap-label"><span>MACK’S BORROWED SWEETSPOT</span><span>${demo ? 'Sample prediction' : `SweetSpot® · ${esc(napPlanLabel())}`}</span></div><h3>${huck.available ? esc(time(huck.time)) : 'Waiting for a prediction'}</h3><span class="nap-state">${huck.sleeping ? 'Sleep in progress' : huck.expired ? 'Previous prediction · passed' : huck.staleRead ? 'Saved prediction · stale' : huck.available ? 'Stored in Huckleberry' : 'From your Huckleberry account'}</span><p>${esc(huck.available ? huck.note : huck.reason)} <span class="mack-excuse">${esc(MACK_EXCUSE)}</span></p></article>${morningLine}`);
+    <article class="nap-card huck-nap"><div class="nap-label"><span>MACK’S BORROWED SWEETSPOT</span><span>${demo ? 'Sample prediction' : `SweetSpot® · ${esc(napPlanLabel())}`}</span></div><h3>${huck.available ? esc(time(huck.time)) : 'Waiting for a prediction'}</h3><span class="nap-state">${huck.sleeping ? 'Sleep in progress' : huck.expired ? 'Previous prediction · passed' : huck.staleRead ? 'Saved prediction · stale' : huck.available ? 'Stored in Huckleberry' : 'From your Huckleberry account'}</span><p>${esc(huck.available ? huck.note : huck.reason)} <span class="mack-excuse">${esc(MACK_EXCUSE)}</span></p></article>${morningLine}${problems.length ? `<p class="forecast-problem" role="status">Part of the forecast couldn’t be drawn (${esc(problems.join('; ').slice(0, 200))}). The predictions above are fine; send this to Claude.</p>` : ''}`);
   renderHTML($('babyScore'), score.scoredNaps ? `<button type="button" class="baby-score" data-go="frankie"><span aria-hidden="true">🏆</span><span>${leader ? `<strong>${esc(leader.owner)}’s ${esc(leader.name)}</strong> is most accurate so far · ±${leader.mae} min across ${leader.n} naps` : `${score.scoredNaps} nap${score.scoredNaps === 1 ? '' : 's'} scored · a leader appears after three scored naps`}</span><span class="baby-score-link">Scoreboard →</span></button>` : '');
   const timer = snapshot.timer, elapsed = timer?.start ? Math.max(0,Math.floor(((timer.paused ? Date.parse(timer.end) : Date.now()) - Date.parse(timer.start)) / 60000)) : 0;
   const latest = snapshot.sleeps.at(-1), bottle = snapshot.lastBottle, diaper = snapshot.lastDiaper;
