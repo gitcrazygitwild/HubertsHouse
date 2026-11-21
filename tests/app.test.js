@@ -43,7 +43,8 @@ async function fixture(options = {}) {
   await module('prediction-log.js',['MODELS','predictionId','isDaytimeWake','sweetspotEntry','sweetspotPatch','previousSweetspot','actualSleepStart','replayGuesses','scorePredictions','MIA_V2_SINCE','miaVersionAt','recoveredEntry']);
   await module('baby-sample.js',['sampleHistory','samplePredictions']);
   await module('awards.js',['frankieAwards']);
-  await module('frankie.js',['renderFrankie','initFrankie','frankieDayText','bottleLinksHTML', 'pumpsHTML','challengeHTML'],'const esc=escapeHTML;');
+  await module('bottle-pace.js',['bottlePace']);
+  await module('frankie.js',['renderFrankie','initFrankie','frankieDayText','bottleLinksHTML', 'pumpsHTML', 'paceHTML','challengeHTML'],'const esc=escapeHTML;');
   await module('baby-logs.js',['LOG_FILTERS','describeLog','logKey','logsHTML'],'const esc=escapeHTML;');
   await module('baby.js',['initHuckleberry','logBabyFromText'],'const esc=escapeHTML;');
   await module('calendar-view.js',['initCalendarExperience','calendarEventContent'],'const esc=escapeHTML;');
@@ -499,6 +500,7 @@ test('a failing extra never blanks the prediction cards, and says what broke', a
   assert.equal(doc.querySelectorAll('#babyPredictions .nap-card').length,3);
   assert.match(doc.getElementById('babyPredictions').textContent,/Part of the forecast couldn’t be drawn \(Day strip: strip exploded\)/);
   assert.equal(doc.getElementById('babyStrip').hidden,true);
+  assert.equal(doc.getElementById('frankieGuessCard').hidden,true,'the Frankie page copy hides too');
   w.purrfectWindow=() => { throw new Error('hubert tripped'); };
   doc.getElementById('babyRefresh').click(); await settle();
   assert.match(doc.getElementById('babyPredictions').textContent,/The predictions couldn’t be drawn: hubert tripped/);
@@ -625,5 +627,24 @@ test('bath days: pick them in Settings and they show on the calendar and Today',
   doc.querySelector('#bathPanel [data-bath-day="5"]').click(); doc.querySelector('#bathPanel [data-bath-day="3"]').click(); await settle();
   assert.deepEqual(pressed(), ['Fri', 'Sun']); assert.match(doc.getElementById('bathPanel').textContent, /Fridays and Sundays/);
   assert.ok(stripDays().every(day => [0, 5].includes(day)) && stripDays().length >= 1, String(stripDays()));
+  assert.deepEqual(errors, []);
+});
+test('Frankie page: the cats’ windows on a day strip, and a bottle pace tracker', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  doc.querySelector('[data-view="frankie"]').click(); await settle();
+  const card = doc.getElementById('frankieGuessCard');
+  assert.equal(card.hidden, false);
+  assert.ok(doc.querySelector('#frankieStrip svg.day-strip'), 'the same strip as Today');
+  assert.deepEqual([...doc.querySelectorAll('#frankieGuessList li')].map(li => li.className.split(' ')[0]), ['guess-hubert', 'guess-mia', 'guess-mack'], 'Hubert, Mia, Mack');
+  // Each cat with a call shows its window; the strip draws the same picks as Today's.
+  const todayLanes = [...doc.querySelectorAll('#babyStrip .strip-cat')].map(n => n.textContent), frankieLanes = [...doc.querySelectorAll('#frankieStrip .strip-cat')].map(n => n.textContent);
+  assert.deepEqual(frankieLanes, todayLanes);
+  // Bottle pace.
+  assert.equal(doc.getElementById('frankiePaceCard').hidden, false);
+  const pace = doc.getElementById('frankiePace');
+  assert.match(pace.textContent, /On track|Ahead of pace|Behind pace/);
+  assert.match(pace.textContent, /usually .* oz by now/); assert.match(pace.textContent, /target .* oz/);
+  assert.ok(pace.querySelector('.pace-bar .pace-mark'), 'a marker for where she usually is by now');
+  assert.match(pace.textContent, /Next bottle/);
   assert.deepEqual(errors, []);
 });

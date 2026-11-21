@@ -175,3 +175,27 @@ rect.is-hovered.mark-night,rect.is-hovered.mark-nap { stroke:var(--card); stroke
 .pump-sessions small { color:var(--muted); }
 .pump-tiles { margin-bottom:4px; }
 .pump-tiles .pump-l { color:var(--chart-left); } .pump-tiles .pump-r { color:var(--chart-right); }
+/* Today's guesses (the cats' windows) and bottle pace. */
+.guess-list ul { list-style:none; margin:12px 0 6px; padding:0; }
+.guess-list li { display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--border2); }
+.guess-list li:last-of-type { border-bottom:0; }
+.guess-list li > span:nth-child(2) { flex:1; min-width:0; }
+.guess-list b { display:block; font-size:13px; font-weight:600; }
+.guess-list small { color:var(--muted); font-size:11px; }
+.guess-list strong { font-size:14px; font-weight:600; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.guess-list .is-quiet { opacity:.6; }
+.guess-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; background:var(--muted); }
+.guess-hubert .guess-dot { background:#5f8a4a; } .guess-mia .guess-dot { background:#4a78a8; } .guess-mack .guess-dot { background:#7a63b5; }
+.pace-head { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+.pace-word { font:400 26px/1.2 var(--serif, Georgia, serif); }
+.pace-on-track .pace-word { color:#4f7a3d; } .pace-ahead .pace-word { color:#3d6c8a; } .pace-behind .pace-word { color:#a86a2e; }
+.pace-head span { color:var(--muted); font-size:13px; }
+.pace-bar { position:relative; display:flex; height:16px; border-radius:8px; background:var(--soft, #eceee4); margin:14px 0 6px; overflow:visible; }
+.pace-bar i { display:block; height:100%; }
+.pace-counted { background:var(--chart-bottle); border-radius:8px 0 0 8px; }
+.pace-settling { background:repeating-linear-gradient(45deg, color-mix(in srgb, var(--chart-bottle) 45%, transparent) 0 5px, color-mix(in srgb, var(--chart-bottle) 22%, transparent) 5px 10px); }
+.pace-mark { position:absolute; top:-5px; bottom:-5px; width:3px; margin-left:-1.5px; border-radius:2px; background:var(--text); }
+.pace-legend { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; font-size:12px; color:var(--muted); }
+.pace-legend b { color:var(--text); font-weight:600; }
+.pace-tiles { grid-template-columns:repeat(3, minmax(0, 1fr)); margin:14px 0 4px; }
+@media (max-width:520px) { .pace-tiles { grid-template-columns:1fr 1fr; } }
