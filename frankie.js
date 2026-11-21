@@ -6,6 +6,7 @@ import { renderHTML } from './dom.js';
 import { dailySleep, dailyBottles, dailyPumps, toOunces, timelineRows, babySummary, dayStart, dayStory, dayStoryText, localDay } from './baby-history.js';
 import { MODELS, scorePredictions, MIA_V2_SINCE } from './prediction-log.js';
 import { bottleSleepLinks, ageInDays, ageLabel } from './baby-model.js';
+import { bottlePace } from './bottle-pace.js';
 import { CHALLENGES, MACK_EXCUSE, scoreMornings, scoreBottles, scorePumps, morningPicks, bottlePicks, pumpPicks, currentBedtime, nightsFrom } from './cat-challenges.js';
 import { frankieAwards } from './awards.js';
 
@@ -89,6 +90,21 @@ function pumpChart(rows, timezone, average, W = 720) {
   });
   const avgLine = average ? (() => { const ay = pad.top + h - (average / max) * h; return `<line x1="${pad.left}" x2="${pad.left + w}" y1="${ay}" y2="${ay}" class="chart-ref"/><text x="${pad.left + 6}" y="${ay - 6}" class="chart-ref-label">7-day avg ${oz(average)}</text>`; })() : '';
   return `<svg viewBox="0 0 ${W} ${H}" class="chart-svg" role="img" aria-label="Ounces pumped per day, left and right, last ${rows.length} days">${axis(w, h, pad, max, 8, '')}${bars}${avgLine}${xTicks(rows, x, slot, H - 8, timezone)}</svg>`;
+}
+// Bottle pace: her usual day as the target, with recent bottles counted gradually.
+export function paceHTML(pace, timezone) {
+  if (!pace.available) return `<p class="muted">${esc(pace.reason)}</p>`;
+  const pct = v => `${Math.max(0, Math.min(100, v / Math.max(pace.target, pace.drank, 1) * 100)).toFixed(1)}%`;
+  const hm = m => m >= 60 ? `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ''}` : `${m}m`;
+  const word = { 'on-track':'On track', ahead:'Ahead of pace', behind:'Behind pace' }[pace.status];
+  const detail = pace.status === 'on-track' ? `about where she usually is by ${clock(Date.now(), timezone)}` : `${oz(Math.abs(pace.diff))} ${pace.status === 'ahead' ? 'more' : 'less'} than usual by ${clock(Date.now(), timezone)}`;
+  const settling = pace.lastBottle?.settling > 0.05 ? `Her ${oz(pace.lastBottle.oz)} bottle at ${clock(Date.parse(pace.lastBottle.at), timezone)} is still being counted in, a little at a time over her usual ${hm(pace.gapMinutes)} between bottles, so it doesn’t look like she’s ahead just because she ate.` : '';
+  const due = pace.nextDue ? Date.parse(pace.nextDue) : null;
+  return `<div class="pace pace-${pace.status}"><div class="pace-head"><strong class="pace-word">${word}</strong><span>${esc(detail)}</span></div>
+    <div class="pace-bar" role="img" aria-label="${esc(`${oz(pace.drank)} of a ${oz(pace.target)} day; usually ${oz(pace.expected)} by now`)}"><i class="pace-counted" style="width:${pct(pace.counted)}"></i><i class="pace-settling" style="width:${pct(Math.max(0, pace.drank - pace.counted))}"></i><b class="pace-mark" style="left:${pct(pace.expected)}" title="Where she usually is by now"></b></div>
+    <div class="pace-legend"><span><b>${oz(pace.drank)}</b> so far · ${pace.count} bottle${pace.count === 1 ? '' : 's'}</span><span>usually <b>${oz(pace.expected)}</b> by now</span><span>target <b>${oz(pace.target)}</b></span></div>
+    <div class="frankie-status pace-tiles"><div class="frankie-tile"><span>Still to go</span><strong>${oz(pace.remaining)}</strong><small>to reach her ${pace.days}-day average</small></div><div class="frankie-tile"><span>On course for</span><strong>${oz(pace.projected)}</strong><small>if the day keeps this pace</small></div><div class="frankie-tile"><span>Next bottle</span><strong>${due ? esc(due < Date.now() ? 'Any time' : clock(due, timezone)) : '—'}</strong><small>every ~${esc(hm(pace.gapMinutes))} lately</small></div></div>
+    ${settling ? `<p class="tiny muted">${esc(settling)}</p>` : ''}</div>`;
 }
 // Today at a glance: total, the left/right split, and today's sessions.
 export function pumpsHTML(pumps = [], timezone, now = Date.now()) {
@@ -198,6 +214,8 @@ export function renderFrankie({ snapshot, timezone, predictions = [], demo = fal
   }
   if ($('frankieBottleBet')) renderHTML($('frankieBottleBet'), challengeHTML('bottle', scoreBottles(bottles, timezone, now, { birthdate:snapshot.birthdate }), timezone, bottlePicks(bottles, timezone, localDay(now, timezone), { birthdate:snapshot.birthdate })));
   const width = id => Math.max(280, Math.round($(id).clientWidth || 720));
+  // Bottle pace for today.
+  if ($('frankiePace')) { $('frankiePaceCard').hidden = false; renderHTML($('frankiePace'), paceHTML(bottlePace(bottles, timezone, now), timezone)); }
   // Karena's pumps: the card always shows (with a how-to when empty); the challenge and chart once there's data.
   const pumps = snapshot.pumps || [];
   if ($('frankiePumps')) renderHTML($('frankiePumps'), pumpsHTML(pumps, timezone, now));

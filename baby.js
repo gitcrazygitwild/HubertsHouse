@@ -36,6 +36,22 @@ function home() {
     renderHTML($('babyPredictions'), `<p class="forecast-problem" role="alert">The predictions couldn’t be drawn: ${esc(e?.message || String(e))}. Tap Refresh; if it keeps happening, send a screenshot to Claude.</p>`);
   }
 }
+// Frankie page: each cat's window on the day strip, like Today's card, plus one line per cat.
+function frankieGuesses(picks, morning) {
+  const card = $('frankieGuessCard'), strip = $('frankieStrip'), list = $('frankieGuessList');
+  if (!card || !strip || !list) return;
+  card.hidden = !snapshot;
+  if (!snapshot) return;
+  renderHTML(strip, dayStripSVG({ sleeps:snapshot.sleeps, timer:snapshot.timer, picks, timezone:zone(), now:Date.now(), width:Math.max(320, Math.round(strip.clientWidth || card.clientWidth || 640)) }));
+  const names = { hubert:'Hubert’s Purrfect Window', mia:'Mia’s Catnap Forecast', mack:'Mack’s borrowed SweetSpot' };
+  const rows = ['hubert', 'mia', 'mack'].map(key => {
+    const p = picks.find(pick => pick.key === key);
+    if (!p) return `<li class="guess-${key} is-quiet"><span class="guess-dot" aria-hidden="true"></span><span><b>${esc(names[key])}</b><small>No call right now</small></span></li>`;
+    const window = p.start && p.end ? `${esc(time(p.start))} – ${esc(time(p.end))}` : esc(time(p.target));
+    return `<li class="guess-${key}"><span class="guess-dot" aria-hidden="true"></span><span><b>${esc(names[key])}</b><small>${esc(p.label)}${p.start && p.end ? ` · best guess ${esc(time(p.target))}` : ''}</small></span><strong>${window}</strong></li>`;
+  }).join('');
+  renderHTML(list, `<ul>${rows}</ul><p class="tiny muted">${morning ? 'She’s down for the night: these are the cats’ morning wake-up calls.' : 'Bands are each cat’s window; dots are their best guess. Shaded blocks are her sleeps so far today.'}</p>`);
+}
 function drawHome() {
   if ($('huckNapPlanHint')) $('huckNapPlanHint').textContent = napPlanHint();
   $('babyTitle').textContent = snapshot ? `${snapshot.name}’s little rhythm.` : 'Little rhythms, together.';
@@ -51,7 +67,7 @@ function drawHome() {
   $('babySleep').textContent = snapshot?.timer?.active ? '☀ Finish sleep' : '☾ Start sleep';
   if (!snapshot) {
     renderHTML($('babyPredictions'), `<div class="baby-intro"><span class="baby-orbit" aria-hidden="true">☾</span><div><h3>A softer landing for the next nap.</h3><p>${connection.connected ? 'Choose a child profile in Settings, then refresh here.' : 'Connect Huckleberry in Settings to log the little moments and compare three nap predictions.'}</p></div></div>`);
-    renderHTML($('babyStats'),''); renderHTML($('babyScore'),''); if ($('babyStrip')) $('babyStrip').hidden = true; frankie(); glance(); return;
+    renderHTML($('babyStats'),''); renderHTML($('babyScore'),''); if ($('babyStrip')) $('babyStrip').hidden = true; if ($('frankieGuessCard')) $('frankieGuessCard').hidden = true; frankie(); glance(); return;
   }
   const huck = huckleberryPrediction(snapshot), own = purrfectWindow({sleeps:snapshot.sleeps,timer:snapshot.timer,timezone:zone(),complete:snapshot.historyComplete});
   const mia = miaForecast({sleeps:snapshot.sleeps,bottles:snapshot.bottles || [],birthdate:snapshot.birthdate,timer:snapshot.timer,timezone:zone(),complete:snapshot.historyComplete});
@@ -85,6 +101,9 @@ function drawHome() {
   const stripPicks = morning ? [['hubert', 'Hubert', morning.hubert], ['mia', 'Mia', morning.mia], ['mack', 'Mack', morning.mack]].filter(([, , p]) => p).map(([key, cat, p]) => ({ key, cat, ...p, label:'wake-up' }))
     : [own.available ? { key:'hubert', cat:'Hubert', start:own.start, end:own.end, target:own.target, label:label(own) } : null, miaShown.available ? { key:'mia', cat:'Mia', start:miaShown.start, end:miaShown.end, target:miaShown.target, label:label(miaShown) } : null,
       huck.available && !huck.expired && !huck.sleeping ? { key:'mack', cat:'Mack', target:huck.time, label:'SweetSpot' } : null].filter(Boolean);
+  // The same windows on the Frankie page, with a line per cat.
+  // A failure here hides the Frankie page card; it isn't reported on Today's card.
+  try { frankieGuesses(stripPicks, morning); } catch (e) { console.error('Frankie guesses failed', e); if ($('frankieGuessCard')) $('frankieGuessCard').hidden = true; }
   const strip = $('babyStrip');
   if (strip) {
     safely('Day strip', () => { renderHTML(strip, dayStripSVG({ sleeps:snapshot.sleeps, timer:snapshot.timer, picks:stripPicks, timezone:zone(), now:Date.now(), width:Math.max(320, Math.round(strip.clientWidth || 640)) })); });
