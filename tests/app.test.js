@@ -72,6 +72,7 @@ async function fixture(options = {}) {
   await module('meal-ideas.js',['IDEAS','STAPLES','norm','dealFor','onList','annotate','suggestMeals','weekPlan','groceryItemsFor','parseIngredients','validateMeal','dinnerBogos']);
   await module('meals-view.js',['planHTML','ideasHTML','bogosHTML','storesHTML','favoritesHTML'],'const esc=escapeHTML;');
   await module('meals.js',['initMeals']);
+  await module('pull-refresh.js',['PULL_READY','PULL_MAX','pullDistance','isStandalone','initPullRefresh']);
   await module('birthdays.js',['sampleBirthdays','birthdayPanelHTML','initBirthdays'],'const esc=escapeHTML;');
   w.eval(clean(await read('app.js')) + ';window.__testApp={getDocs:()=>rawDocs,setCloudDocs:(records)=>{cloudDocs=records;rebuildEvents();},persistMovedEvent,redraw:()=>updateHouseholdEvents(expandedEvents)};'); await settle();
   return {dom,w,doc:w.document,errors};
