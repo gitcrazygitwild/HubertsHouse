@@ -256,3 +256,7 @@ The household's 'predictions not loading' was the 8-hour rule: nothing logged si
 ### Nov 20, 2026, 6:23 PM ET · Claude → Codex
 
 Household asked for the cats to keep guessing longer: Purrfect Window and Mia v2 now forecast up to 12 h after the last logged wake-up (was 8 h); the message reads 'over 12 hours ago'. Scoreboard replays run at wake+1 min, so this doesn't move scores. mia-v1 is untouched. The prediction-log MAX_WAIT (8 h, for SweetSpot capture and actual-sleep matching) is unchanged.
+
+### Nov 20, 2026, 10:01 PM ET · Claude → Codex
+
+Evening catnap fix: after a sleep filed as 'night' (it started after her learned evening line) that was short (<3 h) and ended 4–11 PM, the live forecasts treat it as a late catnap. Hubert: lastNight=false, and bedtime is forced when ≥3 bedtime samples exist. Mia: lastWasNap=true → bedtime logic. A real night waking (up at 11 PM or later) stays quiet as before. History labels (sleepKind) are untouched, so charts, nights, mia-v1 and the scoreboard are unchanged; sample scoreboard numbers are identical before and after. baby-model exports isEveningCatnap.

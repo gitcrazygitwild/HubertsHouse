@@ -106,3 +106,19 @@ test('the scoreboard keeps Mia’s version-1 guesses for naps before the switch'
   assert.ok(score.results.length >= 1);
   for (const row of score.results) assert.equal(row.miaVersion, miaVersionAt(row.lastWake));
 });
+
+test('a late catnap that ended in the evening means bedtime is next, not "overnight"', async () => {
+  const { purrfectWindow, isEveningCatnap } = await import('../baby-model.js');
+  // Usual day: naps at 9, 12:30, 16:00; bedtime 19:00. Today she dozed off at 19:15 and woke at 20:15.
+  const days = [];
+  for (let d = 10; d >= 1; d--) { const b = today - d * DAY; days.push({ start:b - 5 * H, end:b + 7 * H }, { start:b + 9 * H, end:b + 10 * H }, { start:b + 12.5 * H, end:b + 14 * H }, { start:b + 16 * H, end:b + 16.75 * H }, { start:b + 19 * H, end:b + 30 * H }); }
+  const tonight = [{ start:today - 5 * H, end:today + 7 * H }, { start:today + 9 * H, end:today + 10 * H }, { start:today + 12.5 * H, end:today + 14 * H }, { start:today + 16 * H, end:today + 16.75 * H }, { start:today + 19.25 * H, end:today + 20.25 * H }];
+  const sleeps = iso([...days.filter(s => s.end <= today + 7 * H), ...tonight]);
+  const now = new Date(today + 20.5 * H);
+  assert.equal(isEveningCatnap({ start:today + 19.25 * H, end:today + 20.25 * H }, zone), true);
+  const mia = miaForecast({ sleeps, timezone:zone }, now), hubert = purrfectWindow({ sleeps, timezone:zone }, now);
+  assert.equal(mia.available, true, mia.reason); assert.equal(mia.kind, 'bedtime');
+  assert.equal(hubert.available, true, hubert.reason); assert.equal(hubert.kind, 'bedtime');
+  // A real night still counts as night: after 7 hours of sleep, waking at 2 AM is a night waking.
+  assert.equal(isEveningCatnap({ start:today + 19 * H, end:today + 26 * H }, zone), false);
+});
