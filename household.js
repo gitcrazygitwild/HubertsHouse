@@ -133,6 +133,7 @@ export function initHousehold(options) {
     try { await store.add(validateItem({ kind: 'grocery', title, owner: 'both', due: '', cadence: 'none', category: guessAisle(title), quantity: '', list: '', completed: false })); if (input.value.trim() === title) input.value = ''; showNotice('Added to the grocery list.'); }
     catch (error) { showNotice(friendlyError(error)); } finally { button.disabled = false; }
   });
+  initGrocerySwipe($('groceryGroups'));
   $('clearBought').addEventListener('click', async () => {
     const bought = items.filter(x => x.kind === 'grocery' && x.completed); if (!bought.length) return;
     if (!confirm(`Clear ${bought.length} bought item${bought.length === 1 ? '' : 's'}?`)) return;
@@ -141,6 +142,7 @@ export function initHousehold(options) {
   });
   document.querySelector('.house-main').addEventListener('click', e => {
     const checklist=e.target.closest('[data-edit-event-checklist]');if(checklist)editEventChecklist?.(checklist.dataset.editEventChecklist);
+    const remove = e.target.closest('[data-delete-item]'); if (remove) { removeGrocery(remove.dataset.deleteItem); return; }
     const edit = e.target.closest('[data-edit-item]'); if (edit) editItem(items.find(x => x.id === edit.dataset.editItem));
     const event = e.target.closest('[data-open-event]'); if (event) openEvent(event.dataset.openEvent, event.dataset.occ);
   });
@@ -169,6 +171,45 @@ export function initHousehold(options) {
   if (localStorage.getItem('hh_display') === '1') setDisplayMode(true);
 }
 export function updateHouseholdEvents(next) { events = next; render(); }
+// One tap (or a swipe left) removes a grocery item, with Undo instead of a confirm.
+const removing = new Set();
+async function removeGrocery(id) {
+  const item = items.find(x => x.id === id && x.kind === 'grocery'); if (!item || removing.has(id)) return;
+  removing.add(id);
+  try {
+    await store.remove(item);
+    const { id:_id, version, createdAt, updatedAt, ...copy } = item;
+    showNotice(`Removed ${item.title}.`, { label:'Undo', run:() => store.add(validateItem(copy)) });
+  } catch (error) { showNotice(friendlyError(error)); render(); }
+  finally { removing.delete(id); }
+}
+// Swipe a grocery row left to remove it. Short swipes spring back; vertical scrolling is left alone.
+function initGrocerySwipe(root) {
+  if (!root) return;
+  let row = null, startX = 0, startY = 0, dx = 0, sideways = null;
+  const reset = () => { if (row) { row.style.transform = ''; row.classList.remove('swiping'); row.style.removeProperty('--swipe'); } row = null; sideways = null; dx = 0; };
+  root.addEventListener('touchstart', e => {
+    const target = e.target.closest('[data-swipe-item]');
+    if (!target || e.touches.length !== 1 || e.target.closest('input, button.item-delete')) return;
+    row = target; startX = e.touches[0].clientX; startY = e.touches[0].clientY; dx = 0; sideways = null;
+  }, { passive:true });
+  root.addEventListener('touchmove', e => {
+    if (!row) return;
+    const x = e.touches[0].clientX - startX, y = e.touches[0].clientY - startY;
+    if (sideways === null && (Math.abs(x) > 10 || Math.abs(y) > 10)) sideways = Math.abs(x) > Math.abs(y) * 1.3;
+    if (!sideways) { if (sideways === false) reset(); return; }
+    dx = Math.min(0, x); row.classList.add('swiping'); row.style.transform = `translateX(${dx}px)`;
+    row.style.setProperty('--swipe', String(Math.min(1, -dx / 110)));
+  }, { passive:true });
+  const end = () => {
+    if (!row) return;
+    const id = row.dataset.swipeItem, gone = dx < -110 || (dx < -70 && -dx > row.offsetWidth * 0.35);
+    if (gone) { row.style.transform = 'translateX(-110%)'; row.classList.add('swiped'); setTimeout(() => removeGrocery(id), 160); row = null; sideways = null; dx = 0; }
+    else reset();
+  };
+  root.addEventListener('touchend', end, { passive:true });
+  root.addEventListener('touchcancel', reset, { passive:true });
+}
 function friendlyError(error) {
   if (/permission-denied/.test(error.code || '')) return 'This account does not have household access. Check your household membership.';
   return error.message || 'Couldn’t save that change. Please try again.';
@@ -202,7 +243,7 @@ async function saveItem(e) {
 }
 function itemHTML(item) {
   const due = dueLabel(item); const sub = item.kind === 'grocery' ? esc(item.quantity || 'Tap to edit details') : `${item.due < dateKey() && item.due ? '<span class="overdue">' : '<span>'}${esc(due)}</span>${item.cadence !== 'none' ? `<span>↻ ${esc(item.cadence)}</span>` : ''}`;
-  return `<div class="item-row ${item.withFrankie ? 'with-frankie ' : ''}${item.completed ? 'done' : ''}"><input type="checkbox" class="item-check" data-complete="${esc(item.id)}" aria-label="${esc(item.completed ? 'Uncheck' : 'Complete')} ${esc(item.title)}" ${item.completed ? 'checked' : ''} /><div class="item-copy"><button type="button" class="item-edit" data-edit-item="${esc(item.id)}">${esc(item.title)}</button><div class="item-meta">${sub}</div></div>${item.kind !== 'grocery' ? `<span class="owner-tag ${esc(item.owner)}">${esc(OWNERS[item.owner] || 'Both')}${item.withFrankie ? ' + Frankie' : ''}</span>` : ''}</div>`;
+  return `<div class="item-row ${item.withFrankie ? 'with-frankie ' : ''}${item.completed ? 'done' : ''}"${item.kind === 'grocery' ? ` data-swipe-item="${esc(item.id)}"` : ''}><input type="checkbox" class="item-check" data-complete="${esc(item.id)}" aria-label="${esc(item.completed ? 'Uncheck' : 'Complete')} ${esc(item.title)}" ${item.completed ? 'checked' : ''} /><div class="item-copy"><button type="button" class="item-edit" data-edit-item="${esc(item.id)}">${esc(item.title)}</button><div class="item-meta">${sub}</div></div>${item.kind !== 'grocery' ? `<span class="owner-tag ${esc(item.owner)}">${esc(OWNERS[item.owner] || 'Both')}${item.withFrankie ? ' + Frankie' : ''}</span>` : `<button type="button" class="item-delete" data-delete-item="${esc(item.id)}" aria-label="Remove ${esc(item.title)}" title="Remove">×</button>`}</div>`;
 }
 function empty(title, detail) { return `<div class="empty-state"><strong>${esc(title)}</strong>${esc(detail)}</div>`; }
 function groupsHTML(list, key, sortKeys) {

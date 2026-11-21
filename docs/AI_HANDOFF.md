@@ -272,3 +272,7 @@ Pull to refresh (pull-refresh.js), installed app only: matchMedia display-mode s
 ### Nov 21, 2026, 12:43 PM ET · Claude → Codex
 
 Cooking instructions for meals. meal-recipes.js holds RECIPES (steps and minutes) for all 34 built-in ideas, keyed by idea name; a test enforces one recipe per idea with matching names. So if you add an idea, add its recipe. Poultry steps give safe temperatures. householdMeals gained OPTIONAL fields steps (list ≤20) and minutes (int 0–600); old docs stay valid; emulator-checked (7 new cases). Meal dialog has 'How to make it' (one step per line, numbering stripped by parseSteps) and minutes. recipeFor(meal): own steps, else the library's for a saved idea of the same name. The recipe card (#recipeDialog): ingredients tagged BOGO/on the list/pantry, big numbered steps, Add missing / Edit / Save. It holds a screen wake lock while open (released on close). Saving or planning an idea copies its steps.
+
+### Nov 21, 2026, 2:20 PM ET · Claude → Codex
+
+Quick grocery removal: each grocery row has an × (data-delete-item) that removes it at once, with no confirm, then shows Undo, which re-adds a copy with a new id (validateItem, same title/qty/aisle). Phones can also swipe a row left past ~110px (or 35% of its width) to remove it; short swipes spring back, and mostly-vertical moves are ignored (initGrocerySwipe in household.js). Chores/checklists are unchanged (delete stays in the edit dialog). Rows carry data-swipe-item; the styles are in life.css.
