@@ -69,8 +69,9 @@ async function fixture(options = {}) {
   await module('litter.js',['initLitter']);
   await module('feeders-view.js',['feederAlerts','feedersHTML','FEEDER_STEPS','feederSettingsHTML','sampleFeeders'],'const esc=escapeHTML;');
   await module('feeders.js',['initFeeders']);
-  await module('meal-ideas.js',['IDEAS','STAPLES','norm','dealFor','onList','annotate','suggestMeals','weekPlan','groceryItemsFor','parseIngredients','validateMeal','dinnerBogos']);
-  await module('meals-view.js',['planHTML','ideasHTML','bogosHTML','storesHTML','favoritesHTML'],'const esc=escapeHTML;');
+  await module('meal-recipes.js',['RECIPES']);
+  await module('meal-ideas.js',['IDEAS','STAPLES','norm','dealFor','onList','annotate','suggestMeals','weekPlan','groceryItemsFor','parseIngredients','validateMeal','dinnerBogos','recipeFor','parseSteps']);
+  await module('meals-view.js',['planHTML','ideasHTML','bogosHTML','storesHTML','favoritesHTML','recipeHTML'],'const esc=escapeHTML;');
   await module('meals.js',['initMeals']);
   await module('pull-refresh.js',['PULL_READY','PULL_MAX','pullDistance','isStandalone','initPullRefresh']);
   await module('birthdays.js',['sampleBirthdays','birthdayPanelHTML','initBirthdays'],'const esc=escapeHTML;');
@@ -531,5 +532,36 @@ test('Life: chores and groceries share one page, and Meals plans dinner around t
   doc.querySelector('[data-meal-new]').click(); doc.getElementById('mealName').value='Friday pizza'; doc.getElementById('mealIngredients').value='pizza dough, pasta sauce, shredded mozzarella';
   doc.getElementById('mealForm').requestSubmit(); await settle();
   assert.ok(!doc.getElementById('mealDialog').open); assert.ok(doc.getElementById('mealFavorites').textContent.includes('Friday pizza'));
+  assert.deepEqual(errors,[]);
+});
+test('Meals: every dinner opens a recipe card with numbered steps', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  doc.querySelector('[data-life-tab="meals"]').click(); await settle();
+  // Tonight's favorite has the household's own steps.
+  doc.querySelector('.meal-day [data-meal-recipe]').click(); await settle();
+  const dialog=doc.getElementById('recipeDialog');
+  assert.ok(dialog.open); assert.equal(doc.getElementById('recipeTitle').textContent,'Karena’s turkey chili');
+  assert.match(doc.getElementById('recipeMeta').textContent,/FAVORITE · 45 MIN/);
+  assert.equal(dialog.querySelectorAll('.recipe-steps li').length,4); assert.match(dialog.querySelector('.recipe-steps').textContent,/simmer 30 minutes/);
+  // Edit opens the form with those steps filled in.
+  dialog.querySelector('[data-recipe-edit]').click();
+  assert.ok(!dialog.open && doc.getElementById('mealDialog').open); assert.match(doc.getElementById('mealSteps').value,/^Soften the onion/); assert.equal(doc.getElementById('mealMinutes').value,'45');
+  doc.getElementById('mealSteps').value='1. Brown the turkey\n2. Simmer all afternoon'; doc.getElementById('mealForm').requestSubmit(); await settle();
+  doc.querySelector('.meal-day [data-meal-recipe]').click(); await settle();
+  assert.deepEqual([...dialog.querySelectorAll('.recipe-steps li')].map(li => li.textContent),['Brown the turkey','Simmer all afternoon']);
+  dialog.querySelector('[data-recipe-close]').click(); assert.ok(!dialog.open);
+  // A library idea: steps, BOGO tags, and one tap to shop or save.
+  const card=doc.querySelector('.meal-idea.idea'), name=card.querySelector('h3').textContent;
+  assert.match(card.querySelector('header small').textContent,/\d+ min/);
+  card.querySelector('[data-idea-recipe]').click(); await settle();
+  assert.equal(doc.getElementById('recipeTitle').textContent,name); assert.ok(dialog.querySelectorAll('.recipe-steps li').length>=3);
+  assert.ok(dialog.querySelector('.recipe-ingredients small.deal'), 'BOGO ingredients are marked');
+  dialog.querySelector('[data-recipe-shop]').click(); await settle();
+  assert.match(doc.getElementById('notice').textContent,/to Groceries/); assert.ok(dialog.open, 'stays open while you shop');
+  dialog.querySelector('[data-recipe-save]').click(); await settle();
+  assert.ok(!dialog.open); assert.ok(doc.getElementById('mealFavorites').textContent.includes(name));
+  // The saved copy keeps the steps.
+  const saved=[...doc.querySelectorAll('#mealFavorites li')].find(li => li.textContent.includes(name)); saved.querySelector('[data-meal-recipe]').click(); await settle();
+  assert.ok(dialog.querySelectorAll('.recipe-steps li').length>=3);
   assert.deepEqual(errors,[]);
 });

@@ -5,8 +5,8 @@ import { config } from './config.js';
 import { showNotice, householdItems, addHouseholdItems } from './household.js';
 import { renderHTML } from './dom.js';
 import { dateKey, guessAisle } from './household-model.js';
-import { suggestMeals, groceryItemsFor, validateMeal, parseIngredients, IDEAS } from './meal-ideas.js';
-import { planHTML, ideasHTML, bogosHTML, storesHTML, favoritesHTML } from './meals-view.js';
+import { suggestMeals, groceryItemsFor, validateMeal, parseIngredients, parseSteps, recipeFor, IDEAS } from './meal-ideas.js';
+import { planHTML, ideasHTML, bogosHTML, storesHTML, favoritesHTML, recipeHTML } from './meals-view.js';
 import { demoBogos } from './demo.js';
 
 const $ = id => document.getElementById(id);
@@ -64,7 +64,7 @@ export function initMeals(app, { demo = false, store } = {}) {
   async function plan(meal, day) {
     const existing = meal.id ? byId(meal.id) : meals.find(m => m.name.toLowerCase() === meal.name.toLowerCase());
     if (existing) await store.update(existing, { plannedFor:day });
-    else await store.add(record({ name:meal.name, ingredients:meal.ingredients, favorite:false, plannedFor:day, lastMade:'' }));
+    else await store.add(record({ name:meal.name, ingredients:meal.ingredients, steps:meal.steps || [], minutes:meal.minutes || 0, favorite:false, plannedFor:day, lastMade:'' }));
   }
   async function shop(meal) {
     const list = groceryItemsFor(meal, groceries());
@@ -75,6 +75,8 @@ export function initMeals(app, { demo = false, store } = {}) {
   function edit(meal) {
     $('mealForm').reset(); $('mealError').textContent = '';
     $('mealId').value = meal?.id || ''; $('mealName').value = meal?.name || ''; $('mealIngredients').value = (meal?.ingredients || []).join('\n');
+    const recipe = meal ? recipeFor(meal) : { steps:[], minutes:0 };
+    $('mealSteps').value = recipe.steps.join('\n'); $('mealMinutes').value = recipe.minutes || '';
     $('mealFavorite').checked = meal ? !!meal.favorite : true; $('deleteMeal').hidden = !meal?.id;
     $('mealDialogTitle').textContent = meal?.id ? 'Edit dinner' : 'Save a favorite';
     $('mealDialog').showModal(); $('mealName').focus();
@@ -90,7 +92,9 @@ export function initMeals(app, { demo = false, store } = {}) {
     if (d.bogoAdd) return run(() => addHouseholdItems([{ kind:'grocery', title:d.bogoAdd.slice(0, 180), owner:'both', due:'', cadence:'none', category:guessAisle(d.bogoAdd), quantity:'BOGO at Publix', list:'', completed:false }]), `${d.bogoAdd} is on the grocery list.`);
     if (d.bogoStore) { publixStore = { number:d.bogoStore, name:d.bogoStoreName || `#${d.bogoStore}` }; try { localStorage.setItem(STORE_KEY, JSON.stringify(publixStore)); } catch {} stores = []; bogos = { loading:true }; draw(); loadBogos(true); return; }
     if (d.ideaShop) return run(() => shop(idea(d.ideaShop)));
-    if (d.ideaSave) { const s = idea(d.ideaSave); return run(async () => { const existing = meals.find(m => m.name.toLowerCase() === s.name.toLowerCase()); if (existing) await store.update(existing, { favorite:true }); else await store.add(record({ name:s.name, ingredients:s.ingredients, favorite:true, plannedFor:'', lastMade:'' })); }, `${s.name} saved to your favorites. ♥`); }
+    if (d.ideaSave) { const s = idea(d.ideaSave); return run(async () => { const existing = meals.find(m => m.name.toLowerCase() === s.name.toLowerCase()); if (existing) await store.update(existing, { favorite:true }); else await store.add(record({ name:s.name, ingredients:s.ingredients, steps:s.steps || [], minutes:s.minutes || 0, favorite:true, plannedFor:'', lastMade:'' })); }, `${s.name} saved to your favorites. ♥`); }
+    if (d.ideaRecipe) return showRecipe(idea(d.ideaRecipe));
+    if (d.mealRecipe) return showRecipe(byId(d.mealRecipe));
     if (d.mealShop) return run(() => shop(byId(d.mealShop)));
     if (d.mealMade) { const m = byId(d.mealMade); return run(() => store.update(m, { lastMade:m.plannedFor && m.plannedFor < today() ? m.plannedFor : today() }), `${m.name}: made. Nice work, chef. 🍽`); }
     if (d.mealUnplan) { const m = byId(d.mealUnplan); return run(() => m.favorite ? store.update(m, { plannedFor:'' }) : store.remove(m)); }
@@ -111,13 +115,39 @@ export function initMeals(app, { demo = false, store } = {}) {
     catch (e) { showNotice(failure(e)); }
   });
 
+  // The recipe card. The screen stays awake while it's open, for cooking.
+  const recipeDialog = $('recipeDialog');
+  let cooking = null, wake = null;
+  const releaseWake = () => { wake?.release?.().catch?.(() => {}); wake = null; };
+  function showRecipe(meal) {
+    if (!meal || !recipeDialog) return;
+    cooking = meal;
+    const saved = !!(meal.id && byId(meal.id)), { minutes } = recipeFor(meal);
+    $('recipeTitle').textContent = meal.name;
+    $('recipeMeta').textContent = [meal.favorite ? '♥ FAVORITE' : saved ? 'ON THE PLAN' : 'IDEA', minutes ? `${minutes} MIN` : ''].filter(Boolean).join(' · ');
+    renderHTML($('recipeBody'), recipeHTML(meal, { bogos:bogos.items || [], groceries:groceries(), saved }));
+    if (!recipeDialog.open) recipeDialog.showModal();
+    if (!wake && navigator.wakeLock?.request) navigator.wakeLock.request('screen').then(lock => { if (recipeDialog.open) wake = lock; else lock.release(); }, () => {});
+  }
+  recipeDialog?.addEventListener('close', () => { cooking = null; releaseWake(); });
+  recipeDialog?.addEventListener('click', event => {
+    const button = event.target.closest('button'); if (!button || !cooking) return;
+    const meal = cooking;
+    if (button.hasAttribute('data-recipe-close')) return recipeDialog.close();
+    if (button.hasAttribute('data-recipe-shop')) return run(() => shop(meal)).then(() => recipeDialog.open && showRecipe(meal));
+    if (button.hasAttribute('data-recipe-edit')) { recipeDialog.close(); return edit(byId(meal.id)); }
+    if (button.hasAttribute('data-recipe-save')) return run(async () => { await store.add(record({ name:meal.name, ingredients:meal.ingredients, steps:meal.steps || [], minutes:meal.minutes || 0, favorite:true, plannedFor:'', lastMade:'' })); recipeDialog.close(); }, `${meal.name} saved to your favorites. ♥`);
+  });
+  // Keep an open recipe current when the list or plan changes.
+  window.addEventListener('hh:items', () => { if (recipeDialog?.open && cooking) showRecipe(cooking.id ? byId(cooking.id) || cooking : cooking); });
+
   const dialog = $('mealDialog');
   dialog?.querySelector('[data-meal-close]')?.addEventListener('click', () => dialog.close());
   $('mealForm')?.addEventListener('submit', async event => {
     event.preventDefault(); $('mealError').textContent = ''; $('saveMeal').disabled = true;
     try {
       const old = byId($('mealId').value);
-      const data = record({ name:$('mealName').value, ingredients:parseIngredients($('mealIngredients').value), favorite:$('mealFavorite').checked, plannedFor:old?.plannedFor || '', lastMade:old?.lastMade || '' });
+      const data = record({ name:$('mealName').value, ingredients:parseIngredients($('mealIngredients').value), steps:parseSteps($('mealSteps').value), minutes:$('mealMinutes').value, favorite:$('mealFavorite').checked, plannedFor:old?.plannedFor || '', lastMade:old?.lastMade || '' });
       if (old) await store.update(old, data); else await store.add(data);
       dialog.close(); showNotice(data.favorite ? `${data.name} is in your favorites. ♥` : 'Saved.');
     } catch (e) { $('mealError').textContent = e?.message || 'Couldn’t save that dinner.'; } finally { $('saveMeal').disabled = false; }

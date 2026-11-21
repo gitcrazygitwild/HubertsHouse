@@ -56,6 +56,24 @@
 .meal-fav-copy small { display:block; color:var(--muted); font-size:11px; margin-top:2px; }
 .meal-favorites .meal-plan-pick select { max-width:150px; padding:7px 8px; font-size:12px; }
 #mealDialog textarea { resize:vertical; min-height:110px; }
+.meal-minutes { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); }
+.meal-minutes input { max-width:96px; }
+.meal-name { border:0; background:none; padding:0; font:inherit; color:inherit; text-align:left; cursor:pointer; overflow-wrap:anywhere; }
+.meal-name:hover { text-decoration:underline; text-decoration-color:#c5ccba; text-underline-offset:3px; }
+.meal-recipe-hint { font-size:12px; opacity:.7; }
+/* Recipe card: big, readable steps for the kitchen counter. */
+.recipe-dialog { width:620px; }
+.recipe-dialog h2 { font-size:28px; }
+.recipe-h { margin:18px 0 8px; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:#69765d; }
+.recipe-ingredients { margin:0; padding:0; list-style:none; display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:6px 18px; }
+.recipe-ingredients li { font-size:15px; padding:4px 0; border-bottom:1px dashed var(--border2); }
+.recipe-ingredients small { font-size:10px; font-weight:650; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); margin-left:4px; }
+.recipe-ingredients small.deal { color:#3f6a2b; }
+.recipe-ingredients small.have { color:#8b684d; }
+.recipe-steps { margin:0; padding:0; list-style:none; counter-reset:step; display:grid; gap:12px; }
+.recipe-steps li { counter-increment:step; display:grid; grid-template-columns:32px 1fr; gap:12px; font-size:17px; line-height:1.55; }
+.recipe-steps li::before { content:counter(step); width:30px; height:30px; border-radius:50%; background:#e3eed9; color:#3f6a2b; font-weight:700; font-size:14px; display:grid; place-items:center; margin-top:1px; }
+.recipe-dialog .modal-actions { margin-top:22px; display:flex; align-items:center; gap:10px; }
 @media (max-width: 760px) {
   .life-tabs { width:100%; }
   .life-tabs button { flex:1; justify-content:center; padding:10px 8px; }

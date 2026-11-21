@@ -48,7 +48,7 @@ export function demoMealStore() {
   let notify;
   const day = offset => { const d = new Date(); d.setDate(d.getDate() + offset); return dateKey(d); };
   let data = [
-    { id:'m1', name:'Karena’s turkey chili', ingredients:['ground turkey', 'beans', 'diced tomatoes', 'onions', 'shredded cheese', 'sour cream'], favorite:true, plannedFor:day(0), lastMade:day(-16) },
+    { id:'m1', name:'Karena’s turkey chili', ingredients:['ground turkey', 'beans', 'diced tomatoes', 'onions', 'shredded cheese', 'sour cream'], steps:['Soften the onion in a little oil, 5 minutes.', 'Brown the turkey with a big spoon of chili powder and cumin.', 'Add the tomatoes and beans; simmer 30 minutes (longer is better).', 'Top with cheese and sour cream.'], minutes:45, favorite:true, plannedFor:day(0), lastMade:day(-16) },
     { id:'m2', name:'Sheet-pan salmon & broccoli', ingredients:['salmon', 'frozen broccoli', 'lemons', 'olive oil', 'rice'], favorite:true, plannedFor:'', lastMade:day(-5) },
     { id:'m3', name:'Taco Tuesday', ingredients:['ground beef', 'taco seasoning', 'tortillas', 'shredded cheese', 'salsa', 'sour cream'], favorite:true, plannedFor:'', lastMade:day(-12) },
     { id:'m4', name:'hanry’s famous pancakes', ingredients:['pancake mix', 'eggs', 'bacon', 'berries'], favorite:true, plannedFor:'', lastMade:'' }

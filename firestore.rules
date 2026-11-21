@@ -36,12 +36,14 @@ service cloud.firestore {
     match /householdMeals/{id} {
       function valid() {
         let d = request.resource.data;
-        return d.keys().hasOnly(['name','ingredients','favorite','plannedFor','lastMade','version','createdAt','updatedAt'])
+        return d.keys().hasOnly(['name','ingredients','favorite','plannedFor','lastMade','steps','minutes','version','createdAt','updatedAt'])
           && d.name is string && d.name.size() > 0 && d.name.size() <= 80
           && d.ingredients is list && d.ingredients.size() <= 25
           && d.favorite is bool && d.version is int
           && d.plannedFor is string && d.plannedFor.size() <= 10
-          && d.lastMade is string && d.lastMade.size() <= 10;
+          && d.lastMade is string && d.lastMade.size() <= 10
+          && (!('steps' in d) || (d.steps is list && d.steps.size() <= 20))
+          && (!('minutes' in d) || (d.minutes is int && d.minutes >= 0 && d.minutes <= 600));
       }
       allow read, delete: if member();
       allow create: if member() && valid() && request.resource.data.version == 0;

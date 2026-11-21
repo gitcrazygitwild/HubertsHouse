@@ -2,8 +2,10 @@
 // ideas built around this week's Publix BOGOs and what's already on the grocery list.
 // Pure: no DOM, no network.
 import { dateKey, guessAisle } from './household-model.js';
+import { RECIPES } from './meal-recipes.js';
 
-// A starter library of weeknight dinners. Ingredient names double as grocery items.
+// A starter library of weeknight dinners. Ingredient names double as grocery items;
+// cooking steps and times live in meal-recipes.js.
 export const IDEAS = [
   { name:'Chicken parmesan', ingredients:['chicken breasts', 'pasta sauce', 'shredded mozzarella', 'parmesan', 'breadcrumbs', 'pasta'] },
   { name:'Baked ziti', ingredients:['pasta', 'pasta sauce', 'ricotta', 'shredded mozzarella', 'parmesan', 'ground beef'] },
@@ -39,7 +41,17 @@ export const IDEAS = [
   { name:'Baked potato bar', ingredients:['potatoes', 'bacon', 'shredded cheese', 'sour cream', 'butter', 'frozen broccoli'] },
   { name:'Grilled cheese & tomato soup', ingredients:['bread', 'cheddar', 'butter', 'tomato soup'] },
   { name:'Cheese board dinner', ingredients:['brie', 'crackers', 'salami', 'grapes', 'hummus'] }
-];
+].map(idea => ({ ...idea, minutes:RECIPES[idea.name]?.minutes || 0, steps:RECIPES[idea.name]?.steps || [] }));
+// How to cook a dinner: its own steps, or the library's for a saved idea with none.
+export function recipeFor(meal) {
+  if (meal?.steps?.length) return { minutes:meal.minutes || 0, steps:meal.steps };
+  const idea = IDEAS.find(i => norm(i.name) === norm(meal?.name));
+  return idea?.steps.length ? { minutes:meal?.minutes || idea.minutes, steps:idea.steps } : { minutes:meal?.minutes || 0, steps:[] };
+}
+// "1. Boil water\n2) Add pasta" → ['Boil water', 'Add pasta'].
+export function parseSteps(text) {
+  return String(text || '').split(/\n+/).map(s => s.trim().replace(/^(\d+[.)]|[-•*])\s*/, '').replace(/\s+/g, ' ').slice(0, 300)).filter(Boolean).slice(0, 20);
+}
 // Things most kitchens already have: shown, but not added to the list automatically.
 export const STAPLES = new Set(['olive oil', 'garlic', 'honey', 'soy sauce', 'salt', 'pepper', 'butter']);
 
@@ -133,7 +145,9 @@ export function validateMeal(data) {
   if (!name || name.length > 80) throw new Error('Name the dinner (under 80 characters).');
   const ingredients = Array.isArray(data.ingredients) ? parseIngredients(data.ingredients.join('\n')) : parseIngredients(data.ingredients);
   const day = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '') ? value : '';
-  return { name, ingredients, favorite:!!data.favorite, plannedFor:day(data.plannedFor), lastMade:day(data.lastMade) };
+  const steps = Array.isArray(data.steps) ? parseSteps(data.steps.join('\n')) : parseSteps(data.steps);
+  const minutes = Math.round(Number(data.minutes) || 0);
+  return { name, ingredients, favorite:!!data.favorite, plannedFor:day(data.plannedFor), lastMade:day(data.lastMade), steps, minutes:minutes > 0 && minutes <= 600 ? minutes : 0 };
 }
 // BOGOs worth a look for dinner: food only, the ones our meal ideas use first.
 export function dinnerBogos(bogos = [], suggestions = []) {
