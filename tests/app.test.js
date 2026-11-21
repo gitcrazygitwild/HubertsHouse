@@ -27,13 +27,13 @@ async function fixture(options = {}) {
   await module('cat-crew.js',['initCatCrew','cats','portrait']);
   await module('dashboard.js',['initDashboard']);
   await module('event-templates.js',['eventTemplate']);
-  await module('demo.js',['demoStore','demoEvents']);
+  await module('demo.js',['demoStore','demoEvents','demoMealStore','demoBogos']);
   if (options.failItemUpdate) {
     const originalStore = w.demoStore;
     w.demoStore = () => ({ ...originalStore(), update: async () => { throw new Error('The connection interrupted this save.'); } });
   }
   await module('checklists.js',['checklistKey','eventChecklistKey','eventChecklistGroups']);
-  await module('household.js',['initHousehold','updateHouseholdEvents','showNotice','showView'],'const esc=escapeHTML;');
+  await module('household.js',['initHousehold','updateHouseholdEvents','showNotice','showView','householdItems','addHouseholdItems'],'const esc=escapeHTML;');
   await module('cloud-calendar.js',['initCloudCalendar','setCloudRange','refreshCloud','saveCloudEvent','saveCloudAssignment','deleteCloudEvent'],'const esc=escapeHTML;');
   await module('baby-history.js',['toOunces','localDay','dayStart','dayKeys','sleepKind','dayStory','dayStoryText','nightLine','clockAt','DEFAULT_NIGHT_LINE','dailySleep','dailyBottles','timelineRows','babySummary']);
   await module('day-strip.js',['stripRange','dayStripSVG'],'const esc=escapeHTML;');
@@ -69,6 +69,9 @@ async function fixture(options = {}) {
   await module('litter.js',['initLitter']);
   await module('feeders-view.js',['feederAlerts','feedersHTML','FEEDER_STEPS','feederSettingsHTML','sampleFeeders'],'const esc=escapeHTML;');
   await module('feeders.js',['initFeeders']);
+  await module('meal-ideas.js',['IDEAS','STAPLES','norm','dealFor','onList','annotate','suggestMeals','weekPlan','groceryItemsFor','parseIngredients','validateMeal','dinnerBogos']);
+  await module('meals-view.js',['planHTML','ideasHTML','bogosHTML','storesHTML','favoritesHTML'],'const esc=escapeHTML;');
+  await module('meals.js',['initMeals']);
   await module('birthdays.js',['sampleBirthdays','birthdayPanelHTML','initBirthdays'],'const esc=escapeHTML;');
   w.eval(clean(await read('app.js')) + ';window.__testApp={getDocs:()=>rawDocs,setCloudDocs:(records)=>{cloudDocs=records;rebuildEvents();},persistMovedEvent,redraw:()=>updateHouseholdEvents(expandedEvents)};'); await settle();
   return {dom,w,doc:w.document,errors};
@@ -80,9 +83,9 @@ test('home views, theme and monitor navigation work together without hiding the 
   assert.equal(new Set([...doc.querySelectorAll('.home-week-day')].map(el => el.dataset.homeDate)).size,42);
   doc.querySelector('[data-home-view="day"]').click(); assert.equal(doc.querySelectorAll('.home-week-day').length,1);
   doc.querySelector('[data-home-view="week"]').click(); assert.equal(doc.querySelectorAll('.home-week-day').length,7);
-  doc.querySelector('[data-view="tasks"]').click(); doc.getElementById('displayBtn').click(); await settle();
-  assert.equal(doc.body.classList.contains('monitor-mode'),true); assert.equal(doc.getElementById('view-tasks').classList.contains('hidden'),false);
-  doc.dispatchEvent(new w.Event('visibilitychange')); await settle(); assert.equal(doc.getElementById('view-tasks').classList.contains('hidden'),false);
+  doc.querySelector('[data-life-tab="todos"]').click(); doc.getElementById('displayBtn').click(); await settle();
+  assert.equal(doc.body.classList.contains('monitor-mode'),true); assert.equal(doc.getElementById('view-life').classList.contains('hidden'),false); assert.equal(doc.getElementById('life-todos').hidden,false);
+  doc.dispatchEvent(new w.Event('visibilitychange')); await settle(); assert.equal(doc.getElementById('view-life').classList.contains('hidden'),false); assert.equal(doc.getElementById('life-todos').hidden,false);
   doc.querySelector('[data-view="today"]').click();
   for (const id of ['dailyQuote','dailyFact','dailyWord','dailyJoke','catCrew','babyStats']) assert.ok(doc.getElementById(id));
   assert.deepEqual(errors,[]);
@@ -129,8 +132,8 @@ test('sample preview keeps data isolated and supports navigation, grocery editin
   assert.ok(doc.getElementById('gate').classList.contains('hidden'));
   assert.ok(!doc.getElementById('demoBanner').classList.contains('hidden'));
   assert.equal(doc.getElementById('statGroceries').textContent,'5');
-  doc.querySelector('[data-view="groceries"]').click();
-  assert.ok(!doc.getElementById('view-groceries').classList.contains('hidden'));
+  doc.querySelector('[data-life-tab="groceries"]').click();
+  assert.ok(!doc.getElementById('view-life').classList.contains('hidden')); assert.ok(!doc.getElementById('life-groceries').hidden && doc.getElementById('life-todos').hidden); assert.equal(w.location.hash,'#groceries');
   const input=doc.getElementById('quickGrocery'); input.value='<img src=x onerror=alert(1)>';
   doc.getElementById('quickGroceryForm').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true})); await settle();
   assert.equal(doc.querySelectorAll('#groceryGroups .item-row').length,6); assert.equal(doc.querySelector('#groceryGroups img'),null);
@@ -142,13 +145,13 @@ test('sample preview keeps data isolated and supports navigation, grocery editin
   const apple=[...doc.querySelectorAll('#groceryGroups .item-row')].find(r => r.textContent.includes('Apples')); apple.querySelector('input').click(); await settle();
   assert.match(doc.getElementById('groceryCount').textContent,/1 in the basket/);
   doc.getElementById('clearBought').click(); await settle(); assert.equal(doc.querySelectorAll('#groceryGroups .item-row').length,5);
-  doc.querySelector('[data-view="tasks"]').click();
+  doc.querySelector('[data-life-tab="todos"]').click();
   const chore=doc.querySelector('#taskGroups [data-complete="d1"]'); chore.click(); await settle();
   assert.equal(doc.querySelector('#taskGroups [data-complete="d1"]').checked,false);
   assert.match(doc.getElementById('notice').textContent,/Next up/); doc.querySelector('#notice button').click(); await settle();
   assert.equal(doc.querySelector('#taskGroups [data-complete="d1"]').closest('.item-row').querySelector('.item-meta span').textContent,'Today');
   doc.querySelector('[data-kind="task"]').click();
-  doc.querySelector('#view-tasks [data-add-kind]').click();
+  doc.querySelector('#life-todos [data-add-kind]').click();
   doc.getElementById('itemTitle').value='Book a cabin'; doc.getElementById('itemList').value='Weekend away';
   doc.getElementById('itemForm').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true})); await settle();
   assert.match(doc.getElementById('taskGroups').textContent,/Weekend away/);
@@ -229,7 +232,7 @@ test('templates open editable drafts, create once on save, and show checklist pr
 
 test('task filters combine with search, unchanged snapshots retain focused controls, and shortcuts respect typing and settings', async t => {
   const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
-  doc.querySelector('[data-view="tasks"]').click();
+  doc.querySelector('[data-life-tab="todos"]').click();
   doc.querySelector('[data-task-focus="today"]').click();
   assert.equal(doc.querySelectorAll('#taskGroups .item-row').length,2);
   const input=doc.getElementById('taskSearch'); input.value='WATER';
@@ -256,7 +259,7 @@ test('task filters combine with search, unchanged snapshots retain focused contr
 
 test('a failed task update restores the checkbox and permits retry when cached markup is unchanged', async t => {
   const {dom,doc,errors}=await fixture({failItemUpdate:true}); t.after(() => dom.window.close());
-  doc.querySelector('[data-view="tasks"]').click();
+  doc.querySelector('[data-life-tab="todos"]').click();
   const checkbox=doc.querySelector('#taskGroups [data-complete="d1"]'); checkbox.click(); await settle();
   assert.equal(doc.querySelector('#taskGroups [data-complete="d1"]'),checkbox);
   assert.equal(checkbox.checked,false);
@@ -294,7 +297,7 @@ test('event checklist completion is shared with Chores & Lists, and stale editor
   doc.getElementById('addCheckItem').click();doc.querySelector('#checklist input[type="text"]').value='Pack Frankie’s snacks';
   doc.getElementById('saveBtnTop').click();await settle();
   const record=w.__testApp.getDocs().find(record=>record.title==='Weekend packing');assert.equal(record.checklist.length,1);
-  doc.querySelector('[data-view="tasks"]').click();doc.querySelector('[data-kind="task"]').click();
+  doc.querySelector('[data-life-tab="todos"]').click();doc.querySelector('[data-kind="task"]').click();
   assert.match(doc.getElementById('eventChecklistGroups').textContent,/Weekend packing/);
   doc.querySelector('[data-event-check]').click();await settle();assert.equal(w.__testApp.getDocs().find(r=>r.id===record.id).checklist[0].done,true);
   doc.getElementById('showCompleted').click();doc.querySelector('[data-edit-event-checklist]').click();assert.equal(doc.querySelector('#taskChecklist input[type="checkbox"]').checked,true);
@@ -307,7 +310,7 @@ test('event checklist completion is shared with Chores & Lists, and stale editor
 });
 test('standalone checklists create multiple shared items without creating a calendar event',async t=>{
   const {dom,w,doc,errors}=await fixture();t.after(()=>dom.window.close());const before=w.__testApp.getDocs().length;
-  doc.querySelector('[data-view="tasks"]').click();doc.querySelector('[data-kind="task"]').click();doc.getElementById('newChecklist').click();
+  doc.querySelector('[data-life-tab="todos"]').click();doc.querySelector('[data-kind="task"]').click();doc.getElementById('newChecklist').click();
   doc.getElementById('standaloneChecklistName').value='Clean shower';doc.getElementById('standaloneChecklistItems').value='Spray tiles\nScrub grout\nRinse and dry';
   doc.getElementById('standaloneChecklistForm').dispatchEvent(new w.Event('submit',{cancelable:true}));await settle();
   assert.equal(doc.getElementById('standaloneChecklistDialog').open,false);assert.match(doc.getElementById('taskGroups').textContent,/Clean shower/);assert.match(doc.getElementById('taskGroups').textContent,/Rinse and dry/);assert.equal(w.__testApp.getDocs().length,before);assert.deepEqual(errors,[]);
@@ -316,7 +319,7 @@ test('read-only Apple checklist steps save through household metadata and never 
   const {dom,w,doc,errors}=await fixture();t.after(()=>dom.window.close());const date=new Date().toISOString();
   const record={id:'apple-checklist',icloud:true,uid:'stable',calendarId:'cal',token:'token',title:'Apple appointment',start:date,end:date,cloudEnd:date,owner:'both',ownerCustom:'',withFrankie:true,readOnlyReason:'Edit this invitation in Apple.',assignmentVersion:2,checklist:[{id:'id-card',text:'Bring ID',done:false}]};
   w.__testApp.setCloudDocs([record]);const calls=[];w.saveCloudAssignment=async(assignment,original)=>{calls.push({assignment,original});return {assignment:{...assignment,assignmentVersion:3}};};w.saveCloudEvent=async()=>{throw new Error('Checklist must not write to Apple');};
-  doc.querySelector('[data-view="tasks"]').click();doc.querySelector('[data-kind="task"]').click();doc.querySelector('[data-event-check="apple-checklist"]').click();await settle();
+  doc.querySelector('[data-life-tab="todos"]').click();doc.querySelector('[data-kind="task"]').click();doc.querySelector('[data-event-check="apple-checklist"]').click();await settle();
   assert.equal(calls.length,1);assert.equal(calls[0].assignment.checklist[0].done,true);assert.equal(calls[0].original.assignmentVersion,2);assert.equal(w.__testApp.getDocs().filter(r=>r.title==='Apple appointment').length,1);assert.equal(w.__testApp.getDocs().find(r=>r.id==='apple-checklist').assignmentVersion,3);assert.deepEqual(errors,[]);
 });
 
@@ -494,4 +497,38 @@ test('a failing extra never blanks the prediction cards, and says what broke', a
   w.purrfectWindow=() => { throw new Error('hubert tripped'); };
   doc.getElementById('babyRefresh').click(); await settle();
   assert.match(doc.getElementById('babyPredictions').textContent,/The predictions couldn’t be drawn: hubert tripped/);
+});
+test('Life: chores and groceries share one page, and Meals plans dinner around the BOGOs', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  const nav=[...doc.querySelectorAll('.house-nav [data-view]')].map(b => b.dataset.view);
+  assert.ok(nav.includes('life') && !nav.includes('tasks') && !nav.includes('groceries'));
+  // Old links still land on the right tab.
+  doc.querySelector('[data-go="tasks"]').click();
+  assert.equal(doc.getElementById('viewTitle').textContent,'Life, handled.'); assert.equal(doc.getElementById('life-todos').hidden,false);
+  assert.equal(doc.getElementById('lifeGroceryCount').textContent,'5');
+  doc.querySelector('[data-life-tab="meals"]').click(); await settle();
+  assert.equal(w.location.hash,'#meals'); assert.ok(doc.getElementById('life-todos').hidden && !doc.getElementById('life-meals').hidden);
+  // Tonight's planned favorite, then ideas: favorites first, then ones using this week's BOGOs.
+  assert.match(doc.querySelector('.meal-day').textContent,/Tonight.*Karena’s turkey chili/);
+  const ideas=[...doc.querySelectorAll('.meal-idea')];
+  assert.equal(ideas.length,6); assert.ok(ideas[0].classList.contains('favorite')); assert.match(ideas[0].textContent,/pancakes/, 'never made comes first');
+  assert.ok(ideas.some(card => card.classList.contains('idea') && card.querySelectorAll('.bogo-chip').length>=3));
+  assert.ok(doc.querySelectorAll('#bogoPanel .bogo-item').length>=10); assert.match(doc.getElementById('bogoPanel').textContent,/Carytown Exchange/);
+  // One tap puts the missing ingredients on the grocery list.
+  const idea=ideas.find(card => card.classList.contains('idea')), name=idea.querySelector('h3').textContent;
+  idea.querySelector('[data-idea-shop]').click(); await settle();
+  assert.match(doc.getElementById('notice').textContent,new RegExp(`for ${name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')} to Groceries`));
+  assert.ok(Number(doc.getElementById('lifeGroceryCount').textContent)>5);
+  // Plan an idea for an open day, save one as a favorite, add a BOGO to the list.
+  const pick=doc.querySelector('[data-idea-plan]'), planned=pick.closest('.meal-idea').querySelector('h3').textContent; pick.value=pick.options[1].value; pick.dispatchEvent(new w.Event('change',{bubbles:true})); await settle();
+  assert.ok([...doc.querySelectorAll('.meal-day.planned')].some(row => row.textContent.includes(planned)));
+  doc.querySelector('[data-idea-save]').click(); await settle(); assert.match(doc.getElementById('notice').textContent,/saved to your favorites/);
+  const before=doc.querySelectorAll('#mealFavorites li').length; assert.equal(before,5);
+  doc.querySelector('[data-bogo-add]').click(); await settle(); assert.match(doc.getElementById('notice').textContent,/on the grocery list/);
+  // Mark tonight made, and save a favorite by hand.
+  doc.querySelector('[data-meal-made]').click(); await settle(); assert.match(doc.querySelector('.meal-day').textContent,/Made ✓/);
+  doc.querySelector('[data-meal-new]').click(); doc.getElementById('mealName').value='Friday pizza'; doc.getElementById('mealIngredients').value='pizza dough, pasta sauce, shredded mozzarella';
+  doc.getElementById('mealForm').requestSubmit(); await settle();
+  assert.ok(!doc.getElementById('mealDialog').open); assert.ok(doc.getElementById('mealFavorites').textContent.includes('Friday pizza'));
+  assert.deepEqual(errors,[]);
 });

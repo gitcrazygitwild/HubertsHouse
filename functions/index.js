@@ -13,6 +13,7 @@ import { createHuckleberryHandler } from './huckleberry-service.js';
 import { createSmartHome, SmartHomeError } from './smart-home.js';
 import { createLitterRobot, LitterRobotError } from './litter-robot.js';
 import { createPetLibro, PetLibroError } from './petlibro.js';
+import { createPublix, PublixError, DEFAULT_STORE } from './publix.js';
 initializeApp();
 const db = getFirestore();
 const assignments = createAssignmentStore(db);
@@ -28,7 +29,7 @@ function endpoint(handler, extra = {}) {
     catch (error) {
       if (error instanceof HttpsError) throw error;
       if(error instanceof HuckleberryError && error.details?.service==='huckleberry') warn('Huckleberry request rejected',{operation:error.details.operation || 'authentication',reason:error.details.reason,...(error.details.httpStatus !== undefined ? {httpStatus:error.details.httpStatus} : {}),...(error.details.grpcCode !== undefined ? {grpcCode:error.details.grpcCode} : {})});
-      if (error instanceof CalendarError || error instanceof HuckleberryError || error instanceof NewsletterError || error instanceof SmartHomeError || error instanceof LitterRobotError || error instanceof PetLibroError) throw new HttpsError(error.code,error.message,error instanceof HuckleberryError ? error.details : undefined);
+      if (error instanceof CalendarError || error instanceof HuckleberryError || error instanceof NewsletterError || error instanceof SmartHomeError || error instanceof LitterRobotError || error instanceof PetLibroError || error instanceof PublixError) throw new HttpsError(error.code,error.message,error instanceof HuckleberryError ? error.details : undefined);
       // Never log request bodies, credentials, calendar data, or raw provider errors.
       throw new HttpsError('unavailable','The connected service is temporarily unavailable. Try again shortly.');
     }
@@ -423,4 +424,13 @@ export const petLibro = endpoint(async (uid, input = {}) => {
   if (input.action === 'snapshot') return petLibroService.snapshot({ force:input.force === true });
   if (input.action === 'feed') return petLibroService.feed(input.feederId, input.portions);
   throw new PetLibroError('invalid-argument', 'Choose a PetLibro action.');
+});
+
+// Publix weekly BOGOs for the Meals tab (unofficial; functions/publix.js). Public ad
+// data only: no Publix account is involved. Cached six hours per store.
+const publixService = createPublix({ db });
+export const publix = endpoint(async (_uid, input = {}) => {
+  if (input.action === 'deals') return { ...(await publixService.deals({ store:input.store || DEFAULT_STORE.number, force:input.force === true })), defaultStore:DEFAULT_STORE };
+  if (input.action === 'stores') return { stores:await publixService.stores(input.zip) };
+  throw new PublixError('invalid-argument', 'Choose a Publix action.');
 });

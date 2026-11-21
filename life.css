@@ -1,0 +1,65 @@
+/* Life page: To-dos, Groceries and Meals tabs (chores + groceries + dinner plans). */
+.life-tabs { display:flex; gap:4px; background:#e9ebdf; padding:4px; border-radius:13px; margin-bottom:26px; width:max-content; max-width:100%; }
+.life-tabs button { border:0; background:none; color:#6f7766; padding:10px 20px; border-radius:10px; cursor:pointer; font-size:14px; font-weight:550; display:inline-flex; align-items:center; gap:8px; min-height:42px; }
+.life-tabs button[aria-selected="true"] { background:#fffdf7; color:#3d4d33; box-shadow:0 2px 5px #30372d14; }
+.life-count:not(:empty) { min-width:20px; height:20px; padding:0 6px; border-radius:10px; background:#dce2d1; color:#4f6140; font-size:11px; font-weight:650; display:inline-grid; place-items:center; font-variant-numeric:tabular-nums; }
+.life-tabs button[aria-selected="true"] .life-count:not(:empty) { background:var(--accent); color:#fff; }
+.meals-card { margin-bottom:22px; }
+.btn.btn-small { min-height:34px; padding:6px 12px; font-size:12px; border-radius:9px; }
+.meal-done { font-size:12px; color:#547542; font-weight:600; white-space:nowrap; }
+.meal-heart { color:#c0605a; font-style:normal; }
+/* This week */
+.meal-week { list-style:none; margin:0; padding:0; }
+.meal-day { display:grid; grid-template-columns:118px 1fr auto; align-items:center; gap:14px; padding:12px 0; border-bottom:1px solid var(--border2); }
+.meal-day:last-child { border-bottom:0; }
+.meal-when b { display:block; font-size:14px; font-weight:600; }
+.meal-when small { color:var(--muted); font-size:11px; }
+.meal-what { font-size:15px; min-width:0; overflow-wrap:anywhere; }
+.meal-day.made .meal-what { color:#7a8270; }
+.meal-day.open select, .meal-plan-pick select { width:100%; max-width:340px; border:1px dashed #c9cfbd; background:transparent; border-radius:9px; padding:9px 10px; color:var(--muted); font-size:13px; }
+.meal-actions { display:flex; align-items:center; gap:10px; justify-content:flex-end; }
+/* Ideas */
+.meal-ideas { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 290px), 1fr)); gap:14px; }
+.meal-idea { border:1px solid var(--border); border-radius:16px; padding:16px 18px; background:var(--card); display:flex; flex-direction:column; gap:8px; }
+.meal-idea.favorite { background:linear-gradient(135deg, #f6e9e4, transparent 70%), var(--card); border-color:#ead3cb; }
+.meal-idea header h3 { margin:0; font-size:16px; letter-spacing:0; font-weight:600; }
+.meal-idea header small { color:var(--muted); font-size:12px; }
+.meal-idea p { margin:0; }
+.meal-deals { display:flex; flex-wrap:wrap; gap:6px; }
+.bogo-chip { display:inline-flex; padding:3px 9px; border-radius:999px; background:#e3eed9; color:#3f6a2b; font-size:11px; font-weight:600; }
+.meal-ingredients { display:flex; flex-wrap:wrap; gap:4px 10px; font-size:12px; color:var(--muted); }
+.meal-ingredients .deal { color:#3f6a2b; font-weight:600; }
+.meal-ingredients .have { text-decoration:line-through; text-decoration-color:#9aa28d; }
+.meal-idea footer { margin-top:auto; padding-top:6px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.meal-idea footer .meal-plan-pick select { max-width:150px; padding:7px 8px; font-size:12px; }
+/* BOGOs */
+.bogo-head { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:10px; }
+.bogo-head p { margin:0; }
+.bogo-list { list-style:none; margin:0 0 12px; padding:0; display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap:4px 24px; }
+.bogo-item { display:flex; align-items:center; gap:12px; padding:9px 0; border-bottom:1px solid var(--border2); }
+.bogo-item img, .bogo-thumb { width:48px; height:48px; border-radius:10px; object-fit:contain; background:#fff; flex-shrink:0; display:grid; place-items:center; font-size:20px; }
+.bogo-item.used .bogo-copy b::after { content:' ★'; color:#c99a3b; }
+.bogo-copy { flex:1; min-width:0; }
+.bogo-copy b { display:block; font-size:13px; font-weight:550; overflow-wrap:anywhere; }
+.bogo-copy small { color:var(--muted); font-size:11px; }
+.bogo-store { margin-top:14px; font-size:13px; }
+.bogo-store summary { cursor:pointer; color:var(--accent); font-weight:600; font-size:12px; }
+.bogo-store-form { display:flex; align-items:flex-end; gap:10px; margin:10px 0; }
+.bogo-store-form .field { margin:0; max-width:140px; }
+.bogo-stores { list-style:none; margin:0; padding:0; }
+.bogo-stores li { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--border2); }
+.bogo-stores small { display:block; color:var(--muted); font-size:11px; }
+/* Favorites */
+.meal-favorites { list-style:none; margin:0; padding:0; }
+.meal-favorites li { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 0; border-bottom:1px solid var(--border2); }
+.meal-favorites li:last-child { border-bottom:0; }
+.meal-fav-copy small { display:block; color:var(--muted); font-size:11px; margin-top:2px; }
+.meal-favorites .meal-plan-pick select { max-width:150px; padding:7px 8px; font-size:12px; }
+#mealDialog textarea { resize:vertical; min-height:110px; }
+@media (max-width: 760px) {
+  .life-tabs { width:100%; }
+  .life-tabs button { flex:1; justify-content:center; padding:10px 8px; }
+  .meal-day { grid-template-columns:84px 1fr; }
+  .meal-day .meal-actions { grid-column:1 / -1; justify-content:flex-start; }
+  .meal-day.open .meal-actions { display:none; }
+}

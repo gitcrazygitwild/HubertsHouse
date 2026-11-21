@@ -10,6 +10,7 @@ import { initInstall } from './install-app.js';
 import { initDevices } from './devices.js';
 import { initLitter } from './litter.js';
 import { initFeeders } from './feeders.js';
+import { initMeals } from './meals.js';
 import { initEventDateEditor } from './event-editor.js';
 import { holidayEvents, holidaysEnabled } from './holidays.js';
 import { birthdayEvents, birthdaysShown } from './birthdays-model.js';
@@ -23,7 +24,7 @@ import { checklistKey, eventChecklistKey } from './checklists.js';
 import { config } from './config.js';
 import { initHousehold, updateHouseholdEvents, showNotice, showView } from './household.js';
 import { initCloudCalendar, setCloudRange, refreshCloud, saveCloudEvent, saveCloudAssignment, deleteCloudEvent } from './cloud-calendar.js';
-import { demoStore, demoEvents } from './demo.js';
+import { demoStore, demoEvents, demoMealStore } from './demo.js';
 import { initDashboard } from './dashboard.js';
 import { initHomeCalendar } from './home-calendar.js';
 import { eventTemplate } from './event-templates.js';
@@ -496,7 +497,7 @@ async function initApp() {
     document.getElementById('accountLabel').textContent = 'Preview mode. No real household or Apple data is loaded.';
     startHousehold(demoStore()); localDocs = demoEvents(); rebuildEvents();
     setCalendarStatus('Sample calendar', 'ready');
-    initCloudCalendar(null,{demo:true,onEvents:() => {},onCalendars:() => {}}); startUpgrades(); initHuckleberry(null,{demo:true}); initNewsletterSettings(null); initSiriSettings(null); initWorldBriefing(null,{demo:true}); initInstall(); initDevices(null,{demo:true}); initLitter(null,{demo:true}); initFeeders(null,{demo:true}); initBirthdays(null,{demo:true,onChange:() => { renderCalendarFromCache(); homeCalendar?.render(); }}); return;
+    initCloudCalendar(null,{demo:true,onEvents:() => {},onCalendars:() => {}}); startUpgrades(); initHuckleberry(null,{demo:true}); initNewsletterSettings(null); initSiriSettings(null); initWorldBriefing(null,{demo:true}); initInstall(); initDevices(null,{demo:true}); initLitter(null,{demo:true}); initFeeders(null,{demo:true}); initMeals(null,{demo:true,store:demoMealStore()}); initBirthdays(null,{demo:true,onChange:() => { renderCalendarFromCache(); homeCalendar?.render(); }}); return;
   }
   onAuthStateChanged(auth,async user => {
     if (!user) { memberVerified = false; gate.classList.remove('hidden'); if (dataStarted) location.reload(); return; }
@@ -517,7 +518,7 @@ async function initApp() {
         setCalendarStatus('Sync unavailable', 'offline');
         showNotice('The calendar could not sync. Check your connection and household access.');
       });
-      startUpgrades(); initHuckleberry(app,{predictions:predictionStore()}); initNewsletterSettings(app); initSiriSettings(app); initWorldBriefing(app); initInstall(); initDevices(app); initLitter(app); initFeeders(app); initBirthdays(app,{onChange:() => { renderCalendarFromCache(); homeCalendar?.render(); }});
+      startUpgrades(); initHuckleberry(app,{predictions:predictionStore()}); initNewsletterSettings(app); initSiriSettings(app); initWorldBriefing(app); initInstall(); initDevices(app); initLitter(app); initFeeders(app); initMeals(app,{store:firestoreStore('householdMeals')}); initBirthdays(app,{onChange:() => { renderCalendarFromCache(); homeCalendar?.render(); }});
       await initCloudCalendar(app,{
         onEvents:records => { cloudDocs = records.map(e => ({...e,end:e.editEnd,cloudEnd:e.end,owner:e.owner || 'both',type:'general',checklist:e.checklist || [],repeat:'none'})); rebuildEvents(); },
         onChecklists:records => {cloudChecklistDocs=records;},
@@ -552,7 +553,7 @@ function startHousehold(store) {
     openEvent:(id,occ) => openFromPanel(id,occ,false), newEvent:() => fab.click(), viewChanged: view => {
       calendar?.updateSize();
       if (!demo) {
-        if(view==='tasks')refreshCloud({force:false});
+        if(view==='life')refreshCloud({force:false});
         const range = view === 'today' ? homeCalendar?.getRange() : view === 'calendar' ? { start: calendar.view.activeStart, end: calendar.view.activeEnd } : null;
         if (range) setCloudRange(range.start.toISOString(), range.end.toISOString());
       }
@@ -572,8 +573,9 @@ function startUpgrades() {
       { group:'Go to', icon:'⌂', label:'Today', keywords:'home dashboard', run:() => showView('today') },
       { group:'Go to', icon:'▦', label:'Calendar', keywords:'month week', run:() => showView('calendar') },
       { group:'Go to', icon:'☺', label:'Frankie', keywords:'baby sleep bottles scoreboard charts', run:() => showView('frankie') },
-      { group:'Go to', icon:'✓', label:'Chores & lists', keywords:'tasks checklists', run:() => showView('tasks') },
-      { group:'Go to', icon:'🛒', label:'Groceries', keywords:'shopping list', run:() => showView('groceries') },
+      { group:'Go to', icon:'✓', label:'To-dos', keywords:'life chores tasks checklists', run:() => showView('tasks') },
+      { group:'Go to', icon:'🛒', label:'Groceries', keywords:'life shopping list', run:() => showView('groceries') },
+      { group:'Go to', icon:'🍽', label:'Meals', keywords:'life dinner meal plan publix bogo recipes', run:() => showView('meals') },
       { group:'Go to', icon:'💡', label:'Devices', keywords:'smart home lights hue sonos music speakers litter robot feeder lock camera fan', run:() => showView('devices') },
       { group:'Go to', icon:'⚙', label:'Settings', keywords:'preferences huckleberry icloud', run:() => showView('settings') },
       { group:'Actions', icon:'＋', label:'New event', keywords:'add plan create', run:() => fab.click() },
@@ -603,8 +605,8 @@ function predictionStore() {
     }
   };
 }
-function firestoreStore() {
-  const col = collection(db,'householdItems');
+function firestoreStore(name = 'householdItems') {
+  const col = collection(db,name);
   const check = (snapshot,item) => { if (!snapshot.exists() || snapshot.data().version !== item.version) throw new Error('This item changed on another device. Try again.'); };
   return {
     subscribe(next,status) {

@@ -7,21 +7,33 @@ let store, items = [], events = [], currentKind = 'chore', taskFocus = 'all', op
 let noticeTimer, wakeLock, displayMode = false, activeView = 'today', monitorFullscreen = false;
 let getEventRecords=()=>[],saveEventChecklist,editEventChecklist,taskSource='all';
 const pendingChecklists=new Set();
-const titles = { today: 'Today at home', calendar: 'Life, all together.', tasks: 'Chores & checklists', groceries: 'The grocery list', settings: 'Your house, your way', frankie: 'Frankie', devices: 'Smart home' };
+const titles = { today: 'Today at home', calendar: 'Your calendar, all together.', life: 'Life, handled.', settings: 'Your house, your way', frankie: 'Frankie', devices: 'Smart home' };
+// Chores and groceries live together on the Life page; the old names open its tabs.
+const LIFE_TABS = { tasks: 'todos', todos: 'todos', groceries: 'groceries', meals: 'meals' };
+let lifeTab = 'todos';
+export const householdItems = () => items;
+export const addHouseholdItems = list => list.length === 1 ? store.add(list[0]) : store.addMany(list);
+function showLifeTab(tab) {
+  lifeTab = Object.values(LIFE_TABS).includes(tab) ? tab : 'todos';
+  document.querySelectorAll('[data-life-tab]').forEach(button => { const on = button.dataset.lifeTab === lifeTab; button.setAttribute('aria-selected', String(on)); button.tabIndex = on ? 0 : -1; });
+  document.querySelectorAll('.life-panel').forEach(panel => { panel.hidden = panel.id !== `life-${lifeTab}`; });
+  window.dispatchEvent(new CustomEvent('hh:life-tab', { detail:lifeTab }));
+}
 export function showNotice(message, action) {
   const el = $('notice'); el.textContent = message; el.classList.remove('hidden');
   if (action) { const b = document.createElement('button'); b.textContent = action.label; b.onclick = () => { el.classList.add('hidden'); Promise.resolve(action.run()).catch(e => showNotice(e.message)); }; el.append(b); }
   clearTimeout(noticeTimer); noticeTimer = setTimeout(() => el.classList.add('hidden'), action ? 14000 : 6500);
 }
 export function showView(view) {
+  if (Object.hasOwn(LIFE_TABS, view)) { showLifeTab(LIFE_TABS[view]); view = 'life'; }
   if (!Object.hasOwn(titles, view)) view = 'today';
   activeView = view;
   document.body.dataset.view = view; // phones hide repeated header pieces outside Today (mobile.css)
   document.querySelectorAll('.house-view').forEach(el => el.classList.toggle('hidden', el.id !== `view-${view}`));
   document.querySelectorAll('[data-view]').forEach(el => { el.classList.toggle('active', el.dataset.view === view); if (el.dataset.view === view) el.setAttribute('aria-current', 'page'); else el.removeAttribute('aria-current'); });
   $('viewTitle').textContent = titles[view];
-  history.replaceState(null, '', `${location.pathname}${location.search}#${view}`);
-  if (['calendar','today','tasks'].includes(view)) requestAnimationFrame(() => viewChanged?.(view));
+  history.replaceState(null, '', `${location.pathname}${location.search}#${view === 'life' && lifeTab !== 'todos' ? lifeTab : view}`);
+  if (['calendar','today','life'].includes(view)) requestAnimationFrame(() => viewChanged?.(view));
 }
 async function setDisplayMode(on) {
   displayMode = on; document.body.classList.toggle('display-mode', on);
@@ -66,14 +78,20 @@ export function initHousehold(options) {
   onData = options.onData;
   getEventRecords=options.getEventRecords || (()=>[]);saveEventChecklist=options.saveEventChecklist;editEventChecklist=options.editEventChecklist;
   store = options.store; openEvent = options.openEvent; newEvent = options.newEvent; viewChanged = options.viewChanged;
-  store.subscribe(next => { items = next; render(); }, (message, error = false) => { $('houseDataStatus').textContent = message; if (error) showNotice(message); });
+  store.subscribe(next => { items = next; render(); window.dispatchEvent(new Event('hh:items')); }, (message, error = false) => { $('houseDataStatus').textContent = message; if (error) showNotice(message); });
   document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
   document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => showView(b.dataset.go)));
+  document.querySelectorAll('[data-life-tab]').forEach(b => b.addEventListener('click', () => showView(b.dataset.lifeTab)));
+  document.querySelector('.life-tabs')?.addEventListener('keydown', e => {
+    const tabs = [...document.querySelectorAll('[data-life-tab]')], at = tabs.findIndex(t => t.dataset.lifeTab === lifeTab);
+    const next = e.key === 'ArrowRight' ? tabs[(at + 1) % tabs.length] : e.key === 'ArrowLeft' ? tabs[(at + tabs.length - 1) % tabs.length] : null;
+    if (next) { e.preventDefault(); showView(next.dataset.lifeTab); next.focus(); }
+  });
   document.querySelectorAll('[data-add-kind]').forEach(b => b.addEventListener('click', () => editItem(null, b.dataset.addKind)));
   document.querySelectorAll('[data-kind]').forEach(b => b.addEventListener('click', () => {
     currentKind = b.dataset.kind;
     document.querySelectorAll('[data-kind]').forEach(x => x.classList.toggle('active', x === b));
-    const add = document.querySelector('#view-tasks [data-add-kind]'); add.dataset.addKind = currentKind; add.textContent = currentKind === 'chore' ? '＋ Add a chore' : '＋ Add a checklist item'; render();
+    const add = document.querySelector('#life-todos [data-add-kind]'); add.dataset.addKind = currentKind; add.textContent = currentKind === 'chore' ? '＋ Add a chore' : '＋ Add a checklist item'; render();
   }));
   document.querySelectorAll('[data-task-focus]').forEach(button => button.addEventListener('click', () => {
     taskFocus = button.dataset.taskFocus; render();
@@ -233,6 +251,8 @@ function render() {
     renderHTML($('eventChecklistGroups'),markup || empty('No event checklist items here yet.', 'Add items inside a household or Apple event. They’ll appear here automatically.'));
     $('tasksProgress').textContent=`${taskSource==='events'?0:tasks.length} standalone items · ${taskSource==='standalone'?0:shown} event items shown`;
   }
+  const count = (id, n) => { const el = $(id); if (el) el.textContent = n ? String(n) : ''; };
+  count('lifeTodoCount', due.length); count('lifeGroceryCount', groceries.filter(x => !x.completed).length);
   $('groceryCount').textContent = `${groceries.filter(x => !x.completed).length} to pick up · ${groceries.filter(x => x.completed).length} in the basket`;
   $('clearBought').disabled = !groceries.some(x => x.completed);
   renderHTML($('groceryGroups'), groceries.length ? groupsHTML([...groceries].sort((a,b) => Number(a.completed) - Number(b.completed) || a.title.localeCompare(b.title)), x => x.completed ? 'In the basket' : x.category && x.category !== 'Other' ? x.category : guessAisle(x.title), [...CATEGORIES, 'In the basket']) : empty('The list is ready when you are.', 'Add the first thing you need. It’ll be here on your next store run.'));

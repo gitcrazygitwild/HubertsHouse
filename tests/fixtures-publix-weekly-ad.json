@@ -1,0 +1,407 @@
+{
+ "IsPersonalizationEnabled": false,
+ "WeeklyAdLatestUpdatedDateTime": "2026-11-21T11:08:31.453Z",
+ "Savings": [
+  {
+   "id": "56bac974-132e-4966-aef5-d3cb4249855e",
+   "savings": "Buy 1 Get 1 FREE",
+   "title": "Stacy&#39;s Pita Chips",
+   "description": "Free item of equal or lesser price.&#13;&#10;Or Bagel or Thins, Located in the Deli, 6.75 to 7.33-oz pkg.",
+   "additionalDealInfo": "SAVE UP TO $5.19",
+   "wa_startDate": "2026-11-18T00:00:00Z",
+   "wa_endDate": "2026-11-25T23:59:59Z",
+   "categories": [
+    "deli",
+    "bogo"
+   ],
+   "department": "Deli",
+   "savingType": "WeeklyAd",
+   "imageUrl": "https://akimages.shoplocal.com/dyn_li/300.0.90.0/Retailers/Publix/261119_Page_11_Feature_011_895428_UL_257760_PackageShot.jpg"
+  },
+  {
+   "id": "d5ebdd00-cb2b-47d9-a2d5-90b90b6e4226",
+   "savings": "Buy 1 Get 1 FREE",
+   "title": "Birds Eye Vegetables",
+   "description": "Free item of equal or lesser price.&#13;&#10;8 to 32-oz pkg.; or Ore-Ida Potatoes, 19 to 48-oz pkg.",
+   "additionalDealInfo": "SAVE UP TO $7.79",
+   "wa_startDate": "2026-11-18T00:00:00Z",
+   "wa_endDate": "2026-11-25T23:59:59Z",
+   "categories": [
+    "frozen-food",
+    "bogo"
+   ],
+   "department": "Vegetables",
+   "savingType": "WeeklyAd",
+   "imageUrl": "https://akimages.shoplocal.com/dyn_li/300.0.90.0/Retailers/Publix/261119_a1_Page_12_Birds_Eye_Vegetables.jpg"
+  },
+  {
+   "id": "b26091da-f50f-4bde-9633-f4533be8d13f",
+   "savings": "Buy 1 Get 1 FREE",
+   "title": "Daisy Sour Cream",
+   "description": "Free item of equal or lesser price.&#13;&#10;16-oz cup; or Lipton Recipe Secrets Soup &amp; Dip Mix, 1.8 to 2.6-oz box &#13;&#10;(Excluding 14-oz Squeeze)",
+   "additionalDealInfo": "SAVE UP TO $2.99",
+   "wa_startDate": "2026-11-18T00:00:00Z",
+   "wa_endDate": "2026-11-25T23:59:59Z",
+   "categories": [
+    "dairy",
+    "bogo"
+   ],
+   "department": "Yogurt",
+   "savingType": "WeeklyAd",
+   "imageUrl": "https://akimages.shoplocal.com/dyn_li/300.0.90.0/Retailers/Publix/261119_Page_12_Feature_02_855650_258659.jpg"
+  },
+  {
+   "id": "e13a2a37-d08b-44d8-bdef-8d8cb3bf8616",
+   "savings": "Buy 1 Get 1 FREE",
+   "title": "Sargento Shredded Cheese",
+   "description": "Free item of equal or lesser price.&#13;&#10;Or Chunk, 5 to 8-oz pkg.",
+   "additionalDealInfo": "SAVE UP TO $4.99",
+   "wa_startDate": "2026-11-18T00:00:00Z",
+   "wa_endDate": "2026-11-25T23:59:59Z",
+   "categories": [
+    "dairy",
+    "bogo"
+   ],
+   "department": "Cheese",
+   "savingType": "WeeklyAd",
+   "imageUrl": "https://akimages.shoplocal.com/dyn_li/300.0.90.0/Retailers/Publix/261119_Page_13_Feature_02_71048_259259.jpg"
+  },
+  {
+   "id": "16c1aec7-6515-4e54-9d3d-32162d56c2c4",
+   "savings": "Buy 1 Get 1 FREE",
+   "title": "Land O Lakes Butter",
+   "description": "Free item of equal or lesser price.&#13;&#10;16-oz pkg.",
+   "additionalDealInfo": "SAVE UP TO $6.59",
+   "wa_startDate": "2026-11-18T00:00:00Z",
+   "wa_endDate": "2026-11-25T23:59:59Z",
+   "categories": [
+    "dairy",
+    "bogo"
+   ],
+   "department": "Butter &amp; Margarine",
+   "savingType": "WeeklyAd",
+   "imageUrl": "https://akimages.shoplocal.com/dyn_li/300.0.90.0/Retailers/Publix/261119_a1_Page_13_Land_OLakes_Butter.jpg"
+  },
+  {
+   "id": "95329dce-cd25-426f-8be6-2c6ad53ddf96",
+   "savings": "Buy 1 Get 1 FREE",
+   "title": "Del Monte Vegetables",
+   "description": "Free item of equal or lesser price.&#13;&#10;14.5 to 15.25-oz can &#13;&#10;(Excluding Selects, Seasoned, Artichokes, and Asparagus)",
+   "additionalDealInfo": "SAVE UP TO $1.79",
+   "wa_startDate": "2026-11-18T00:00:00Z",
+   "wa_endDate": "2026-11-25T23:59:59Z",
+   "categories": [
+    "grocery",
+    "bogo"
+   ],
+   "department": "Canned Vegetables",
+   "savingType": "WeeklyAd",
+   "imageUrl": "https://akimages.shoplocal.com/dyn_li/300.0.90.0/Retailers/Publix/261119_a1_Page_14_Del_Monte_Vegetables.jpg"
+  },
+  {
+   "id": "4e585435-6d58-4254-97c6-cffaa4e36b88",
+   "savings": "Buy 1 Get 1 FREE",
+   "title": "Bertolli Sauce",
+   "description": "Free item of equal or lesser price.&#13;&#10;15 to 24-oz jar",
+   "additionalDealInfo": "SAVE UP TO $6.49",
+   "wa_startDate": "2026-11-18T00:00:00Z",
+   "wa_endDate": "2026-11-25T23:59:59Z",
+   "categories": [
+    "grocery",
+    "bogo"
+   ],
+   "department": "Pasta &amp; Pasta Sauce",
+   "savingType": "WeeklyAd",
+   "imageUrl": "https://akimages.shoplocal.com/dyn_li/300.0.90.0/Retailers/Publix/261119_Page_14_Feature_05_4549_260703.jpg"
+  },
+  {
+   "id": "98bc6def-b59b-49f2-b17e-e60c98f1d36a",
+   "savings": "Buy 1 Get 1 FREE",
+   "title": "Swanson Broth or Cooking Stock",
+   "description": "Free item of equal or lesser price.&#13;&#10;32-oz ctn.; or Hunt&#39;s Tomatoes, or Tomato Sauce or Puree, 28 or 29-oz can; or Rotel Diced Tomatoes, 28-oz can",
+   "additionalDealInfo": "SAVE UP TO $3.99",
+   "wa_startDate": "2026-11-18T00:00:00Z",
+   "wa_endDate": "2026-11-25T23:59:59Z",
+   "categories": [
+    "grocery",
+    "bogo"
+   ],
+   "department": "Soup &amp; Broth",
+   "savingType": "WeeklyAd",
+   "imageUrl": "https://akimages.shoplocal.com/dyn_li/300.0.90.0/Retailers/Publix/261119_a1_Page_14_Swanson_Broth_or_Cooking_Stock.jpg"
+  },
+  {
+   "id": "5a971fac-5a0d-4fdf-b6e1-952198b97965",
+   "savings": "Buy 1 Get 1 FREE",
+   "title": "Cottonelle Bathroom Tissue",
+   "description": "Free item of equal or lesser price.&#13;&#10;Mega Rolls, 4-roll pkg.",
+   "additionalDealInfo": "SAVE UP TO $7.49",
+   "wa_startDate": "2026-11-18T00:00:00Z",
+   "wa_endDate": "2026-11-25T23:59:59Z",
+   "categories": [
+    "non-foods",
+    "bogo"
+   ],
+   "department": "Bathroom Tissue",
+   "savingType": "WeeklyAd",
+   "imageUrl": "https://akimages.shoplocal.com/dyn_li/300.0.90.0/Retailers/Publix/261119_Page_18_Feature_06_343703_264636.jpg"
+  },
+  {
+   "id": "f2f96017-4f48-4a65-b5be-f165de8f2f08",
+   "savings": "Buy 1 Get 1 FREE",
+   "title": "Botticelli Pasta Sauce",
+   "description": "Free item of equal or lesser price.&#13;&#10;Or Pesto or Pizza Sauce, or Tomato Puree, 6.5 to 24-oz jar",
+   "additionalDealInfo": "SAVE UP TO $7.99",
+   "wa_startDate": "2026-11-18T00:00:00Z",
+   "wa_endDate": "2026-12-01T23:59:59Z",
+   "categories": [
+    "grocery",
+    "bogo"
+   ],
+   "department": "Pasta &amp; Pasta Sauce",
+   "savingType": "WeeklyAd",
+   "imageUrl": "https://akimages.shoplocal.com/dyn_li/300.0.90.0/Retailers/Publix/261119_Flex_Area_09-1_Feature_03_232817_252909.jpg"
+  },
+  {
+   "id": "0d2b8444-28c6-4db2-ba74-c824f3bbfc52",
+   "savings": "Buy 1 Get 1 FREE",
+   "title": "Smithfield Bacon",
+   "description": "Free item of equal or lesser price.&#13;&#10;12 or 16-oz pkg.",
+   "additionalDealInfo": "SAVE UP TO $9.99",
+   "wa_startDate": "2026-11-18T00:00:00Z",
+   "wa_endDate": "2026-11-25T23:59:59Z",
+   "categories": [
+    "meat",
+    "bogo"
+   ],
+   "department": "Meat",
+   "savingType": "WeeklyAd",
+   "imageUrl": "https://akimages.shoplocal.com/dyn_li/300.0.90.0/Retailers/Publix/261119_Page_07_Feature_05_74033_254959.jpg"
+  },
+  {
+   "id": "8e36e785-7bb5-40d4-b1d4-c6d886086943",
+   "savings": "Buy 1 Get 1 FREE",
+   "title": "Red Raspberries",
+   "description": "Free item of equal or lesser price.&#13;&#10;6-oz pkg.",
+   "additionalDealInfo": "Save Up To $5.15",
+   "wa_startDate": "2026-11-18T00:00:00Z",
+   "wa_endDate": "2026-11-26T23:59:59Z",
+   "categories": [
+    "produce",
+    "bogo"
+   ],
+   "department": null,
+   "savingType": "WeeklyAd",
+   "imageUrl": "https://images.publixcdn.com/pct/images/products/20000/023969-600x600-A.jpg"
+  },
+  {
+   "id": "29caa7ef-dff6-4c3f-ba60-511dd1e967c7",
+   "savings": "Buy 1 Get 1 FREE",
+   "title": "Galbani Fresh Mozzarella Cheese",
+   "description": "Free item of equal or lesser price.&#13;&#10;Sliced Ball, 8-oz pkg.",
+   "additionalDealInfo": "Save Up To $6.09",
+   "wa_startDate": "2026-11-18T00:00:00Z",
+   "wa_endDate": "2026-11-26T23:59:59Z",
+   "categories": [
+    "deli",
+    "bogo"
+   ],
+   "department": null,
+   "savingType": "WeeklyAd",
+   "imageUrl": "https://images.publixcdn.com/pct/images/products/275000/277747-600x600-A.jpg"
+  },
+  {
+   "id": "8d7e7449-592d-4d11-915c-6fc8031f2c87",
+   "savings": "Buy 1 Get 1 FREE",
+   "title": "Hatfield Ham Steak",
+   "description": "Free item of equal or lesser price.&#13;&#10;Hardwood Smoked, Honey, or Brown Sugar, 8-oz pkg.",
+   "additionalDealInfo": "Save Up To $3.99",
+   "wa_startDate": "2026-11-18T00:00:00Z",
+   "wa_endDate": "2026-11-26T23:59:59Z",
+   "categories": [
+    "meat",
+    "bogo"
+   ],
+   "department": null,
+   "savingType": "WeeklyAd",
+   "imageUrl": "https://images.publixcdn.com/pct/images/products/290000/292774-600x600-A.jpg"
+  },
+  {
+   "id": "62ad505d-8ab0-47f8-ac6d-9930090600e6",
+   "savings": "Buy 1 Get 1 FREE",
+   "title": "Stonefire Naan Rounds",
+   "description": "Free item of equal or lesser price.&#13;&#10;Original or Protein, Located in the Deli, 12.7-oz pkg.",
+   "additionalDealInfo": "Save Up To $6.09",
+   "wa_startDate": "2026-11-18T00:00:00Z",
+   "wa_endDate": "2026-11-26T23:59:59Z",
+   "categories": [
+    "deli",
+    "bogo"
+   ],
+   "department": null,
+   "savingType": "WeeklyAd",
+   "imageUrl": "https://images.publixcdn.com/pct/images/products/980000/982110-600x600-A.jpg"
+  },
+  {
+   "id": "97340dbb-ac56-4354-a9a5-e8584d6d5994",
+   "savings": "Buy 1 Get 1 FREE",
+   "title": "Perdue Breaded Chicken Breast Nuggets",
+   "description": "Free item of equal or lesser price.&#13;&#10;Or Patties or Tenders, Fully Cooked, 22 to 29-oz pkg.",
+   "additionalDealInfo": "Save Up To $9.29",
+   "wa_startDate": "2026-11-18T00:00:00Z",
+   "wa_endDate": "2026-11-26T23:59:59Z",
+   "categories": [
+    "meat",
+    "bogo"
+   ],
+   "department": null,
+   "savingType": "WeeklyAd",
+   "imageUrl": "https://images.publixcdn.com/pct/images/products/165000/166307-600x600-A.jpg"
+  },
+  {
+   "id": "3346f209-3180-4680-8099-c1a970f6515e",
+   "savings": "Buy 1 Get 1 FREE",
+   "title": "Armour Meatballs",
+   "description": "Free item of equal or lesser price.&#13;&#10;Sold Frozen, 11 to 25-oz pkg.",
+   "additionalDealInfo": "Save Up To $10.99",
+   "wa_startDate": "2026-11-18T00:00:00Z",
+   "wa_endDate": "2026-11-26T23:59:59Z",
+   "categories": [
+    "meat",
+    "bogo"
+   ],
+   "department": null,
+   "savingType": "WeeklyAd",
+   "imageUrl": "https://images.publixcdn.com/pct/images/products/75000/079503-600x600-A.jpg"
+  },
+  {
+   "id": "48a10104-72a5-42ca-b04c-151febdf3a14",
+   "savings": "Buy 1 Get 1 FREE",
+   "title": "Clamato Tomato Cocktail",
+   "description": "Free item of equal or lesser price.&#13;&#10;The Original, From Concentrate, 32-oz bot.",
+   "additionalDealInfo": "Save Up To $3.29",
+   "wa_startDate": "2026-11-18T00:00:00Z",
+   "wa_endDate": "2026-11-26T23:59:59Z",
+   "categories": [
+    "grocery",
+    "beverages",
+    "bogo"
+   ],
+   "department": null,
+   "savingType": "WeeklyAd",
+   "imageUrl": "https://images.publixcdn.com/pct/images/products/10000/012289-600x600-A.jpg"
+  },
+  {
+   "id": "8e80a921-96ce-489a-855c-6dcba2ae2f09",
+   "savings": "Buy 1 Get 1 FREE",
+   "title": "Clamato Tomato Cocktail",
+   "description": "Free item of equal or lesser price.&#13;&#10;The Original, From Concentrate, 64-oz bot.",
+   "additionalDealInfo": "Save Up To $5.89",
+   "wa_startDate": "2026-11-18T00:00:00Z",
+   "wa_endDate": "2026-11-26T23:59:59Z",
+   "categories": [
+    "grocery",
+    "beverages",
+    "bogo"
+   ],
+   "department": null,
+   "savingType": "WeeklyAd",
+   "imageUrl": "https://images.publixcdn.com/pct/images/products/10000/012458-600x600-A.jpg"
+  },
+  {
+   "id": "d865427a-0ede-41db-9a2e-5a60869b7f16",
+   "savings": "Buy 1 Get 1 FREE",
+   "title": "Toufayan Flatbread &amp; Wraps",
+   "description": "Free item of equal or lesser price.&#13;&#10;6.77 to 18-oz. pkg.",
+   "additionalDealInfo": "Save Up To $5.89",
+   "wa_startDate": "2026-11-18T00:00:00Z",
+   "wa_endDate": "2026-11-26T23:59:59Z",
+   "categories": [
+    "deli",
+    "bogo"
+   ],
+   "department": null,
+   "savingType": "WeeklyAd",
+   "imageUrl": "https://images.publixcdn.com/pct/images/products/245000/247550-600x600-A.jpg"
+  },
+  {
+   "id": "cfbef01f-44d2-4bc6-a11e-06ea55260fcb",
+   "savings": "Buy 1 Get 1 FREE",
+   "title": "Tyson Restaurant Style Chicken",
+   "description": "Free item of equal or lesser price.&#13;&#10;Nuggets, Bites, or Strips, Uncooked, 32 or 40-oz pkg.",
+   "additionalDealInfo": "Save Up To $13.39",
+   "wa_startDate": "2026-11-18T00:00:00Z",
+   "wa_endDate": "2026-11-26T23:59:59Z",
+   "categories": [
+    "meat",
+    "bogo"
+   ],
+   "department": null,
+   "savingType": "WeeklyAd",
+   "imageUrl": "https://images.publixcdn.com/pct/images/products/340000/343817-600x600-A.jpg"
+  },
+  {
+   "id": "de3b2ff6-d292-49d1-9463-4dad2fa94bcc",
+   "savings": "$21.99",
+   "title": "Caramel Pecan Crunch Decadent Cake",
+   "description": "From the Publix Bakery, 46-oz pkg.",
+   "additionalDealInfo": "SAVE UP TO $5.00",
+   "wa_startDate": "2026-11-18T00:00:00Z",
+   "wa_endDate": "2026-11-25T23:59:59Z",
+   "categories": [
+    "bakery",
+    "order-now"
+   ],
+   "department": "Bakery",
+   "savingType": "WeeklyAd",
+   "imageUrl": "https://akimages.shoplocal.com/dyn_li/300.0.90.0/Retailers/Publix/261119_Page_01_Feature_02_94301_253509.jpg"
+  },
+  {
+   "id": "0c0ba216-e7d3-4b1b-abc7-ef6481af1792",
+   "savings": "$17.99 Each",
+   "title": "Publix Signature Bouquet",
+   "description": null,
+   "additionalDealInfo": "SAVE UP TO $1.00",
+   "wa_startDate": "2026-11-18T00:00:00Z",
+   "wa_endDate": "2026-11-25T23:59:59Z",
+   "categories": [
+    "floral"
+   ],
+   "department": "Floral",
+   "savingType": "WeeklyAd",
+   "imageUrl": "https://akimages.shoplocal.com/dyn_li/300.0.90.0/Retailers/Publix/261119_Page_01_Feature_04_83520_253609.jpg"
+  },
+  {
+   "id": "de2bf68d-0528-478a-9df6-8d9e12d992f2",
+   "savings": "$5.99",
+   "title": "Apple Pie",
+   "description": "Flaky Double Crust or Dutch Apple With Streusel Topping, From the Publix Bakery, 32 or 34-oz pkg.",
+   "additionalDealInfo": "SAVE UP TO $1.50",
+   "wa_startDate": "2026-11-18T00:00:00Z",
+   "wa_endDate": "2026-11-25T23:59:59Z",
+   "categories": [
+    "bakery",
+    "order-now"
+   ],
+   "department": "Bakery",
+   "savingType": "WeeklyAd",
+   "imageUrl": "https://akimages.shoplocal.com/dyn_li/300.0.90.0/Retailers/Publix/261119_a1_Page_10_Apple_Pie.jpg"
+  },
+  {
+   "id": "c6c8d6d6-9e38-4477-9726-d72644c85697",
+   "savings": "$11.99",
+   "title": "Chocolate Chip Cookie Cake",
+   "description": "Decorated for Thanksgiving, From the Publix Bakery, 16-oz pkg.",
+   "additionalDealInfo": "SAVE UP TO $2.00",
+   "wa_startDate": "2026-11-18T00:00:00Z",
+   "wa_endDate": "2026-11-25T23:59:59Z",
+   "categories": [
+    "bakery",
+    "order-now"
+   ],
+   "department": "Bakery",
+   "savingType": "WeeklyAd",
+   "imageUrl": "https://akimages.shoplocal.com/dyn_li/300.0.90.0/Retailers/Publix/261119_a1_Page_10_Chocolate_Chip_Cookie_Cake.jpg"
+  }
+ ]
+}
