@@ -81,3 +81,11 @@
   .meal-day .meal-actions { grid-column:1 / -1; justify-content:flex-start; }
   .meal-day.open .meal-actions { display:none; }
 }
+/* Grocery rows: one-tap remove (×) and swipe left to remove. */
+#groceryGroups .item-row { position:relative; transition:transform .18s ease, opacity .18s ease; background:var(--card); }
+#groceryGroups .item-row.swiping { transition:none; box-shadow:inset -3px 0 0 rgba(176, 72, 52, calc(var(--swipe, 0) * .9)); }
+#groceryGroups .item-row.swiped { opacity:0; }
+.item-delete { border:0; background:none; color:#9aa28d; width:36px; height:36px; border-radius:50%; font-size:22px; line-height:1; cursor:pointer; flex-shrink:0; display:grid; place-items:center; }
+.item-delete:hover, .item-delete:focus-visible { background:#f4e4dd; color:#a34b39; }
+@media (max-width: 760px) { .item-delete { width:44px; height:44px; } }
+@media (prefers-reduced-motion: reduce) { #groceryGroups .item-row { transition:none; } }

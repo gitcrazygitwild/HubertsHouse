@@ -565,3 +565,28 @@ test('Meals: every dinner opens a recipe card with numbered steps', async t => {
   assert.ok(dialog.querySelectorAll('.recipe-steps li').length>=3);
   assert.deepEqual(errors,[]);
 });
+test('groceries: one tap or a swipe removes an item, with Undo', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  doc.querySelector('[data-life-tab="groceries"]').click(); await settle();
+  const count=() => Number(doc.getElementById('lifeGroceryCount').textContent || 0), row=name => [...doc.querySelectorAll('#groceryGroups .item-row')].find(r => r.textContent.includes(name));
+  assert.equal(count(),5);
+  // One tap, no confirm box.
+  w.confirm=() => { throw new Error('should not ask'); };
+  row('Avocados').querySelector('[data-delete-item]').click(); await settle();
+  assert.equal(row('Avocados'),undefined); assert.equal(count(),4); assert.match(doc.getElementById('notice').textContent,/Removed Avocados/);
+  doc.querySelector('#notice button').click(); await settle();
+  assert.ok(row('Avocados'),'Undo puts it back'); assert.equal(count(),5);
+  assert.equal(row('Avocados').querySelector('.item-meta').textContent,'3 ripe ones','with its details');
+  // Swipe left past the line removes; a short swipe springs back.
+  const swipe=(target,dx,dy=0) => { const fire=(type,x,y) => { const e=new w.Event(type,{bubbles:true}); Object.defineProperty(e,'touches',{value:type==='touchend'?[]:[{clientX:x,clientY:y}]}); target.dispatchEvent(e); };
+    fire('touchstart',300,100); for (let i=1;i<=6;i++) fire('touchmove',300+dx*i/6,100+dy*i/6); fire('touchend',0,0); };
+  swipe(row('Sourdough').querySelector('.item-copy'),-50); await settle(250);
+  assert.ok(row('Sourdough')); assert.equal(row('Sourdough').style.transform,'');
+  swipe(row('Sourdough').querySelector('.item-copy'),-20,-140); await settle(250);
+  assert.ok(row('Sourdough'),'scrolling up and down is not a swipe');
+  swipe(row('Sourdough').querySelector('.item-copy'),-180); await new Promise(r => setTimeout(r,300));
+  assert.equal(row('Sourdough'),undefined); assert.equal(count(),4);
+  // Chores don't get the × (their delete stays in the edit dialog).
+  doc.querySelector('[data-life-tab="todos"]').click(); assert.equal(doc.querySelectorAll('#taskGroups [data-delete-item]').length,0);
+  assert.deepEqual(errors,[]);
+});
