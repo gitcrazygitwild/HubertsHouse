@@ -2,6 +2,7 @@ import { dateKey, escapeHTML as esc } from './household-model.js';
 import { localDate, startOfDay, nextDay, eventEnd, eventsOnDay, checklistProgress } from './calendar-model.js';
 import { renderHTML } from './dom.js';
 import { birthdaysInRange, birthdaysShown } from './birthdays-model.js';
+import { bathDaysInRange } from './bath-days.js';
 import { showView, showNotice } from './household.js';
 
 const $ = id => document.getElementById(id);
@@ -64,7 +65,7 @@ export function initCalendarExperience({ calendar, getEvents, getFilteredEvents,
     $('selectedDayTitle').textContent = selected.toLocaleDateString([], { month: 'short', day: 'numeric' });
     $('addToDay').setAttribute('aria-label', `Add an event on ${selected.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' })}`);
     const dayEvents = eventsOnDay(filtered, selected), dayAfter = new Date(selected); dayAfter.setDate(dayAfter.getDate() + 1);
-    const bdays = birthdaysShown() ? birthdaysInRange(selected, dayAfter).map(b => `<div class="day-birthday">${esc(b.title)}</div>`).join('') : '';
+    const bdays = bathDaysInRange(selected, dayAfter).map(b => `<div class="day-birthday day-bath">${esc(b.title)}</div>`).join('') + (birthdaysShown() ? birthdaysInRange(selected, dayAfter).map(b => `<div class="day-birthday">${esc(b.title)}</div>`).join('') : '');
     html('selectedDayEvents', bdays + (dayEvents.length ? dayEvents.map(event => {
       const owner = ownerOf(event), label = event.allDay ? 'All day' : localDate(event.start) < selected ? 'Ongoing' : time(event.start);
       return `<button type="button" class="day-event ${owner}${event.extendedProps?.withFrankie ? ' with-frankie' : ''}" ${eventAttrs(event)}><span class="day-event-time">${esc(label)}</span><span class="day-event-copy"><strong>${esc(event.title)}</strong><small>${esc(ownerNames[owner])}${event.extendedProps?.withFrankie ? ' + Frankie' : ''}${event.extendedProps?.isRepeatOccurrence ? ' · Repeats' : ''}${event.extendedProps?.icloud ? ' · iCloud' : ''}</small></span></button>`;

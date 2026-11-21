@@ -49,6 +49,15 @@ service cloud.firestore {
       allow create: if member() && valid() && request.resource.data.version == 0;
       allow update: if member() && valid() && request.resource.data.version == resource.data.version + 1;
     }
+    // Household settings (one document, "home"): Frankie's bath days, Sunday = 0.
+    match /householdSettings/{id} {
+      allow read: if member();
+      allow create, update: if member() && id == 'home'
+        && request.resource.data.keys().hasOnly(['bathDays','updatedAt'])
+        && request.resource.data.bathDays is list && request.resource.data.bathDays.size() <= 7
+        && request.resource.data.bathDays.hasOnly([0,1,2,3,4,5,6]);
+      allow delete: if false;
+    }
     // Nap prediction scoreboard: Huckleberry's SweetSpot per daytime wake-up.
     // Hubert's and Mia's guesses are recomputed from sleep history, never stored.
     // A newer capture may replace an older one (latest prediction while awake).

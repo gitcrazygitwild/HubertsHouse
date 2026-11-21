@@ -89,3 +89,11 @@
 .item-delete:hover, .item-delete:focus-visible { background:#f4e4dd; color:#a34b39; }
 @media (max-width: 760px) { .item-delete { width:44px; height:44px; } }
 @media (prefers-reduced-motion: reduce) { #groceryGroups .item-row { transition:none; } }
+/* Settings → Frankie's bath days; 🛁 markers on the calendars. */
+.bath-days { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+.bath-day { min-width:52px; min-height:44px; padding:8px 12px; border-radius:12px; border:1px solid var(--border); background:transparent; color:var(--muted); font:inherit; font-size:13px; font-weight:600; cursor:pointer; }
+.bath-day[aria-pressed="true"] { background:#dcebf5; border-color:#9cc3dd; color:#24506b; }
+:root[data-theme="dark"] .bath-day[aria-pressed="true"] { background:#1f3a4b; border-color:#3f6e8c; color:#cfe6f5; }
+.bath-summary { margin-top:10px; }
+.home-holiday.home-bath, .day-birthday.day-bath { background:#e3f0f8; color:#2d5d7a; }
+:root[data-theme="dark"] .home-holiday.home-bath, :root[data-theme="dark"] .day-birthday.day-bath { background:#1f3a4b; color:#cfe6f5; }

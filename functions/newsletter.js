@@ -10,6 +10,7 @@ import { purrfectWindow, miaForecast, huckleberryPrediction } from './shared/bab
 import { scorePredictions } from './shared/prediction-log.js';
 import { weatherFlags } from './shared/smart-home.js';
 import { frankieAwards } from './shared/awards.js';
+import { isBathDay, cleanBathDays, DEFAULT_BATH_DAYS, BATH_TITLE } from './shared/bath-days.js';
 import { freeEvenings } from './shared/free-nights.js';
 import { upcomingBirthdays } from './shared/birthdays-model.js';
 import { scoreMornings, scoreBottles, bottlePicks, CHALLENGES } from './shared/cat-challenges.js';
@@ -63,7 +64,11 @@ const startOfDay = date => { const d = new Date(date); d.setHours(0, 0, 0, 0); r
 const dateKey = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 const onDay = (events, day) => { const from = startOfDay(day), to = new Date(+from + DAY); return events.filter(e => e.start < to && e.end > from); };
 
-export function buildDigest({ name = '', now = new Date(), household = [], icloud = [], items = [], forecast = null, snapshot = null, predictions = [], recent = null, briefing = null, birthdays = [], prefs = {}, skipped = [] }) {
+function bathItem(day, saved) {
+  const list = saved == null ? DEFAULT_BATH_DAYS : cleanBathDays(saved) ?? DEFAULT_BATH_DAYS;
+  return isBathDay(day, list) ? [{ title:BATH_TITLE, start:new Date(day), end:new Date(+day + DAY), allDay:true, owner:'both', withFrankie:true }] : [];
+}
+export function buildDigest({ name = '', now = new Date(), household = [], icloud = [], items = [], forecast = null, snapshot = null, predictions = [], recent = null, briefing = null, birthdays = [], prefs = {}, skipped = [], bathDays = null }) {
   const today = startOfDay(now), horizon = new Date(+today + 15 * DAY);
   const events = eventsInRange(household, icloud, today, horizon), tomorrow = new Date(+today + DAY);
   const week = Array.from({ length:7 }, (_, i) => { const day = new Date(+today + i * DAY); return { day, count:onDay(events, day).length }; });
@@ -77,7 +82,8 @@ export function buildDigest({ name = '', now = new Date(), household = [], iclou
     name:String(name || '').trim(), now, content:dailyContent(now), afterDark:prefs.afterDark === true,
     weather:fc[0] ? { ...fc[0], tomorrow:fc[1] || null } : null, outlook:fc.slice(0, 7),
     rain:weatherFlags(events.map(e => ({ ...e, start:e.start.toISOString(), end:e.end.toISOString() })), fc, now),
-    today:onDay(events, today), tomorrow:onDay(events, tomorrow), week:{ plans:week.reduce((sum, d) => sum + d.count, 0), busiest:busiest?.count ? busiest : null },
+    // Bath nights ride along as all-day items at the top of today's and tomorrow's plans.
+    today:[...bathItem(today, bathDays), ...onDay(events, today)], tomorrow:[...bathItem(tomorrow, bathDays), ...onDay(events, tomorrow)], week:{ plans:week.reduce((sum, d) => sum + d.count, 0), busiest:busiest?.count ? busiest : null },
     freeNights:freeEvenings(events, now, 14, 3).map(n => n.date), birthdays:upcomingBirthdays(now, 7, birthdays), chores, groceries, baby:null, skipped:[...new Set(skipped)].filter(key => SKIPPED_LABELS[key]),
     world:briefing && (briefing.headlines?.length || briefing.markets?.length) ? { headlines:(briefing.headlines || []).slice(0, 6), goodNews:briefing.goodNews || null, markets:briefing.markets || [] } : null
   };

@@ -5,6 +5,7 @@ import { renderHTML } from './dom.js';
 import { parseQuickAdd, describeDraft, parseBabyLog, describeBabyLog } from './quick-add.js';
 import { weatherFlags, nextUp, untilText } from './smart-home.js';
 import { birthdaysInRange, birthdaysShown } from './birthdays-model.js';
+import { isBathDay } from './bath-days.js';
 import { freeEvenings, dateNightDraft } from './free-nights.js';
 import { skyState, skyArt } from './sky.js';
 
@@ -166,6 +167,8 @@ function renderNowNext() {
     if (today.length) parts.push(`<span class="nn-item nn-birthday"><span aria-hidden="true">🎂</span><button type="button" class="nn-link" data-nn-view="calendar"><strong>${esc(today.map(label).join(' · '))}</strong></button><span class="nn-muted">today</span></span>`);
     else if (tomorrow.length) parts.push(`<span class="nn-item nn-birthday"><span aria-hidden="true">🎂</span><button type="button" class="nn-link" data-nn-view="calendar">Tomorrow: <strong>${esc(tomorrow.map(label).join(' · '))}</strong></button></span>`);
   }
+  // Bath night, from the afternoon on (mornings are for the day's plans).
+  if (isBathDay(now) && now.getHours() >= 12 && now.getHours() < 22) parts.push('<span class="nn-item nn-bath"><span aria-hidden="true">🛁</span><button type="button" class="nn-link" data-nn-view="settings"><strong>Bath night</strong></button><span class="nn-muted">tonight</span></span>');
   if (current) parts.push(`<span class="nn-item"><span class="nn-live" aria-hidden="true"></span>${eventLink(current.event, current.from, `Now: <strong>${esc(current.event.title)}</strong>`)} <span class="nn-muted">${current.minutesLeft}m left</span></span>`);
   if (next) parts.push(`<span class="nn-item"><span aria-hidden="true">◷</span>${eventLink(next.event, next.from, `Next: <strong>${esc(next.event.title)}</strong>`)} <span class="nn-muted">${esc(next.minutesUntil < 1440 ? clock(next.from) : `${dayName(next.from)} ${clock(next.from)}`)} · ${esc(untilText(next.minutesUntil))}</span></span>`);
   if (baby) {

@@ -217,7 +217,7 @@ async function newsletterFor(uid, shared, progress = () => {}) {
   const bdays = await withinTime(birthdaysFor(uid).catch(() => null), 15000);
   progress('writing the email');
   const skipped = [...shared.skipped, ...(icloud.late ? ['icloud'] : [])];
-  const digest = buildDigest({ name:prefs.name, now, household:shared.household, icloud:icloud.events, items:shared.items, forecast:shared.forecast, snapshot:shared.snapshot, predictions:shared.predictions, recent:shared.recent, briefing:shared.briefing, birthdays:bdays.value?.birthdays || [], prefs, skipped });
+  const digest = buildDigest({ name:prefs.name, now, household:shared.household, icloud:icloud.events, items:shared.items, forecast:shared.forecast, snapshot:shared.snapshot, predictions:shared.predictions, recent:shared.recent, briefing:shared.briefing, birthdays:bdays.value?.birthdays || [], prefs, skipped, bathDays:shared.bathDays });
   return { prefs, email:composeEmail(digest), skipped };
 }
 // Diapers aren't in the snapshot's history; the recent-logs list has them.
@@ -238,9 +238,10 @@ async function sharedNewsletterData(uids, progress = () => {}) {
     const recent = live.fresh ? await babyRecent(uids) : { entries:null }; // no fresh connection, no second wait
     return { ...live, recent };
   })();
-  const [events, items, forecast, babyData, predictions, world] = await Promise.all([
+  const [events, items, forecast, babyData, predictions, world, settings] = await Promise.all([
     db.collection('events').get(), db.collection('householdItems').get(), timed('forecast', withinTime(forecastNow(), BUDGET.forecast)), timed('baby', baby),
-    db.collection('babyPredictions').orderBy('lastWake', 'desc').limit(400).get(), timed('briefing', withinTime(briefingService(), BUDGET.briefing))
+    db.collection('babyPredictions').orderBy('lastWake', 'desc').limit(400).get(), timed('briefing', withinTime(briefingService(), BUDGET.briefing)),
+    db.doc('householdSettings/home').get().catch(() => null)
   ]);
   const skipped = [];
   if (forecast.late) skipped.push('forecast');
@@ -248,7 +249,7 @@ async function sharedNewsletterData(uids, progress = () => {}) {
   if (!babyData.fresh && (babyData.late || babyData.snapshot)) skipped.push('baby'); // slow, or answered with an error while a saved copy exists
   if (babyData.fresh && babyData.recent.late) skipped.push('diapers');
   info('Newsletter data gathered', { ms:took, skipped, babyFallback:!babyData.fresh && !!babyData.snapshot });
-  return { household:events.docs.map(d => d.data()), items:items.docs.map(d => d.data()), forecast:forecast.value, snapshot:babyData.snapshot, predictions:predictions.docs.map(d => ({ id:d.id, ...d.data() })), recent:babyData.recent.entries, briefing:world.value, skipped };
+  return { household:events.docs.map(d => d.data()), items:items.docs.map(d => d.data()), forecast:forecast.value, snapshot:babyData.snapshot, predictions:predictions.docs.map(d => ({ id:d.id, ...d.data() })), recent:babyData.recent.entries, briefing:world.value, bathDays:settings?.exists ? settings.data().bathDays ?? null : null, skipped };
 }
 async function activeMembers() {
   return (await db.collection('households/home/members').where('active', '==', true).get()).docs.map(d => d.id);
