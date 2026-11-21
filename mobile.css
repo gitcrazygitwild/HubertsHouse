@@ -77,3 +77,12 @@ html, body { overflow-x: clip; max-width: 100%; }
   /* Safari's date and time pickers are wider than Chrome's: one per row on phones. */
   .baby-form-row, .log-time-row, .item-dialog .row { grid-template-columns: 1fr !important; }
 }
+/* Pull to refresh (installed app only; pull-refresh.js). */
+.pull-refresh { position:fixed; top:calc(var(--safe-top, 0px) + 8px); left:50%; z-index:25000; transform:translate(-50%, -48px); opacity:0; display:flex; align-items:center; gap:8px; padding:8px 14px; border-radius:999px; background:var(--card, #fffdf7); border:1px solid var(--border, #dcdfd2); box-shadow:0 6px 20px #26341d1f; font-size:12px; font-weight:600; color:var(--muted, #6f7766); pointer-events:none; }
+.pull-refresh.settling { transition:transform .2s ease, opacity .2s ease; }
+.pull-refresh-icon { display:inline-block; transition:transform .2s ease; font-size:14px; line-height:1; }
+.pull-refresh.ready { color:var(--accent, #4f6140); }
+.pull-refresh.ready .pull-refresh-icon { transform:rotate(180deg); }
+.pull-refresh.refreshing .pull-refresh-icon { animation:pull-spin .8s linear infinite; }
+@keyframes pull-spin { to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .pull-refresh, .pull-refresh-icon { transition:none !important; animation:none !important; } }
