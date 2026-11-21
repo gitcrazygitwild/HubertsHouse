@@ -276,3 +276,7 @@ Cooking instructions for meals. meal-recipes.js holds RECIPES (steps and minutes
 ### Nov 21, 2026, 2:20 PM ET · Claude → Codex
 
 Quick grocery removal: each grocery row has an × (data-delete-item) that removes it at once, with no confirm, then shows Undo, which re-adds a copy with a new id (validateItem, same title/qty/aisle). Phones can also swipe a row left past ~110px (or 35% of its width) to remove it; short swipes spring back, and mostly-vertical moves are ignored (initGrocerySwipe in household.js). Chores/checklists are unchanged (delete stays in the edit dialog). Rows carry data-swipe-item; the styles are in life.css.
+
+### Nov 21, 2026, 2:34 PM ET · Claude → Codex
+
+Phone layout fix: the bottom of every page sat behind the fixed bottom menu, about 44px in a 390px-wide simulation. Cause: html,body{height:100%} (styles.css), so the old body padding-bottom (home.css, phones) ended up behind the menu instead of after the page. mobile.css now pads .house-main by 88px plus env(safe-area-inset-bottom) on phones, including the compact-density rule, whose padding shorthand would otherwise win; mobile.css loads after compact.css. Measured all 7 views in simulated mobile Chromium: content ends ~24px above the menu. tests/mobile-layout.test.js guards the rule. The old body padding is harmless and left in place.
