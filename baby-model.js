@@ -18,6 +18,11 @@ function staleReason(lastEnd, timezone, who) {
   const { hour, minute } = localParts(lastEnd, timezone), clock = `${hour % 12 || 12}:${String(minute).padStart(2, '0')} ${hour < 12 ? 'AM' : 'PM'}`;
   return `Nothing logged since she woke at ${clock}, over 12 hours ago. Log today’s naps and ${who} will forecast again.`;
 }
+// A short sleep that ended in the evening (she fell asleep after her usual cutoff, then
+// woke up) is a late catnap for forecasting, not the night: the next thing is bedtime.
+// Only the live forecast uses this; history keeps its usual nap/night labels.
+// Up at 11 PM or later after her real bedtime is a night waking, so the cats stay quiet.
+export const isEveningCatnap = (sleep, timezone) => { if (!sleep || sleep.end - sleep.start >= 3 * 3600000) return false; const hour = localParts(sleep.end, timezone).hour; return hour >= 16 && hour < 23; };
 function quantile(values, q) {
   const sorted = [...values].sort((a,b) => a - b), position = (sorted.length - 1) * q;
   const low = Math.floor(position), weight = position - low;
@@ -64,7 +69,7 @@ export function purrfectWindow({ sleeps = [], timer = null, timezone = 'America/
   const last = merged.at(-1), lastWake = last?.end;
   // They keep guessing for up to 12 hours after her last logged wake-up (backfill the naps later).
   if (!lastWake || +now - lastWake > 12 * 3600000) return empty(staleReason(lastWake, timezone, 'Hubert'));
-  const current = localParts(+now, timezone), wake = localParts(lastWake, timezone), lastNight = isNight(last);
+  const current = localParts(+now, timezone), wake = localParts(lastWake, timezone), lastNight = isNight(last) && !isEveningCatnap(last, timezone);
   if ((current.hour >= 1 && current.hour < 5) || wake.hour < 5 || (lastNight && wake.hour >= 12)) return empty('Awake in the night. Hubert forecasts her next wake-up once she’s back asleep (start the sleep timer).');
   const samples = [];
   for (let index = 1; index < merged.length; index++) {
@@ -78,7 +83,8 @@ export function purrfectWindow({ sleeps = [], timer = null, timezone = 'America/
   }
   // What usually followed a wake-up within 90 minutes of this time of day?
   const wakeClock = clockOf(lastWake, timezone), near = samples.filter(sample => Math.abs(sample.clock - wakeClock) <= 90);
-  const beds = near.filter(sample => sample.bed).length, bedtime = !lastNight && beds >= 2 && beds > near.length / 2;
+  const catnap = isNight(last) && isEveningCatnap(last, timezone), beds = near.filter(sample => sample.bed).length; // only a sleep filed as night
+  const bedtime = !lastNight && ((beds >= 2 && beds > near.length / 2) || (catnap && samples.filter(sample => sample.bed).length >= 3));
   const pool = samples.filter(sample => sample.bed === bedtime);
   let selected = pool.filter(sample => Math.abs(sample.hour - wake.hour) <= 3), matchedTime = true;
   if (selected.length < 3 || nightsOf(selected) < 2) { selected = pool; matchedTime = false; }
@@ -279,7 +285,7 @@ export function miaForecast({ sleeps = [], bottles = [], birthdate = null, timer
   const current = localParts(+now, timezone);
   if (current.hour >= 1 && current.hour < 5) return empty('Overnight is outside Mia’s forecast.');
   const {samples, bedtimes, byDay, today, line} = indexedWakeWindows(sleeps, timezone, now, lookback, bottles);
-  const todays = byDay.get(today) || {naps:[]}, lastWasNap = isNap(last, timezone, line), lastEnd = localParts(last.end, timezone).hour;
+  const todays = byDay.get(today) || {naps:[]}, lastWasNap = isNap(last, timezone, line) || isEveningCatnap(last, timezone), lastEnd = localParts(last.end, timezone).hour;
   // After night sleep, only a morning wake-up (4 AM–noon) starts a new day; anything else is a night waking.
   if (!lastWasNap && (lastEnd < 4 || lastEnd >= 12)) return empty('Overnight is outside Mia’s forecast. A sleep that starts after Frankie’s usual evening line counts as night sleep.');
   const napsToday = todays.naps.filter(nap => nap.end <= last.end).length;
