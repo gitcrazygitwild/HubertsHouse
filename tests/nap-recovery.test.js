@@ -71,7 +71,8 @@ test('a recovered SweetSpot must be new and land after that wake-up', () => {
 });
 
 test('the scoreboard lists recent naps missing a SweetSpot', () => {
-  const day = Date.now() - 86400000, iso = ms => new Date(ms).toISOString(), M = 60000;
+  // Midnight UTC yesterday, so the naps are daytime whatever time the test runs.
+  const day = Math.floor(Date.now() / 86400000) * 86400000 - 86400000, iso = ms => new Date(ms).toISOString(), M = 60000;
   const sleeps = [{ start:iso(day + 7 * H - 600 * M), end:iso(day + 7 * H) }, { start:iso(day + 9 * H), end:iso(day + 10 * H) }, { start:iso(day + 12 * H), end:iso(day + 13 * H) }, { start:iso(day + 15 * H), end:iso(day + 15.5 * H) }];
   const first = sweetspotEntry({ lastWake:sleeps[1].end, childId:'c', sweetspot:{ available:true, time:iso(day + 12 * H) }, timezone:'UTC', sleeps, now:new Date(day + 10 * H + 5 * M) });
   const score = scorePredictions([first], sleeps, null, 'UTC');

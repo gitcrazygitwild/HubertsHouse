@@ -43,3 +43,31 @@ export function demoEvents() {
     { id: 'sample13', title: 'Date night', start: date(13,18), end: date(13,21), owner: 'both', type: 'general' }
   ].map(x => ({ allDay: false, checklist: [], notes: 'Sample event — preview only.', repeat: 'none', ...x }));
 }
+// Sample favorites and one planned dinner for the Meals tab preview.
+export function demoMealStore() {
+  let notify;
+  const day = offset => { const d = new Date(); d.setDate(d.getDate() + offset); return dateKey(d); };
+  let data = [
+    { id:'m1', name:'Karena’s turkey chili', ingredients:['ground turkey', 'beans', 'diced tomatoes', 'onions', 'shredded cheese', 'sour cream'], favorite:true, plannedFor:day(0), lastMade:day(-16) },
+    { id:'m2', name:'Sheet-pan salmon & broccoli', ingredients:['salmon', 'frozen broccoli', 'lemons', 'olive oil', 'rice'], favorite:true, plannedFor:'', lastMade:day(-5) },
+    { id:'m3', name:'Taco Tuesday', ingredients:['ground beef', 'taco seasoning', 'tortillas', 'shredded cheese', 'salsa', 'sour cream'], favorite:true, plannedFor:'', lastMade:day(-12) },
+    { id:'m4', name:'hanry’s famous pancakes', ingredients:['pancake mix', 'eggs', 'bacon', 'berries'], favorite:true, plannedFor:'', lastMade:'' }
+  ].map(x => ({ version:0, ...x }));
+  const emit = () => notify?.(structuredClone(data));
+  const check = item => { const current = data.find(x => x.id === item.id); if (!current || current.version !== item.version) throw new Error('This dinner changed. Try again.'); return current; };
+  return {
+    subscribe(cb, status) { notify = cb; emit(); status?.(''); },
+    async add(item) { const result = { ...item, id:crypto.randomUUID(), version:0 }; data.push(result); emit(); return result; },
+    async update(item, patch) { const current = check(item); Object.assign(current, patch, { version:current.version + 1 }); emit(); return structuredClone(current); },
+    async remove(item) { check(item); data = data.filter(x => x.id !== item.id); emit(); }
+  };
+}
+// A slice of a real Publix weekly ad (BOGOs only), for the preview.
+export const demoBogos = () => {
+  const ends = new Date(Date.now() + 4 * 86400000).toISOString();
+  return [['Smithfield Bacon', 'Meat', '$7.49'], ['Tyson Restaurant Style Chicken', 'Meat', '$9.99'], ['Hatfield Ham Steak', 'Meat', '$5.29'], ['Armour Meatballs', 'Meat', '$6.99'],
+    ['Bertolli Sauce', 'Pantry', '$4.79'], ['Swanson Broth or Cooking Stock', 'Pantry', '$3.99'], ['Barilla Protein+ Pasta', 'Pantry', '$2.89'], ['Sargento Shredded Cheese', 'Dairy', '$4.99'],
+    ['Daisy Sour Cream', 'Dairy', '$2.99'], ['Land O Lakes Butter', 'Dairy', '$6.49'], ['Birds Eye Vegetables', 'Frozen', '$7.79'], ['Toufayan Flatbread & Wraps', 'Deli', '$4.99'],
+    ['Stonefire Naan Rounds', 'Deli', '$4.49'], ['Sabra Hummus', 'Deli', '$4.29'], ['Red Raspberries', 'Produce', '$5.99'], ['Fresh Attitude Salads', 'Produce', '$4.99'], ['Cheez-It Family Size Baked Snack Crackers', 'Snacks', '$6.29']]
+    .map(([title, category, save]) => ({ title, category, save, detail:'', ends, image:null }));
+};

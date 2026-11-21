@@ -32,6 +32,21 @@ service cloud.firestore {
       allow create: if member() && valid() && request.resource.data.version == 0;
       allow update: if member() && valid() && request.resource.data.version == resource.data.version + 1;
     }
+    // Meals: saved favorites and this week's dinner plan (Life → Meals).
+    match /householdMeals/{id} {
+      function valid() {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['name','ingredients','favorite','plannedFor','lastMade','version','createdAt','updatedAt'])
+          && d.name is string && d.name.size() > 0 && d.name.size() <= 80
+          && d.ingredients is list && d.ingredients.size() <= 25
+          && d.favorite is bool && d.version is int
+          && d.plannedFor is string && d.plannedFor.size() <= 10
+          && d.lastMade is string && d.lastMade.size() <= 10;
+      }
+      allow read, delete: if member();
+      allow create: if member() && valid() && request.resource.data.version == 0;
+      allow update: if member() && valid() && request.resource.data.version == resource.data.version + 1;
+    }
     // Nap prediction scoreboard: Huckleberry's SweetSpot per daytime wake-up.
     // Hubert's and Mia's guesses are recomputed from sleep history, never stored.
     // A newer capture may replace an older one (latest prediction while awake).

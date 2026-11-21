@@ -39,6 +39,7 @@ Two AI assistants work on this repository: **Codex** and **Claude**. They never 
 | App shell, events, Firebase wiring | `app.js`, `index.html`, `household.js` |
 | Baby tracking, Huckleberry UI | `baby.js`, `baby-model.js` (Purrfect Window, Mia’s Catnap Forecast), `frankie.js` (Frankie page), `baby-history.js`, `awards.js`, `prediction-log.js` (scoreboard) |
 | Smart features | `upgrades.js` (quick add, ⌘K, Now & Next, sky, free nights), `quick-add.js`, `smart-home.js`, `free-nights.js`, `sky.js` |
+| Life page (to-dos, groceries, meals) | `household.js` (tabs; `#tasks`/`#groceries`/`#meals` open the right tab), `meals.js`, `meals-view.js`, `meal-ideas.js` (ideas library, BOGO matching), `functions/publix.js` (unofficial Publix weekly ad, store 1588 Carytown by default) |
 | Daily content | `daily-content.js`, `jokes.js` |
 | Server (Firebase Functions) | `functions/index.js`, `functions/huckleberry-*.js`, `functions/caldav.js`, `functions/newsletter.js` |
 | Setup and deploys | `docs/SETUP.md`, `scripts/setup-github-deploy.sh`, `.github/workflows/` |
