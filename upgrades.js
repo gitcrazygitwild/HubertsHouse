@@ -35,28 +35,63 @@ function initQuickAdd() {
     if (!draft) { update(); input.focus(); return; }
     ctx.openDraft(draftPayload(draft)); input.value = ''; update();
   });
-  initVoice(form, input, update);
+  initVoice(form, input, update, undefined, { notice:ctx.notice || (() => {}) });
 }
 // Speak instead of typing (where the browser offers speech recognition, e.g. Safari
 // and Chrome). The words land in the box with the usual preview; nothing is saved
-// until Add is pressed.
-export function initVoice(form, input, update, Recognition = globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition) {
-  if (!Recognition || form.querySelector('.smart-mic')) return null;
+// until Add is pressed. iPhone home-screen apps list speech recognition but Apple
+// blocks it there, so on failure (and up front in an installed iPhone app) the mic
+// switches to "keyboard" mode: it opens the keyboard, whose own 🎤 dictation works.
+const DICTATION_KEY = 'hh_dictation';
+export const dictationMode = ({ win = globalThis, storage = globalThis.localStorage } = {}) => {
+  try { if (storage?.getItem(DICTATION_KEY) === 'keyboard') return 'keyboard'; } catch {}
+  const nav = win.navigator || {}, ios = /iPhone|iPad|iPod/.test(nav.userAgent || '') || (nav.platform === 'MacIntel' && nav.maxTouchPoints > 1);
+  const standalone = nav.standalone === true || !!win.matchMedia?.('(display-mode: standalone)').matches;
+  return ios && standalone ? 'keyboard' : 'speech';
+};
+// Errors that mean "speech recognition can't run here", as opposed to "didn't hear anything".
+const BLOCKED = new Set(['not-allowed', 'service-not-allowed', 'audio-capture', 'network', 'language-not-supported']);
+export function initVoice(form, input, update, Recognition = globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition, { notice = () => {}, win = globalThis, storage = globalThis.localStorage, now = () => Date.now() } = {}) {
+  if (form.querySelector('.smart-mic')) return null;
+  let mode = Recognition ? dictationMode({ win, storage }) : 'none';
+  // Without speech recognition there's nothing a button adds on desktops; touch keyboards have their own mic.
+  if (mode === 'none') return null;
   const mic = document.createElement('button');
   mic.type = 'button'; mic.className = 'btn smart-mic'; mic.textContent = '🎤';
-  mic.setAttribute('aria-label', 'Say a plan or a Frankie log'); mic.title = 'Speak instead of typing';
+  const label = () => { mic.setAttribute('aria-label', mode === 'keyboard' ? 'Dictate with the keyboard' : 'Say a plan or a Frankie log'); mic.title = mode === 'keyboard' ? 'Opens the keyboard: tap its 🎤 to dictate' : 'Speak instead of typing'; };
+  label();
   form.querySelector('[type="submit"]').before(mic);
+  const toKeyboard = (why) => {
+    mode = 'keyboard'; label();
+    try { storage?.setItem(DICTATION_KEY, 'keyboard'); } catch {}
+    notice(`${why} Tap the box, then the 🎤 on your keyboard to dictate. The mic button will open the keyboard from now on.`);
+  };
   let listening = null;
   mic.addEventListener('click', () => {
+    if (mode === 'keyboard') {
+      input.focus(); // inside the tap, so the phone opens its keyboard
+      notice('Tap the 🎤 on your keyboard and say it, e.g. “Frankie bottle 4 ounces at 3”.');
+      return;
+    }
     if (listening) { listening.stop(); return; }
     input.dataset.placeholder ||= input.placeholder; // before it changes to “Listening…”
-    const rec = new Recognition(); listening = rec;
+    const rec = new Recognition(), started = now(); listening = rec;
+    let heard = false, failed = null;
     rec.lang = 'en-US'; rec.interimResults = true; rec.maxAlternatives = 1;
     mic.classList.add('is-listening'); mic.setAttribute('aria-pressed', 'true'); input.placeholder = 'Listening…';
-    rec.onresult = event => { input.value = [...event.results].map(result => result[0].transcript).join(' ').trim(); update(); };
-    rec.onerror = () => {};
-    rec.onend = () => { listening = null; mic.classList.remove('is-listening'); mic.setAttribute('aria-pressed', 'false'); input.placeholder = input.dataset.placeholder || ''; input.focus(); };
-    try { rec.start(); } catch { rec.onend(); }
+    rec.onresult = event => { heard = true; input.value = [...event.results].map(result => result[0].transcript).join(' ').trim(); update(); };
+    rec.onerror = event => { failed = event?.error || 'unknown'; };
+    rec.onend = () => {
+      listening = null; mic.classList.remove('is-listening'); mic.setAttribute('aria-pressed', 'false'); input.placeholder = input.dataset.placeholder || '';
+      if (heard) { input.focus(); return; }
+      if (BLOCKED.has(failed)) return toKeyboard(failed === 'not-allowed' ? 'The microphone isn’t allowed here.' : 'Voice input isn’t available in this app.');
+      if (failed === 'no-speech') return notice('Didn’t catch that. Tap 🎤 and try again.');
+      if (failed === 'aborted') return;
+      // Ended instantly with nothing heard and no reason given: blocked without saying so.
+      if (now() - started < 1000) return toKeyboard('Voice input isn’t available in this app.');
+      notice('Didn’t catch that. Tap 🎤 and try again.');
+    };
+    try { rec.start(); } catch { failed = 'service-not-allowed'; rec.onend(); }
   });
   return mic;
 }
