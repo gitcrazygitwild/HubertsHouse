@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { parseBogos, fetchWeeklyBogos, findStores, createPublix, plain, DEFAULT_STORE } from '../functions/publix.js';
-import { dealFor, onList, annotate, suggestMeals, weekPlan, groceryItemsFor, parseIngredients, validateMeal, IDEAS } from '../meal-ideas.js';
+import { dealFor, onList, annotate, suggestMeals, weekPlan, groceryItemsFor, parseIngredients, validateMeal, IDEAS, recipeFor, parseSteps } from '../meal-ideas.js';
+import { RECIPES } from '../meal-recipes.js';
 
 // A trimmed copy of a real Publix weekly ad (store 1588, week of Nov 18, 2026).
 const ad = JSON.parse(await readFile(new URL('./fixtures-publix-weekly-ad.json', import.meta.url), 'utf8'));
@@ -107,7 +108,21 @@ test('one tap adds only what’s missing, and the week starts tonight', () => {
 
 test('saved dinners are tidy and safe', () => {
   assert.deepEqual(parseIngredients('ground turkey, Beans\nbeans;  shredded   cheese\n\n'), ['ground turkey', 'Beans', 'shredded cheese']);
-  assert.deepEqual(validateMeal({ name:'  Chili  ', ingredients:'a, b', favorite:1, plannedFor:'2026-11-22', lastMade:'yesterday' }), { name:'Chili', ingredients:['a', 'b'], favorite:true, plannedFor:'2026-11-22', lastMade:'' });
+  assert.deepEqual(validateMeal({ name:'  Chili  ', ingredients:'a, b', favorite:1, plannedFor:'2026-11-22', lastMade:'yesterday' }), { name:'Chili', ingredients:['a', 'b'], favorite:true, plannedFor:'2026-11-22', lastMade:'', steps:[], minutes:0 });
   assert.throws(() => validateMeal({ name:'' }), /Name the dinner/);
   assert.equal(parseIngredients(Array.from({ length:40 }, (_, i) => `item ${i}`).join(',')).length, 25);
+});
+
+test('every idea comes with cooking steps, and saved dinners can have their own', () => {
+  assert.deepEqual(Object.keys(RECIPES).sort(), IDEAS.map(i => i.name).sort(), 'one recipe per idea, names matching');
+  for (const idea of IDEAS) { assert.ok(idea.steps.length >= 3 && idea.steps.length <= 8, idea.name); assert.ok(idea.minutes >= 10 && idea.minutes <= 120, idea.name); assert.ok(idea.steps.every(s => s.length <= 300 && /[.!]$/.test(s)), idea.name); }
+  // Poultry recipes say how to tell it's done.
+  for (const name of ['Chicken parmesan', 'Chicken tacos', 'Lemon roast chicken & potatoes']) assert.match(RECIPES[name].steps.join(' '), /165°F|175°F/, name);
+  // A saved favorite with its own steps uses them; a saved idea without steps falls back to the library.
+  assert.deepEqual(recipeFor({ name:'Chicken tacos', steps:['Our way.'], minutes:20 }), { minutes:20, steps:['Our way.'] });
+  assert.equal(recipeFor({ name:'chicken tacos' }).steps.length, RECIPES['Chicken tacos'].steps.length);
+  assert.deepEqual(recipeFor({ name:'Grandma’s stew' }), { minutes:0, steps:[] });
+  assert.deepEqual(parseSteps('1. Boil water\n2) Add pasta\n\n- Drain   it\n• Serve'), ['Boil water', 'Add pasta', 'Drain it', 'Serve']);
+  assert.equal(parseSteps(Array.from({ length:30 }, (_, i) => `step ${i}`).join('\n')).length, 20);
+  assert.deepEqual([validateMeal({ name:'x', minutes:'45' }).minutes, validateMeal({ name:'x', minutes:'9000' }).minutes, validateMeal({ name:'x', minutes:'soon' }).minutes], [45, 0, 0]);
 });
