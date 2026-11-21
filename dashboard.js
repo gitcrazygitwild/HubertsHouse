@@ -81,8 +81,12 @@ export function initDashboard({ onAppearanceChange = () => {} } = {}) {
     speak.hidden = false;
     speak.addEventListener('click', () => {
       const word = $('dailyWord').textContent.trim(); if (!word) return;
-      synth.cancel();
-      const line = new SpeechSynthesisUtterance(word); line.lang = 'en-US'; line.rate = 0.85;
+      // Only cancel something already playing: on iPhone, cancel() right before speak() can swallow the speech.
+      if (synth.speaking || synth.pending) synth.cancel();
+      synth.resume?.(); // Chrome can be left paused
+      const line = new SpeechSynthesisUtterance(word); line.lang = 'en-US'; line.rate = 0.85; line.volume = 1;
+      const voice = synth.getVoices?.().find(v => /^en[-_]US/i.test(v.lang) && v.localService) || synth.getVoices?.().find(v => /^en/i.test(v.lang));
+      if (voice) line.voice = voice;
       speak.classList.add('is-speaking'); line.onend = line.onerror = () => speak.classList.remove('is-speaking');
       synth.speak(line);
     });

@@ -59,17 +59,16 @@ test('the mic fills the quick-add box and never saves on its own', async () => {
   delete globalThis.document; dom.window.close();
 });
 
-test('when voice input is blocked (iPhone home-screen app), the mic opens the keyboard’s dictation instead', async () => {
+test('voice input: the installed iPhone app uses keyboard dictation; a browser tab explains failures and never locks the mic out', async () => {
   const dom = new JSDOM('<form><input id="q" placeholder="Add a plan"><button type="submit">Add</button></form>'), w = dom.window;
   globalThis.document = w.document;
-  const memory = () => { const m = new Map(); return { getItem:k => m.get(k) ?? null, setItem:(k, v) => m.set(k, String(v)), m }; };
+  const memory = (init = {}) => { const m = new Map(Object.entries(init)); return { getItem:k => m.get(k) ?? null, setItem:(k, v) => m.set(k, String(v)), removeItem:k => m.delete(k), m }; };
   const iphone = (standalone) => ({ navigator:{ userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X)', standalone }, matchMedia:() => ({ matches:standalone }) });
+  const mac = { navigator:{ userAgent:'Mozilla/5.0 (Macintosh) Chrome/131', platform:'MacIntel', maxTouchPoints:0 } };
   const fresh = () => { w.document.body.innerHTML = '<form><input id="q" placeholder="Add a plan"><button type="submit">Add</button></form>'; return [w.document.querySelector('form'), w.document.getElementById('q')]; };
-  // Which mode, where.
-  assert.equal(dictationMode({ win:iphone(true), storage:memory() }), 'keyboard', 'installed iPhone app');
-  assert.equal(dictationMode({ win:iphone(false), storage:memory() }), 'speech', 'Safari tab');
-  assert.equal(dictationMode({ win:{ navigator:{ userAgent:'Chrome' } }, storage:{ getItem:() => 'keyboard' } }), 'keyboard', 'remembered after a failure');
-  assert.equal(dictationMode({ win:{ navigator:{} }, storage:{ getItem:() => { throw new Error('blocked'); } } }), 'speech');
+  assert.equal(dictationMode({ win:iphone(true) }), 'keyboard', 'installed iPhone app');
+  assert.equal(dictationMode({ win:iphone(false) }), 'speech', 'Safari tab');
+  assert.equal(dictationMode({ win:mac }), 'speech');
   // Installed iPhone app: no recognition attempt; the tap focuses the box and explains.
   let started = 0; const notes = [];
   class Never { start() { started++; } stop() {} }
@@ -77,28 +76,32 @@ test('when voice input is blocked (iPhone home-screen app), the mic opens the ke
   const mic = initVoice(form, input, () => {}, Never, { notice:m => notes.push(m), win:iphone(true), storage:memory() });
   assert.equal(mic.getAttribute('aria-label'), 'Dictate with the keyboard');
   mic.click(); assert.equal(started, 0); assert.equal(w.document.activeElement, input); assert.match(notes.at(-1), /🎤 on your keyboard/);
-  // A blocked error switches to keyboard mode, says why, and remembers it.
-  class Blocked { start() { this.onerror({ error:'service-not-allowed' }); this.onend(); } stop() {} }
-  [form, input] = fresh(); let store = memory();
+  // Safari tab, blocked: says why (Siri, site microphone setting) and keeps trying next time.
+  let tries = 0;
+  class Blocked { start() { tries++; this.onerror({ error:'service-not-allowed' }); this.onend(); } stop() {} }
+  [form, input] = fresh(); const store = memory({ hh_dictation:'keyboard' }); // locked by the old version
   const mic2 = initVoice(form, input, () => {}, Blocked, { notice:m => notes.push(m), win:iphone(false), storage:store });
-  mic2.click();
-  assert.match(notes.at(-1), /isn’t available in this app.*keyboard to dictate/); assert.equal(store.m.get('hh_dictation'), 'keyboard');
-  assert.equal(mic2.getAttribute('aria-label'), 'Dictate with the keyboard'); assert.ok(!mic2.classList.contains('is-listening'));
-  // Ending instantly with nothing heard and no error is treated the same way.
+  assert.equal(store.m.has('hh_dictation'), false, 'the old lock is cleared');
+  mic2.click(); assert.match(notes.at(-1), /Siri turned on.*Website Settings → Microphone → Allow.*keyboard/);
+  mic2.click(); assert.equal(tries, 2, 'the next tap tries again'); assert.equal(mic2.getAttribute('aria-label'), 'Say a plan or a Frankie log');
+  // A desktop browser gets desktop advice.
+  [form, input] = fresh();
+  initVoice(form, input, () => {}, Blocked, { notice:m => notes.push(m), win:mac, storage:memory() }).click();
+  assert.match(notes.at(-1), /site-settings icon/); assert.doesNotMatch(notes.at(-1), /Siri/);
+  // Ending instantly with no reason: "stopped before it could listen"; just not hearing anything: "Didn't catch that".
   let clock = 0; class Silent { start() { clock += 200; this.onend(); } stop() {} }
-  [form, input] = fresh(); store = memory();
-  initVoice(form, input, () => {}, Silent, { notice:m => notes.push(m), win:iphone(false), storage:store, now:() => clock }).click();
-  assert.equal(store.m.get('hh_dictation'), 'keyboard');
-  // Just not hearing anything is not a failure.
+  [form, input] = fresh();
+  initVoice(form, input, () => {}, Silent, { notice:m => notes.push(m), win:iphone(false), storage:memory(), now:() => clock }).click();
+  assert.match(notes.at(-1), /stopped before it could listen/);
   class Quiet { start() { this.onerror({ error:'no-speech' }); this.onend(); } stop() {} }
-  [form, input] = fresh(); store = memory();
-  const mic3 = initVoice(form, input, () => {}, Quiet, { notice:m => notes.push(m), win:iphone(false), storage:store });
-  mic3.click(); assert.match(notes.at(-1), /Didn’t catch that/); assert.equal(store.m.get('hh_dictation'), undefined); assert.equal(mic3.getAttribute('aria-label'), 'Say a plan or a Frankie log');
-  // start() throwing (some browsers) also falls back.
-  class Throws { start() { throw new Error('nope'); } stop() {} }
-  [form, input] = fresh(); store = memory();
-  initVoice(form, input, () => {}, Throws, { notice:m => notes.push(m), win:iphone(false), storage:store }).click();
-  assert.equal(store.m.get('hh_dictation'), 'keyboard');
+  [form, input] = fresh();
+  initVoice(form, input, () => {}, Quiet, { notice:m => notes.push(m), win:iphone(false), storage:memory() }).click();
+  assert.match(notes.at(-1), /Didn’t catch that/);
+  // Hearing words fills the box.
+  class Hears { start() { this.onresult({ results:[[{ transcript:'frankie bottle 4 oz' }]] }); this.onend(); } stop() {} }
+  [form, input] = fresh(); let previews = 0;
+  initVoice(form, input, () => previews++, Hears, { notice:m => notes.push(m), win:iphone(false), storage:memory() }).click();
+  assert.equal(input.value, 'frankie bottle 4 oz'); assert.equal(previews, 1);
   delete globalThis.document; dom.window.close();
 });
 
