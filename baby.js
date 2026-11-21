@@ -191,6 +191,7 @@ function demoWrite(entry) {
   if (entry.kind === 'sleep-log') { snapshot.sleeps.push({start:entry.start,end:entry.end}); snapshot.sleeps.sort((a,b) => Date.parse(a.start) - Date.parse(b.start)); }
   if (entry.kind === 'bottle') { snapshot.lastBottle = {time:entry.start,amount:entry.amount,units:entry.units,type:entry.bottleType}; snapshot.bottles.push({start:entry.start,amount:entry.amount,units:entry.units,type:entry.bottleType}); snapshot.bottles.sort((a,b) => Date.parse(a.start) - Date.parse(b.start)); }
   if (entry.kind === 'diaper') snapshot.lastDiaper = {time:entry.start,mode:entry.mode};
+  if (entry.kind === 'pump') { (snapshot.pumps ||= []).push({start:entry.start,left:entry.left,right:entry.right,total:entry.left + entry.right,units:entry.units,...(entry.minutes ? {minutes:entry.minutes} : {})}); snapshot.pumps.sort((a,b) => Date.parse(a.start) - Date.parse(b.start)); }
   snapshot.checkedAt = new Date().toISOString();
 }
 async function write(entry, childId, connectionVersion = connection.connectionVersion) {
@@ -211,7 +212,22 @@ async function toggleSleep(at = null, want = null) {
 export function logBabyFromText(log) {
   if (!snapshot) { showView('settings'); showNotice('Connect Huckleberry in Settings to log for Frankie.'); return false; }
   if (log.kind === 'sleep-start' || log.kind === 'sleep-stop') return toggleSleep(log.kind === 'sleep-start' || +log.start < Date.now() - 60000 ? log.start : null, log.kind);
+  if (log.kind === 'pump') { logPump(log); return true; }
   return openLog(log.kind, log);
+}
+// Karena's pumps from quick add ("pumped left 2 right 2.5"): the preview was the confirmation.
+// Both sides are needed; Huckleberry's single-total pump format isn't confirmed, so it isn't written.
+const pumpRequests = new Map();
+async function logPump(log) {
+  if (log.left == null) { showNotice('Add how much came from each side, e.g. “karena pumped left 2 right 2.5”.'); return; }
+  const key = `${+log.start}|${log.left}|${log.right}|${log.units}`;
+  if (!pumpRequests.has(key)) pumpRequests.set(key, crypto.randomUUID()); // a retry of the same pump reuses its ID
+  const entry = { kind:'pump', start:log.start.toISOString(), requestId:pumpRequests.get(key), left:log.left, right:log.right, units:log.units, ...(log.minutes ? { minutes:log.minutes } : {}) };
+  try {
+    await write(entry, snapshot.childId);
+    showNotice(`Logged a pump: left ${log.left} ${log.units}, right ${log.right} ${log.units}. 🤱`);
+    if (!demo) await refresh(true); else home();
+  } catch (e) { showNotice(message(e)); }
 }
 // ---------- Night feed mode ----------
 // A dim, full-screen panel for 3 AM: the clock, time since the last bottle, the

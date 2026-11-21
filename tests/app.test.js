@@ -590,3 +590,23 @@ test('groceries: one tap or a swipe removes an item, with Undo', async t => {
   doc.querySelector('[data-life-tab="todos"]').click(); assert.equal(doc.querySelectorAll('#taskGroups [data-delete-item]').length,0);
   assert.deepEqual(errors,[]);
 });
+test('quick add logs Karena’s pumps (both sides) straight to the Frankie page', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  const input = doc.getElementById('quickAddInput'), form = doc.getElementById('quickAddForm');
+  const type = text => { input.value = text; input.dispatchEvent(new w.Event('input')); };
+  doc.querySelector('[data-view="frankie"]').click(); await settle();
+  const today = () => doc.querySelector('#frankiePumps .frankie-tile strong').textContent;
+  const before = parseFloat(today());
+  // A total alone isn't saved: it asks for the sides.
+  type('karena pumped 5 oz');
+  assert.match(doc.getElementById('quickAddPreview').textContent, /Pump for Karena .* 5 oz total, add left and right/);
+  form.dispatchEvent(new w.Event('submit', { cancelable:true })); await settle();
+  assert.match(doc.getElementById('notice').textContent, /each side/); assert.equal(parseFloat(today()), before);
+  type('karena pumped left 2 right 2.5');
+  assert.match(doc.getElementById('quickAddPreview').textContent, /Pump for Karena · .* · L 2 oz · R 2\.5 oz/);
+  form.dispatchEvent(new w.Event('submit', { cancelable:true })); await settle();
+  assert.match(doc.getElementById('notice').textContent, /Logged a pump: left 2 oz, right 2\.5 oz/);
+  assert.equal(input.value, ''); assert.ok(Math.abs(parseFloat(today()) - (before + 4.5)) < 0.15, `${before} → ${today()}`);
+  assert.ok(doc.getElementById('babyLogDialog').open !== true, 'no dialog needed');
+  assert.deepEqual(errors, []);
+});

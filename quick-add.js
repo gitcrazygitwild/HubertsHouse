@@ -87,10 +87,13 @@ export function describeDraft(draft, locale) {
 
 // ---------- Frankie logs in plain words ----------
 // "frankie bottle 10:30am 4oz", "frankie diaper wet", "frankie nap 1-2:15pm",
-// "frankie fell asleep 9:40", "frankie woke up". Only text that names Frankie
-// (or "baby") AND a log word is treated as a log, so "Frankie swim class Tue
-// 3pm" stays a calendar event.
-const WHO = /\b(frankie|frankies|frankie's|baby)\b|🍼/i;
+// "frankie fell asleep 9:40", "frankie woke up", "karena pumped left 2 right 2.5".
+// Only text that names Frankie, "baby" or Karena AND a log word is treated as a log,
+// so "Frankie swim class Tue 3pm" stays a calendar event.
+const WHO = /\b(frankie|frankies|frankie's|baby|karena|karena's)\b|🍼/i;
+// Pumping: "pumped", "pump", "pumping", but not "a bottle of pumped milk" (that's a bottle).
+const PUMP = /\bpump(?:ed|ing|s)?\b/i, FEED = /\b(bottles?|fed|feeds?|feeding|drank|drink)\b|🍼/i;
+const SIDE_AMOUNT = '(\\d+(?:\\.\\d+)?)\\s*(oz|ounces?|ml)?';
 const LOG_WORDS = { bottle:/\b(bottles?|fed|feeds?|feeding|ounces?|oz|ml)\b|\d\s?(oz|ml)\b|🍼/i, diaper:/\b(diapers?|nappy|changed?|poo+p?y?|pee|wet|dirty|dry|blowout)\b/i, sleep:/\b(nap|napped|naps|slept|sleep|sleeping|asleep|woke|wakes?|awake|down for)\b/i };
 const MILK = [[/\bformula\b/i, 'Formula'], [/\b(breast ?milk|breast|bm|pumped|expressed)\b/i, 'Breast Milk'], [/\bcow'?s?( milk)?\b/i, 'Cow Milk'], [/\bsoy\b/i, 'Soy Milk']];
 // Logs are about the past: pick the most recent matching moment at or before
@@ -108,14 +111,22 @@ function clockToDate(hour, minute, meridiem, now) {
 export function parseBabyLog(text, now = new Date()) {
   const raw = String(text || '');
   if (!WHO.test(raw)) return null;
-  const kind = LOG_WORDS.diaper.test(raw) && !LOG_WORDS.bottle.test(raw) ? 'diaper' : LOG_WORDS.bottle.test(raw) ? 'bottle' : LOG_WORDS.diaper.test(raw) ? 'diaper' : LOG_WORDS.sleep.test(raw) ? 'sleep' : null;
+  const kind = PUMP.test(raw) && !FEED.test(raw) ? 'pump' : LOG_WORDS.diaper.test(raw) && !LOG_WORDS.bottle.test(raw) ? 'diaper' : LOG_WORDS.bottle.test(raw) ? 'bottle' : LOG_WORDS.diaper.test(raw) ? 'diaper' : LOG_WORDS.sleep.test(raw) ? 'sleep' : null;
   if (!kind) return null;
   let rest = ` ${raw} `;
   const take = pattern => { const match = rest.match(pattern); if (match) rest = `${rest.slice(0, match.index)} ${rest.slice(match.index + match[0].length)}`; return match; };
   const result = { kind, start:new Date(now), recognized:[] };
-  // Amount first, so "4oz" is never read as a time.
-  const amount = take(/(\d+(?:\.\d+)?)\s?(oz|ounces?|ml)\b/i);
+  // Pump sides before anything else, so "left 2" is never read as a time.
+  if (kind === 'pump') {
+    const side = name => take(new RegExp(`\\b(?:${name})\\b(?: side)?(?: of| was| is|:)?\\s*${SIDE_AMOUNT}`, 'i')) || take(new RegExp(`${SIDE_AMOUNT}\\s*(?:on the |from the |on |from )?(?:${name})\\b(?: side)?`, 'i'));
+    const left = side('left|l'), right = side('right|r'), units = [left?.[2], right?.[2]].some(u => /^ml$/i.test(u || '')) ? 'ml' : 'oz';
+    if (left || right) { result.left = left ? Number(left[1]) : 0; result.right = right ? Number(right[1]) : 0; result.units = units; result.amount = Math.round((result.left + result.right) * 100) / 100; }
+  }
+  // Amount first, so "4oz" is never read as a time. (For a pump with sides, the total is already known.)
+  const amount = result.left != null ? null : take(/(\d+(?:\.\d+)?)\s?(oz|ounces?|ml)\b/i);
   if (amount) { result.amount = Number(amount[1]); result.units = /^ml$/i.test(amount[2]) ? 'ml' : 'oz'; }
+  // "for 20 minutes" on a pump is how long it lasted.
+  if (kind === 'pump') { const length = take(/\bfor (\d+) ?(?:minutes?|mins?|m)\b/i); if (length) result.minutes = Number(length[1]); }
   const duration = take(/\bfor (\d+(?:\.\d+)?|an?|half an) ?(hours?|hrs?|h|minutes?|mins?|m)\b/i) || (kind === 'sleep' ? take(/\b(\d+(?:\.\d+)?) ?(hours?|hrs?|h|minutes?|mins?|m)\b(?! ago)/i) : null);
   const minutes = duration ? (/^h/i.test(duration[2]) ? (/^an?$/i.test(duration[1]) ? 1 : /half/i.test(duration[1]) ? .5 : Number(duration[1])) * 60 : Number(duration[1])) : null;
   let start = null, end = null, match;
@@ -150,6 +161,10 @@ export function parseBabyLog(text, now = new Date()) {
 export function describeBabyLog(log, locale) {
   if (!log) return '';
   const at = date => date.toLocaleTimeString(locale, { hour:'numeric', minute:'2-digit' });
+  if (log.kind === 'pump') {
+    const at = date => date.toLocaleTimeString(locale, { hour:'numeric', minute:'2-digit' });
+    return `🤱 Pump for Karena · ${at(log.start)} · ${log.left != null ? `L ${log.left} ${log.units} · R ${log.right} ${log.units}` : log.amount ? `${log.amount} ${log.units} total, add left and right` : 'add left and right, e.g. “left 2 right 2.5”'}${log.minutes ? ` · ${log.minutes} min` : ''}`;
+  }
   const label = { bottle:'🍼 Bottle', diaper:'♡ Diaper', 'sleep-log':'☾ Finished sleep', 'sleep-start':'☾ Fell asleep', 'sleep-stop':'☀ Woke up' }[log.kind];
   const detail = log.kind === 'bottle' ? (log.amount ? `${log.amount} ${log.units}${log.bottleType ? ` ${log.bottleType}` : ''}` : `same as last bottle${log.bottleType ? ` · ${log.bottleType}` : ''}`)
     : log.kind === 'diaper' ? ({ pee:'Wet', poo:'Dirty', both:'Wet + dirty', dry:'Dry' }[log.mode] || 'choose wet or dirty')

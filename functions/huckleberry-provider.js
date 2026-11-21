@@ -228,18 +228,23 @@ function offsetAt(stamp, timezone) {
   return match ? (match[1] === '+' ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3])) : 0;
 }
 export function validateBabyWrite(input, now = Date.now()) {
-  if (!input || !['sleep-start','sleep-stop','sleep-log','bottle','diaper'].includes(input.kind)) fail('invalid-argument','Choose a baby log type.');
+  if (!input || !['sleep-start','sleep-stop','sleep-log','bottle','diaper','pump'].includes(input.kind)) fail('invalid-argument','Choose a baby log type.');
   if (!/^[0-9a-f-]{36}$/i.test(input.requestId || '')) fail('invalid-argument','Reopen the log form and try again.');
   const start = Date.parse(input.start), end = input.end ? Date.parse(input.end) : null;
   if (!Number.isFinite(start) || start > now + 60000 || start < now - 30 * 86400000) fail('invalid-argument','Choose a time within the past 30 days.');
   if (input.kind === 'sleep-log' && (!Number.isFinite(end) || end <= start || end > now + 60000 || end - start > 48 * 3600000)) fail('invalid-argument','Choose a finished sleep lasting less than 48 hours.');
   if (input.kind === 'bottle' && (!Number.isFinite(input.amount) || input.amount <= 0 || input.amount > (input.units === 'oz' ? 64 : 2000) || !['oz','ml'].includes(input.units) || !['Formula','Breast Milk','Cow Milk','Soy Milk','Other'].includes(input.bottleType))) fail('invalid-argument','Enter a valid bottle amount, unit, and type.');
   if (input.kind === 'diaper' && !['pee','poo','both','dry'].includes(input.mode)) fail('invalid-argument','Choose wet, dirty, both, or dry.');
+  if (input.kind === 'pump') {
+    const max = input.units === 'ml' ? 600 : 20, ok = value => Number.isFinite(value) && value >= 0 && value <= max;
+    if (!['oz','ml'].includes(input.units) || !ok(input.left) || !ok(input.right) || input.left + input.right <= 0) fail('invalid-argument','Enter how much came from each side.');
+    if (input.minutes !== undefined && (!Number.isInteger(input.minutes) || input.minutes < 1 || input.minutes > 180)) fail('invalid-argument','Enter a pumping time under 3 hours.');
+  }
   if (input.notes !== undefined && (typeof input.notes !== 'string' || input.notes.length > 1000)) fail('invalid-argument','Keep notes under 1,000 characters.');
   return {...input,start,end,notes:input.notes?.trim() || ''};
 }
 export async function writeHuckleberry(client, childId, input, timezone, now = Date.now()) {
-  const data = validateBabyWrite(input, now), child = id(childId), collection = data.kind.startsWith('sleep') ? 'sleep' : data.kind === 'bottle' ? 'feed' : 'diaper';
+  const data = validateBabyWrite(input, now), child = id(childId), collection = data.kind.startsWith('sleep') ? 'sleep' : data.kind === 'bottle' ? 'feed' : data.kind === 'pump' ? 'pump' : 'diaper';
   const parent = client.doc(`${collection}/${child}`), hash = createHash('sha256').update(`${child}/${input.requestId}/${data.kind}`).digest('hex');
   const entryId = collection === 'sleep' ? hash.slice(0,16) : `${data.start}-${hash.slice(0,20)}`;
   const interval = parent.collection('intervals').doc(entryId), seconds = now / 1000;
@@ -252,7 +257,12 @@ export async function writeHuckleberry(client, childId, input, timezone, now = D
     if (existing.exists) return {saved:true,duplicate:true};
     const state = current.data() || {}, timer = state.timer || {}, offset = offsetAt(data.start, timezone);
     const batch = client.batch(), patch = {};
-    if (data.kind === 'sleep-start') {
+    if (data.kind === 'pump') {
+      // Just the session row, in the documented leftright shape (pump/{child}/intervals). The
+      // tracker's summary fields aren't documented, so they are left for Huckleberry to manage.
+      batch.create(interval, {start:data.start / 1000,entryMode:'leftright',leftAmount:data.left,rightAmount:data.right,units:data.units,offset,end_offset:offset,lastUpdated:seconds,
+        ...(data.minutes ? {duration:data.minutes * 60} : {}),...(data.notes ? {notes:data.notes} : {})});
+    } else if (data.kind === 'sleep-start') {
       if (timer.uuid === hash.slice(0,16)) return {saved:true,duplicate:true};
       if (timer.active) fail('failed-precondition','A sleep timer is already running. Refresh to see it.');
       patch.timer = {active:true,paused:false,timerStartTime:data.start,timestamp:{seconds},local_timestamp:seconds,uuid:hash.slice(0,16)};
