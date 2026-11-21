@@ -3,10 +3,10 @@
 // with a shared tooltip; every chart also has a table view.
 import { escapeHTML as esc } from './household-model.js';
 import { renderHTML } from './dom.js';
-import { dailySleep, dailyBottles, timelineRows, babySummary, dayStart, dayStory, dayStoryText, localDay } from './baby-history.js';
+import { dailySleep, dailyBottles, dailyPumps, toOunces, timelineRows, babySummary, dayStart, dayStory, dayStoryText, localDay } from './baby-history.js';
 import { MODELS, scorePredictions, MIA_V2_SINCE } from './prediction-log.js';
 import { bottleSleepLinks, ageInDays, ageLabel } from './baby-model.js';
-import { CHALLENGES, MACK_EXCUSE, scoreMornings, scoreBottles, morningPicks, bottlePicks, currentBedtime, nightsFrom } from './cat-challenges.js';
+import { CHALLENGES, MACK_EXCUSE, scoreMornings, scoreBottles, scorePumps, morningPicks, bottlePicks, pumpPicks, currentBedtime, nightsFrom } from './cat-challenges.js';
 import { frankieAwards } from './awards.js';
 
 const $ = id => document.getElementById(id);
@@ -70,6 +70,43 @@ function bottleChart(rows, timezone, average, W = 720) {
   const avgLine = average ? (() => { const ay = pad.top + h - (average / max) * h; return `<line x1="${pad.left}" x2="${pad.left + w}" y1="${ay}" y2="${ay}" class="chart-ref"/><text x="${pad.left + 6}" y="${ay - 6}" class="chart-ref-label">7-day avg ${oz(average)}</text>`; })() : '';
   return `<svg viewBox="0 0 ${W} ${H}" class="chart-svg" role="img" aria-label="Bottle ounces per day, last ${rows.length} days">${axis(w, h, pad, max, 8, '')}${bars}${avgLine}${xTicks(rows, x, slot, H - 8, timezone)}</svg>`;
 }
+// Pumped ounces per day, stacked: left, right, then any sessions logged as one total.
+function pumpChart(rows, timezone, average, W = 720) {
+  const H = 200, pad = { top:12, right:8, bottom:26, left:40 }, w = W - pad.left - pad.right, h = H - pad.top - pad.bottom;
+  const max = niceMax(Math.max(...rows.map(r => r.ounces), 8), 8), slot = w / rows.length, bw = Math.max(2, Math.min(22, slot - 2));
+  const x = i => pad.left + i * slot;
+  let bars = '';
+  rows.forEach((row, i) => {
+    const bx = x(i) + (slot - bw) / 2, today = i === rows.length - 1 ? ' is-today' : '';
+    const parts = [['left', row.left], ['right', row.right], ['unsplit', row.unsplit]].filter(([, v]) => v > 0);
+    let top = pad.top + h;
+    parts.forEach(([kind, value], j) => {
+      const ph = (value / max) * h; top -= ph;
+      bars += j === parts.length - 1 ? `<path d="${bar(bx, top, bw, ph)}" class="mark-${kind}${today}"/>` : `<rect x="${bx}" y="${top}" width="${bw}" height="${ph}" class="mark-${kind}${today}"/>`;
+    });
+    const tip = `${dayLabel(row.key, timezone)}${today ? ' · so far' : ''}|${oz(row.ounces)} · ${row.count} pump${row.count === 1 ? '' : 's'}|Left ${oz(row.left)} · Right ${oz(row.right)}${row.unsplit ? `|Total only ${oz(row.unsplit)}` : ''}`;
+    bars += `<rect x="${x(i)}" y="${pad.top}" width="${slot}" height="${h}" class="chart-hit" data-tip="${esc(tip)}"/>`;
+  });
+  const avgLine = average ? (() => { const ay = pad.top + h - (average / max) * h; return `<line x1="${pad.left}" x2="${pad.left + w}" y1="${ay}" y2="${ay}" class="chart-ref"/><text x="${pad.left + 6}" y="${ay - 6}" class="chart-ref-label">7-day avg ${oz(average)}</text>`; })() : '';
+  return `<svg viewBox="0 0 ${W} ${H}" class="chart-svg" role="img" aria-label="Ounces pumped per day, left and right, last ${rows.length} days">${axis(w, h, pad, max, 8, '')}${bars}${avgLine}${xTicks(rows, x, slot, H - 8, timezone)}</svg>`;
+}
+// Today at a glance: total, the left/right split, and today's sessions.
+export function pumpsHTML(pumps = [], timezone, now = Date.now()) {
+  if (!pumps.length) return '<p class="muted">No pumps logged yet. Log them in Huckleberry (Pump, with left and right amounts) and they’ll show up here with a daily chart and a cat challenge.</p>';
+  const rows = dailyPumps(pumps, timezone, 8, now), today = rows.at(-1), week = rows.slice(0, -1).filter(r => r.count);
+  const avg = week.length ? week.reduce((s, r) => s + r.ounces, 0) / week.length : null;
+  const sided = today.left + today.right, share = v => today.ounces ? Math.round(v / today.ounces * 1000) / 10 : 0;
+  const last = pumps.at(-1), todays = pumps.filter(p => localDay(Date.parse(p.start), timezone) === today.key).reverse();
+  const side = p => p.left == null && p.right == null ? `${oz(toOunces(p.total, p.units))} total` : `L ${oz(toOunces(p.left || 0, p.units))} · R ${oz(toOunces(p.right || 0, p.units))}`;
+  const lead = today.left && today.right ? (Math.abs(today.left - today.right) < 0.25 ? 'Even on both sides today.' : `${today.left > today.right ? 'Left' : 'Right'} side is ahead by ${oz(Math.abs(today.left - today.right))}.`) : '';
+  return `<div class="frankie-status pump-tiles"><div class="frankie-tile"><span>Pumped today</span><strong>${oz(today.ounces)}</strong><small>${today.count} session${today.count === 1 ? '' : 's'}${last ? ` · last ${esc(ago(last.start, now))} ago` : ''}</small></div>
+    <div class="frankie-tile"><span>Left</span><strong class="pump-l">${oz(today.left)}</strong><small>today</small></div>
+    <div class="frankie-tile"><span>Right</span><strong class="pump-r">${oz(today.right)}</strong><small>today</small></div>
+    <div class="frankie-tile"><span>Daily average</span><strong>${oz(avg)}</strong><small>${week.length ? `last ${week.length} pumping day${week.length === 1 ? '' : 's'}` : 'building'}</small></div></div>
+    ${today.ounces ? `<div class="pump-split" role="img" aria-label="${esc(`Today: left ${oz(today.left)}, right ${oz(today.right)}${today.unsplit ? `, total only ${oz(today.unsplit)}` : ''}`)}"><i class="left" style="width:${share(today.left)}%"></i><i class="right" style="width:${share(today.right)}%"></i>${today.unsplit ? `<i class="unsplit" style="width:${share(today.unsplit)}%"></i>` : ''}</div>
+    <div class="pump-split-labels"><span class="l">Left <b>${oz(today.left)}</b>${sided ? ` · ${Math.round(today.left / sided * 100)}%` : ''}</span>${today.unsplit ? `<span>Total only <b>${oz(today.unsplit)}</b></span>` : ''}<span class="r">Right <b>${oz(today.right)}</b>${sided ? ` · ${Math.round(today.right / sided * 100)}%` : ''}</span></div>${lead ? `<p class="tiny muted">${esc(lead)}</p>` : ''}` : ''}
+    ${todays.length ? `<ul class="pump-sessions">${todays.slice(0, 8).map(p => `<li><span>${esc(clock(Date.parse(p.start), timezone))}${p.minutes ? ` <small>· ${p.minutes} min</small>` : ''}</span><span>${esc(side(p))} <small>· ${esc(oz(toOunces(p.total, p.units)))}</small></span></li>`).join('')}</ul>` : '<p class="tiny muted">No pumps yet today.</p>'}`;
+}
 function timeline(rows, timezone, W = 720) {
   const rowH = 18, gap = 6, pad = { top:6, left:W < 480 ? 64 : 82, right:8, bottom:22 }, w = W - pad.left - pad.right, H = pad.top + rows.length * (rowH + gap) + pad.bottom;
   let body = '';
@@ -118,15 +155,15 @@ export function bottleLinksHTML(links, ageDays = null) {
 }
 // The morning wake-up and Bottle Bet challenges: one card per cat, then recent rounds.
 export function challengeHTML(kind, score, timezone, upcoming = null) {
-  const morning = kind === 'morning', unit = morning ? 'm' : ' oz', models = CHALLENGES[kind];
+  const morning = kind === 'morning', pump = kind === 'pump', unit = morning ? 'm' : ' oz', models = CHALLENGES[kind];
   const value = (v, row) => v == null ? '—' : morning ? clock(v, timezone) : `${v} oz`;
   const cards = score.summary.map(model => `<article class="score-card score-${model.key}${score.leader === model.key ? ' is-leader' : ''}"><div class="score-head"><span>${esc(model.owner.toUpperCase())}</span>${score.leader === model.key ? '<span class="leader-badge">🏆 Leading</span>' : ''}</div><h3>${esc(model.name)}</h3>
     <div class="score-stats"><div><strong>${model.mae == null ? '—' : `±${model.mae}${unit}`}</strong><small>avg miss</small></div><div><strong>${model.hitRate == null ? '—' : `${model.hitRate}%`}</strong><small>within ${morning ? '15m' : '2 oz'}</small></div><div><strong>${model.wins}</strong><small>closest</small></div></div>
     <p class="score-width">${esc(model.how)}</p><p>${model.n ? `${model.n} ${morning ? 'morning' : 'day'}${model.n === 1 ? '' : 's'} scored` : `No ${morning ? 'mornings' : 'days'} scored yet`}</p></article>`).join('');
   const calls = upcoming && Object.values(upcoming).some(Boolean) ? `<p class="challenge-calls"><strong>${morning ? 'Tonight’s calls' : 'Today’s guesses'}:</strong> ${models.filter(m => upcoming[m.key] != null).map(m => `${esc(m.owner)} ${esc(morning ? clock(upcoming[m.key].target, timezone) : `${upcoming[m.key]} oz`)}`).join(' · ')}</p>` : '';
   const rows = score.results.slice(0, 6).map(row => `<tr><td>${esc(morning ? new Date(row.actual).toLocaleDateString([], { weekday:'short', timeZone:timezone }) : new Date(`${row.key}T12:00:00`).toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' }))} · ${esc(morning ? clock(row.actual, timezone) : `${row.actual} oz`)}</td>${models.map(m => `<td class="${Math.abs(row.errors[m.key]) <= (morning ? 15 : 2) ? 'is-hit' : 'is-miss'}${row.winners.length === 1 && row.winners[0] === m.key ? ' is-best' : ''}">${esc(morning ? clock(row.picks[m.key].target, timezone) : `${row.picks[m.key]} oz`)}</td>`).join('')}</tr>`).join('');
-  return `${calls}<div class="score-grid">${cards}</div>${rows ? `<div class="score-table-wrap"><table class="score-table"><thead><tr><th>${morning ? 'Woke up' : 'Drank'}</th>${models.map(m => `<th>${esc(m.owner)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>` : ''}
-    <p class="tiny muted">${morning ? 'Each cat makes its call at bedtime, from nights logged before it. The morning wake-up is when the night’s last stretch ended (4 AM to noon).' : 'Each cat guesses at midnight from earlier days. Days with fewer than three bottles logged aren’t scored.'} Recalculated from Frankie’s logs, so backfilled ${morning ? 'nights' : 'days'} count too.</p>`;
+  return `${calls}<div class="score-grid">${cards}</div>${rows ? `<div class="score-table-wrap"><table class="score-table"><thead><tr><th>${morning ? 'Woke up' : pump ? 'Pumped' : 'Drank'}</th>${models.map(m => `<th>${esc(m.owner)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>` : ''}
+    <p class="tiny muted">${morning ? 'Each cat makes its call at bedtime, from nights logged before it. The morning wake-up is when the night’s last stretch ended (4 AM to noon).' : pump ? 'Each cat guesses at midnight from earlier days. Days with no pumps logged aren’t scored.' : 'Each cat guesses at midnight from earlier days. Days with fewer than three bottles logged aren’t scored.'} Recalculated from ${pump ? 'Huckleberry’s' : 'Frankie’s'} logs, so backfilled ${morning ? 'nights' : 'days'} count too.</p>`;
 }
 export function renderFrankie({ snapshot, timezone, predictions = [], demo = false, connected = false }) {
   shared = snapshot ? { snapshot, timezone, demo } : null;
@@ -161,6 +198,12 @@ export function renderFrankie({ snapshot, timezone, predictions = [], demo = fal
   }
   if ($('frankieBottleBet')) renderHTML($('frankieBottleBet'), challengeHTML('bottle', scoreBottles(bottles, timezone, now, { birthdate:snapshot.birthdate }), timezone, bottlePicks(bottles, timezone, localDay(now, timezone), { birthdate:snapshot.birthdate })));
   const width = id => Math.max(280, Math.round($(id).clientWidth || 720));
+  // Karena's pumps: the card always shows (with a how-to when empty); the challenge and chart once there's data.
+  const pumps = snapshot.pumps || [];
+  if ($('frankiePumps')) renderHTML($('frankiePumps'), pumpsHTML(pumps, timezone, now));
+  if ($('pumpPoolCard')) $('pumpPoolCard').hidden = !pumps.length;
+  if ($('pumpChartCard')) $('pumpChartCard').hidden = !pumps.length;
+  if (pumps.length && $('frankiePumpPool')) renderHTML($('frankiePumpPool'), challengeHTML('pump', scorePumps(pumps, timezone, now, { bottles }), timezone, pumpPicks(pumps, timezone, localDay(now, timezone), { bottles })));
   renderHTML($('frankieTimeline'), timeline(timelineRows(sleeps, timezone, 14, now), timezone, width('frankieTimeline')) + legend([['night', 'Night sleep'], ['nap', 'Nap']]));
   const sleepRows = dailySleep(sleeps, timezone, range, now), bottleRows = dailyBottles(bottles, timezone, range, now);
   const shown = Math.min(range, snapshot.historyDays || range);
@@ -168,6 +211,12 @@ export function renderFrankie({ snapshot, timezone, predictions = [], demo = fal
     + table('Daily sleep', ['Day', 'Night', 'Naps', 'Total', 'Nap count'], [...sleepRows.slice(-shown)].reverse().map(r => [esc(dayLabel(r.key, timezone)), hm(r.night), hm(r.nap), hm(r.total), r.naps])));
   renderHTML($('frankieBottles'), bottleChart(bottleRows.slice(-shown), timezone, summary.avgOunces, width('frankieBottles'))
     + table('Bottle ounces per day', ['Day', 'Ounces', 'Bottles'], [...bottleRows.slice(-shown)].reverse().map(r => [esc(dayLabel(r.key, timezone)), oz(r.ounces), r.count])));
+  if (pumps.length && $('frankiePumpChart') && !$('pumpChartCard')?.hidden) {
+    const pumpRows = dailyPumps(pumps, timezone, range, now).slice(-shown), past = pumpRows.slice(-8, -1).filter(r => r.count);
+    const avg = past.length ? past.reduce((s, r) => s + r.ounces, 0) / past.length : null;
+    renderHTML($('frankiePumpChart'), pumpChart(pumpRows, timezone, avg, width('frankiePumpChart')) + legend([['left', 'Left'], ['right', 'Right'], ...(pumpRows.some(r => r.unsplit) ? [['unsplit', 'Total only']] : [])])
+      + table('Ounces pumped per day', ['Day', 'Total', 'Left', 'Right', 'Pumps'], [...pumpRows].reverse().map(r => [esc(dayLabel(r.key, timezone)), oz(r.ounces), oz(r.left), oz(r.right), r.count])));
+  }
   document.querySelectorAll('[data-frankie-range]').forEach(button => button.setAttribute('aria-pressed', String(Number(button.dataset.frankieRange) === range)));
   $('frankieNote').textContent = `${demo ? 'Sample data · ' : ''}${snapshot.historyComplete === false || snapshot.feedsComplete === false ? 'Some older history was too long to load in full. ' : ''}Up to ${snapshot.historyDays || 14} days from Huckleberry · ${timezone.replaceAll('_', ' ')}.`;
 }

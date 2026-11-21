@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { nightsFrom, currentBedtime, morningPicks, bottlePicks, scoreMornings, scoreBottles, CHALLENGES, MACK_EXCUSE } from '../cat-challenges.js';
+import { nightsFrom, currentBedtime, morningPicks, bottlePicks, scoreMornings, scoreBottles, pumpPicks, scorePumps, CHALLENGES, MACK_EXCUSE } from '../cat-challenges.js';
+import { dailyPumps } from '../baby-history.js';
 import { miaForecast } from '../baby-model.js';
 import { MODELS } from '../prediction-log.js';
 
@@ -83,4 +84,35 @@ test('Mia calls the wake-up from a nap, with a tight window', () => {
   assert.ok(Date.parse(mia.end) - Date.parse(mia.target) <= 10 * M && Date.parse(mia.end) - Date.parse(mia.target) >= 5 * M);
   const night = miaForecast({ sleeps, timer:{ active:true, start:new Date(today + 20 * H).toISOString() }, timezone:zone }, new Date(today + 21 * H));
   assert.equal(night.available, false); assert.match(night.reason, /morning wake-up calls/);
+});
+
+test('pumps roll up per day with both sides, and single totals as "unsplit"', () => {
+  const at = (d, h) => new Date(today - d * DAY + h * H).toISOString();
+  const pumps = [{ start:at(1, 8), left:2, right:2.5, total:4.5, units:'oz' }, { start:at(1, 14), left:60, right:90, total:150, units:'ml' }, { start:at(1, 20), left:null, right:null, total:3, units:'oz' }, { start:at(0, 7), left:1.5, right:2, total:3.5, units:'oz' }];
+  const rows = dailyPumps(pumps, zone, 2, today + 9 * H);
+  assert.deepEqual(rows[0], { key:'2026-11-18', ounces:12.6, left:4, right:5.5, unsplit:3, count:3 }); // 60 ml ≈ 2 oz, 90 ml ≈ 3 oz
+  assert.deepEqual([rows[1].ounces, rows[1].left, rows[1].right, rows[1].count], [3.5, 1.5, 2, 1]);
+  assert.equal(dailyPumps(undefined, zone, 3, today).length, 3);
+});
+
+test('the Pump Pool: same time last week, supply & demand, and copycat', () => {
+  // Weekdays pump ~20 oz, Sundays ~14; slight upward trend. The guess is for Thursday Nov 19.
+  const totals = { '2026-11-05':19, '2026-11-06':19.5, '2026-11-07':18, '2026-11-08':14, '2026-11-09':20, '2026-11-10':20, '2026-11-11':20.5, '2026-11-12':21, '2026-11-13':21, '2026-11-14':19, '2026-11-15':15, '2026-11-16':21.5, '2026-11-17':22, '2026-11-18':22.5 };
+  const pumps = Object.entries(totals).flatMap(([day, oz]) => [8, 13, 18, 22].map(h => ({ start:new Date(Date.parse(`${day}T00:00:00Z`) + h * H).toISOString(), left:oz / 8, right:oz / 8, total:oz / 4, units:'oz' })));
+  const picks = pumpPicks(pumps, zone, '2026-11-19');
+  assert.equal(picks.mack, 22.5, 'yesterday, exactly');
+  // Hubert: the middle of the last 7 days (21) and last Thursday (21) agree → 21.
+  assert.equal(picks.hubert, 21);
+  // For Sunday, last Sunday (15) pulls the weekday-heavy middle down a third of the way.
+  const sunday = { ...totals, '2026-11-19':23, '2026-11-20':23, '2026-11-21':22 }, sundayPumps = Object.entries(sunday).flatMap(([day, oz]) => [8, 20].map(h => ({ start:new Date(Date.parse(`${day}T00:00:00Z`) + h * H).toISOString(), left:oz / 4, right:oz / 4, total:oz / 2, units:'oz' })));
+  assert.equal(pumpPicks(sundayPumps, zone, '2026-11-22').hubert, 19.5); // middle 22, a third of the way to 15 → 19.67 → nearest half ounce
+  assert.ok(picks.mia >= 21.5 && picks.mia <= 24.5, `Mia follows the trend (${picks.mia})`);
+  // A thirsty baby nudges Mia up, never by more than 1.5 oz.
+  const bottles = [16, 17, 18].flatMap(d => [8, 12, 16, 20].map(h => ({ start:new Date(Date.parse(`2026-11-${d}T00:00:00Z`) + h * H).toISOString(), amount:8, units:'oz' })));
+  const thirsty = pumpPicks(pumps, zone, '2026-11-19', { bottles });
+  assert.ok(thirsty.mia > picks.mia && thirsty.mia - picks.mia <= 1.5, `${picks.mia} → ${thirsty.mia}`);
+  assert.deepEqual(pumpPicks(pumps.slice(0, 8), zone, '2026-11-19'), { hubert:null, mia:null, mack:null }, 'needs three pumping days');
+  const score = scorePumps(pumps, zone, today + 9 * H);
+  assert.ok(score.scored >= 10); assert.equal(score.summary.length, 3); assert.ok(['hubert', 'mia', 'mack'].includes(score.leader));
+  assert.deepEqual(CHALLENGES.pump.map(m => m.owner), ['Hubert', 'Mia', 'Mack']);
 });

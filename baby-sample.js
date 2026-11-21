@@ -26,10 +26,20 @@ export function sampleHistory(now = Date.now(), days = 45) {
     }
     for (const hour of [7, 10.3, 13.6, 16.8, 19.2]) bottles.push({ start:base + (hour + jitter(.4)) * H, amount:Math.round((4 + age * .03 + jitter(.6)) * 2) / 2 });
   }
+  // Karena's pumps, from their own random stream so the sleep and bottle samples don't change.
+  const pumpRandom = rng(4242), pumps = [];
+  for (let d = Math.min(days, 30); d >= 0; d--) {
+    const day = new Date(now); day.setDate(day.getDate() - d); day.setHours(0, 0, 0, 0);
+    for (const hour of [6.2, 10, 14.1, 18, 22.3]) {
+      const left = Math.round((1.8 + (pumpRandom() - .5) * .9) * 4) / 4, right = Math.round((2.3 + (pumpRandom() - .5) * .9) * 4) / 4;
+      pumps.push({ start:+day + (hour + (pumpRandom() - .5) * .6) * H, left, right, total:left + right, units:'oz', minutes:15 + Math.round(pumpRandom() * 10) });
+    }
+  }
   const live = sleeps.filter(s => s.start < now - 25 * MIN).map(s => ({ start:s.start, end:Math.min(s.end, now - 25 * MIN) })).filter(s => s.end > s.start);
   return {
     sleeps:live.map(s => ({ start:new Date(s.start).toISOString(), end:new Date(s.end).toISOString() })),
-    bottles:bottles.filter(b => b.start <= now).map(b => ({ start:new Date(b.start).toISOString(), amount:b.amount, units:'oz', type:'Formula' }))
+    bottles:bottles.filter(b => b.start <= now).map(b => ({ start:new Date(b.start).toISOString(), amount:b.amount, units:'oz', type:'Formula' })),
+    pumps:pumps.filter(p => p.start <= now).map(p => ({ ...p, start:new Date(p.start).toISOString() }))
   };
 }
 
