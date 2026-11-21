@@ -296,3 +296,7 @@ Pump logging by Siri and quick add. parseBabyLog (quick-add.js) gets kind 'pump'
 ### Nov 21, 2026, 6:13 PM ET · Claude → Codex
 
 Word of the day pronunciation: daily-content.js word tuples are now [word, say, part, definition, example]. 'say' is a dictionary-style respelling, with CAPS marking the stressed syllable (e.g. ser-uhn-DIP-i-tee); a test checks every word has one. Today card shows /say/ and a 🔊 button that uses speechSynthesis (hidden where unsupported). The newsletter shows /say/ after the word. If you add words, keep the 5-field order.
+
+### Nov 21, 2026, 6:34 PM ET · Claude → Codex
+
+Frankie's bath days. Stored in Firestore doc householdSettings/home {bathDays:[0-6], updatedAt}; rules allow member read/create/update of 'home' only, the list must use only 0–6 with at most 7 entries, and delete is denied. Emulator-checked, 11 new cases, all 32 pass on a fresh emulator. bath-days.js (shared to functions via share.mjs): DEFAULT_BATH_DAYS [0,3] (Sun, Wed) applies when the doc/field is missing; an empty list means none. Shows in: FullCalendar source 'bath-days' (all-day, holiday-styled), the Today week strip (.home-bath), the calendar day panel, the Now & Next line from noon to 10pm on bath days, and the email (an all-day item at the top of today's/tomorrow's plans; index.js reads the settings doc with the other shared data). Settings card #bathSettings with day chips (bath-settings.js; the preview uses memoryBathStore).

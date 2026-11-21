@@ -12,7 +12,7 @@ async function fixture(options = {}) {
   const w=dom.window;
   w.structuredClone=structuredClone; w.confirm=() => true; w.alert=message => {throw new Error(message);};
   w.HTMLDialogElement.prototype.showModal=function(){this.open=true;}; w.HTMLDialogElement.prototype.close=function(){this.open=false;};
-  Object.assign(w,{config:{firebase:{},calendarServiceEnabled:false},initializeApp:() => ({}),getFirestore:() => ({}),collection:() => ({}),getAuth:() => ({}),onAuthStateChanged:(_auth,callback) => callback({uid:'nonmember',email:'outsider@example.com'}),getDoc:async () => ({exists:() => false}),doc:(...args) => args,signOut:async () => {},serverTimestamp:() => new Date(),getFunctions:() => ({}),httpsCallable:() => {throw new Error('Demo must not call the calendar service');}});
+  Object.assign(w,{config:{firebase:{},calendarServiceEnabled:false},initializeApp:() => ({}),getFirestore:() => ({}),collection:() => ({}),getAuth:() => ({}),onAuthStateChanged:(_auth,callback) => callback({uid:'nonmember',email:'outsider@example.com'}),getDoc:async () => ({exists:() => false}),setDoc:async () => {},doc:(...args) => args,signOut:async () => {},serverTimestamp:() => new Date(),getFunctions:() => ({}),httpsCallable:() => {throw new Error('Demo must not call the calendar service');}});
   // Real FullCalendar is exercised in a DOM. This is not a visual browser test.
   w.eval(await read('node_modules/fullcalendar/index.global.js'));
   async function module(file,names,extra='') { w.eval(`(() => { ${extra}\n${clean(await read(file))}\nObject.assign(window,{${names.join(',')}}); })();`); }
@@ -74,6 +74,8 @@ async function fixture(options = {}) {
   await module('meals-view.js',['planHTML','ideasHTML','bogosHTML','storesHTML','favoritesHTML','recipeHTML'],'const esc=escapeHTML;');
   await module('meals.js',['initMeals']);
   await module('pull-refresh.js',['PULL_READY','PULL_MAX','pullDistance','isStandalone','initPullRefresh']);
+  await module('bath-days.js',['DEFAULT_BATH_DAYS','WEEKDAYS','BATH_TITLE','cleanBathDays','bathDays','setBathDays','isBathDay','describeBathDays','bathDaysInRange','bathEvents','nextBathDay']);
+  await module('bath-settings.js',['bathPanelHTML','memoryBathStore','initBathDays'],'const esc=escapeHTML;');
   await module('birthdays.js',['sampleBirthdays','birthdayPanelHTML','initBirthdays'],'const esc=escapeHTML;');
   w.eval(clean(await read('app.js')) + ';window.__testApp={getDocs:()=>rawDocs,setCloudDocs:(records)=>{cloudDocs=records;rebuildEvents();},persistMovedEvent,redraw:()=>updateHouseholdEvents(expandedEvents)};'); await settle();
   return {dom,w,doc:w.document,errors};
@@ -609,5 +611,19 @@ test('quick add logs Karena’s pumps (both sides) straight to the Frankie page'
   assert.match(doc.getElementById('notice').textContent, /Logged a pump: left 2 oz, right 2\.5 oz/);
   assert.equal(input.value, ''); assert.ok(Math.abs(parseFloat(today()) - (before + 4.5)) < 0.15, `${before} → ${today()}`);
   assert.ok(doc.getElementById('babyLogDialog').open !== true, 'no dialog needed');
+  assert.deepEqual(errors, []);
+});
+test('bath days: pick them in Settings and they show on the calendar and Today', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  const pressed = () => [...doc.querySelectorAll('#bathPanel [data-bath-day]')].filter(b => b.getAttribute('aria-pressed') === 'true').map(b => b.textContent);
+  assert.deepEqual(pressed(), ['Wed', 'Sun'], 'Wednesday and Sunday to start');
+  assert.match(doc.getElementById('bathPanel').textContent, /Wednesdays and Sundays/);
+  // The week strip on Today shows them on the right days.
+  const stripDays = () => [...doc.querySelectorAll('#homeWeek .home-week-day')].filter(d => d.querySelector('.home-bath')).map(d => new Date(`${d.dataset.homeDate}T12:00:00`).getDay());
+  assert.ok(stripDays().length >= 1 && stripDays().every(day => [0, 3].includes(day)), String(stripDays()));
+  // Add Friday, drop Wednesday.
+  doc.querySelector('#bathPanel [data-bath-day="5"]').click(); doc.querySelector('#bathPanel [data-bath-day="3"]').click(); await settle();
+  assert.deepEqual(pressed(), ['Fri', 'Sun']); assert.match(doc.getElementById('bathPanel').textContent, /Fridays and Sundays/);
+  assert.ok(stripDays().every(day => [0, 5].includes(day)) && stripDays().length >= 1, String(stripDays()));
   assert.deepEqual(errors, []);
 });
