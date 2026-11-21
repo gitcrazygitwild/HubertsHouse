@@ -186,7 +186,7 @@ export function composeEmail(d) {
 
   // A little something
   const c = d.content;
-  const extras = p(`<em style="font-family:Georgia,serif;font-size:16px">“${esc(c.quote)}”</em>`) + p(`✦ ${esc(c.fact)}`, 'font-size:13px') + p(`<strong>${esc(c.word.word)}</strong> ${small(esc(c.word.part))} — ${esc(c.word.definition)}`, 'font-size:13px')
+  const extras = p(`<em style="font-family:Georgia,serif;font-size:16px">“${esc(c.quote)}”</em>`) + p(`✦ ${esc(c.fact)}`, 'font-size:13px') + p(`<strong>${esc(c.word.word)}</strong>${c.word.say ? ` ${small(`/${esc(c.word.say)}/`)}` : ''} ${small(esc(c.word.part))} — ${esc(c.word.definition)}`, 'font-size:13px')
     + `<div style="margin-top:12px;padding:12px 14px;border-radius:12px;background:#eeeaf6">${p(`<strong>Dad joke:</strong> ${esc(c.joke.setup)}`, 'margin:0 0 4px;font-size:13px')}${p(small(`↓ Punchline: <span style="color:${C.ink}">${esc(c.joke.punchline)}</span>`), 'margin:0')}</div>`
     + (d.afterDark ? `<div style="margin-top:8px;padding:12px 14px;border-radius:12px;background:#f3e6ea">${p(`<strong>🔞 After dark:</strong> ${esc(c.afterDark.setup)}`, 'margin:0 0 4px;font-size:13px')}${p(small(`↓ ${esc(c.afterDark.punchline)}`), 'margin:0')}</div>` : '');
   sections.push(section('A little something for today', 'Quote, fact, word & a laugh', extras));

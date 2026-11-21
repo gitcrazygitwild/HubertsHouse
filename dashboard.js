@@ -56,6 +56,8 @@ export function initDashboard({ onAppearanceChange = () => {} } = {}) {
     $('dailyFact').textContent = content.fact;
     $('dailyWord').textContent = content.word.word;
     $('dailyWordPart').textContent = content.word.part;
+    $('dailyWordSay').textContent = content.word.say ? `/${content.word.say}/` : '';
+    $('dailyWordSay').setAttribute('aria-label', `Pronounced ${content.word.say || content.word.word}`);
     $('dailyDefinition').textContent = content.word.definition;
     $('dailyExample').textContent = `“${content.word.example}”`;
     $('dailyJokeSetup').textContent = content.joke.setup;
@@ -73,6 +75,18 @@ export function initDashboard({ onAppearanceChange = () => {} } = {}) {
     write('hh_mission_done', read('hh_mission_done') === currentDay ? '' : currentDay);
     missionState(currentDay);
   });
+  // 🔊 says the word with the device's own voice, where the browser offers speech.
+  const speak = $('dailyWordSpeak'), synth = globalThis.speechSynthesis;
+  if (speak && synth && typeof globalThis.SpeechSynthesisUtterance === 'function') {
+    speak.hidden = false;
+    speak.addEventListener('click', () => {
+      const word = $('dailyWord').textContent.trim(); if (!word) return;
+      synth.cancel();
+      const line = new SpeechSynthesisUtterance(word); line.lang = 'en-US'; line.rate = 0.85;
+      speak.classList.add('is-speaking'); line.onend = line.onerror = () => speak.classList.remove('is-speaking');
+      synth.speak(line);
+    });
+  }
   refresh();
   setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, 60000);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });

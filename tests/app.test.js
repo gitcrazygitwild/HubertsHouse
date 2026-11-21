@@ -90,6 +90,7 @@ test('home views, theme and monitor navigation work together without hiding the 
   doc.dispatchEvent(new w.Event('visibilitychange')); await settle(); assert.equal(doc.getElementById('view-life').classList.contains('hidden'),false); assert.equal(doc.getElementById('life-todos').hidden,false);
   doc.querySelector('[data-view="today"]').click();
   for (const id of ['dailyQuote','dailyFact','dailyWord','dailyJoke','catCrew','babyStats']) assert.ok(doc.getElementById(id));
+  assert.match(doc.getElementById('dailyWordSay').textContent, /^\/[a-z-]*[A-Z]{2,}[a-zA-Z-]*\/$/, 'the word of the day shows how to say it');
   assert.deepEqual(errors,[]);
 });
 test('Frankie stays paired with an adult and is preserved when opening an event again', async t => {

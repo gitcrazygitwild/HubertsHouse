@@ -65,3 +65,16 @@ test('checklist progress ignores empty rows and missing lists; an untimed end sp
   assert.deepEqual(eventsOnDay([late], '2026-11-02'), [late]);
   assert.deepEqual(eventsOnDay([late], '2026-11-03'), []);
 });
+
+test('every word of the day says how to say it, with the stressed syllable in capitals', () => {
+  const seen = new Set();
+  for (let day = 0; day < 14; day++) {
+    const { word } = dailyContent(new Date(2026, 0, 1 + day, 12));
+    seen.add(word.word);
+    assert.match(word.say, /^[a-z]+(-[a-z]+)*$/i, word.word);
+    assert.match(word.say, /[A-Z]{2,}/, `${word.word} marks its stressed syllable`);
+    assert.ok(word.part && word.definition && word.example, word.word);
+  }
+  assert.equal(seen.size, 14);
+  assert.equal(dailyContent(new Date(2026, 0, 1, 12)).word.say.length > 0, true);
+});
