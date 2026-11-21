@@ -144,3 +144,24 @@ test('spoken numbers and colon-less times are understood, and a miss says what w
   assert.match(notUnderstood('What should I log?'), /question .* instead of your answer/);
   assert.match(notUnderstood('Frankie log'), /shortcut’s name/);
 });
+
+test('Karena’s pumps: both sides by voice, and a total alone asks for the sides', async () => {
+  const { parseBabyLog, describeBabyLog } = await import('../quick-add.js');
+  const pump = planSiriLog({ text:'pumped left two ounces right two and a half at 5', snapshot, now });
+  assert.deepEqual([pump.entry.kind, pump.entry.left, pump.entry.right, pump.entry.units], ['pump', 2, 2.5, 'oz']);
+  assert.equal(new Date(pump.entry.start).getHours(), 17);
+  assert.equal(pump.speak, 'Log a pump at 5:00 PM: left 2 ounces, right 2.5 ounces, 4.5 in all?');
+  assert.equal(pump.done, 'Logged 4.5 ounces pumped at 5:00 PM: left 2, right 2.5.');
+  assert.equal(planSiriLog({ text:'pump 90 ml left 60 ml right for 20 minutes', snapshot, now }).entry.minutes, 20);
+  assert.equal(planSiriLog({ text:'pumped right 3 ounces', snapshot, now }).entry.left, 0, 'one side only is fine');
+  assert.throws(() => planSiriLog({ text:'pumped 5 ounces', snapshot, now }), /each side/);
+  assert.throws(() => planSiriLog({ text:'pumped', snapshot, now }), /each side/);
+  // A bottle of pumped milk is still a bottle.
+  const bottle = planSiriLog({ text:'4 ounce bottle of pumped milk', snapshot, now });
+  assert.equal(bottle.entry.kind, 'bottle'); assert.equal(bottle.entry.bottleType, 'Breast Milk');
+  // Typed in quick add, with Karena's name.
+  const typed = parseBabyLog('karena pumped L 2 R 3 at 4pm', now);
+  assert.deepEqual([typed.kind, typed.left, typed.right], ['pump', 2, 3]);
+  assert.match(describeBabyLog(typed, 'en-US'), /Pump for Karena · 4:00 PM · L 2 oz · R 3 oz/);
+  assert.equal(parseBabyLog('Karena dentist Tuesday 3pm', now), null, 'Karena’s calendar plans aren’t logs');
+});

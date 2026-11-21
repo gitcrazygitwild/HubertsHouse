@@ -257,3 +257,18 @@ test('snapshot loads pump history, and a cache from before pumps reloads on a fu
   const broken = {doc:client.doc,collection:path => path.startsWith('pump') ? { where:() => { throw new Error('nope'); } } : query(path)};
   assert.deepEqual((await huckleberrySnapshot(broken,'child','America/New_York',null,true,now)).pumps,[]);
 });
+test('a pump saves one leftright row under pump/{child}, once, without touching other trackers', async () => {
+  const client = memory({'pump/child':{prefs:{other:'keep'}}});
+  const entry = {kind:'pump',requestId:randomUUID(),start,left:2,right:2.5,units:'oz',minutes:20};
+  assert.deepEqual(await writeHuckleberry(client,'child',entry,'America/New_York',now),{saved:true});
+  const rows = [...client.docs].filter(([path]) => path.startsWith('pump/child/intervals/'));
+  assert.equal(rows.length,1);
+  const row = rows[0][1];
+  assert.deepEqual({start:row.start,entryMode:row.entryMode,leftAmount:row.leftAmount,rightAmount:row.rightAmount,units:row.units,duration:row.duration},{start:Date.parse(start)/1000,entryMode:'leftright',leftAmount:2,rightAmount:2.5,units:'oz',duration:1200});
+  assert.equal(typeof row.offset,'number'); assert.equal(client.docs.get('pump/child').prefs.other,'keep');
+  assert.ok(![...client.docs.keys()].some(path => path.startsWith('feed/')),'not a bottle');
+  // It reads back the way the Frankie page reads pumps.
+  assert.deepEqual(normalizePumpHistory([row],now - 86400000,now + 60000).map(p => [p.left,p.right,p.total,p.minutes]),[[2,2.5,4.5,20]]);
+  assert.deepEqual(await writeHuckleberry(client,'child',entry,'America/New_York',now),{saved:true,duplicate:true});
+  for (const patch of [{left:-1},{right:25},{left:0,right:0},{units:'cups'},{minutes:0},{minutes:500},{left:'2'}]) assert.throws(() => validateBabyWrite({...entry,...patch},now));
+});

@@ -62,7 +62,7 @@ export function notUnderstood(said) {
   const heard = said.length > 80 ? `${said.slice(0, 77)}…` : said;
   if (/what should i log/i.test(said)) return `I received the question “${heard}” instead of your answer. In Get Contents of URL, set the text field to Provided Input.`;
   if (/^(hey siri,? )?frankie log\.?$/i.test(said)) return 'I received the shortcut’s name instead of your answer. In Get Contents of URL, set the text field to Provided Input from Ask for Input.';
-  return `I heard “${heard}”, but couldn’t tell what to log. Try “5 ounces at 5:15”, “dirty diaper”, “fell asleep at 2:40” or “woke up”.`;
+  return `I heard “${heard}”, but couldn’t tell what to log. Try “5 ounces at 5:15”, “dirty diaper”, “pumped left 2, right 2.5”, “fell asleep at 2:40” or “woke up”.`;
 }
 export const EMPTY_TEXT_HINT = 'I got your request but no words. In Get Contents of URL, set the text field to Provided Input from Ask for Input, not Shortcut Input.';
 // Why no key was found, in words Siri can say.
@@ -93,6 +93,15 @@ export function planSiriLog({ text, snapshot, now = new Date(), keyHash = '' }) 
   if (!log) throw new SiriError(notUnderstood(said));
   const entry = { kind:log.kind, start:log.start.toISOString(), requestId:requestId(keyHash, said, now) };
   const name = snapshot?.name || 'Frankie';
+  if (log.kind === 'pump') {
+    // Both sides are required: Huckleberry's single-total pump format isn't confirmed, so it's never written.
+    if (log.left == null) throw new SiriError(log.amount ? `How much from each side? Try “pumped left 2, right ${Math.max(0, log.amount - 2)}”.` : 'How much from each side? Try “pumped left 2 ounces, right 2 and a half”.');
+    const both = log.left + log.right;
+    if (!(both > 0)) throw new SiriError('That adds up to nothing. Try “pumped left 2, right 2 and a half”.');
+    Object.assign(entry, { left:log.left, right:log.right, units:log.units, ...(log.minutes ? { minutes:log.minutes } : {}) });
+    const u = n => UNITS[log.units][n === 1 ? 0 : 1], total = Math.round(both * 100) / 100;
+    return { entry, speak:`Log a pump at ${clock(log.start)}: left ${log.left} ${u(log.left)}, right ${log.right} ${u(log.right)}, ${total} in all?`, done:`Logged ${total} ${u(total)} pumped at ${clock(log.start)}: left ${log.left}, right ${log.right}.` };
+  }
   if (log.kind === 'bottle') {
     const last = latestBottle(snapshot);
     const amount = log.amount ?? last?.amount, units = log.units || last?.units || 'oz', type = log.bottleType || last?.type || 'Formula';
