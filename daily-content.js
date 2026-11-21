@@ -34,21 +34,22 @@ const facts = [
   'Earth’s atmosphere scatters blue light more strongly than red light, making the daytime sky look blue.',
   'A rainbow is a full circle; the ground usually hides the bottom half from view.'
 ];
+// [word, how to say it (CAPS = the stressed syllable), part of speech, definition, example]
 const words = [
-  ['serendipity','noun','Finding something good when you weren’t looking for it.','Finding our favorite café was pure serendipity.'],
-  ['petrichor','noun','The pleasant smell after rain falls on dry ground.','The open window let in the petrichor.'],
-  ['respite','noun','A short period of rest or relief.','A quiet cup of tea offered a welcome respite.'],
-  ['convivial','adjective','Friendly, lively, and enjoyable.','It was a convivial dinner around a crowded table.'],
-  ['gumption','noun','Practical initiative, courage, and resourcefulness.','A little gumption got the project moving.'],
-  ['mellifluous','adjective','Smooth and pleasant to hear.','Her mellifluous voice filled the kitchen.'],
-  ['halcyon','adjective','Calm, peaceful, and happy.','We remembered the halcyon days by the lake.'],
-  ['amble','verb','To walk at a relaxed, unhurried pace.','Let’s amble around the neighborhood.'],
-  ['solace','noun','Comfort in a difficult or disappointing moment.','He found solace in a familiar song.'],
-  ['verdant','adjective','Green with growing plants.','The trail wound through a verdant valley.'],
-  ['kindred','adjective','Similar in nature or character.','They recognized each other as kindred spirits.'],
-  ['apricity','noun','The warmth of the sun in winter.','The cat settled into a patch of apricity.'],
-  ['effervescent','adjective','Lively, enthusiastic, and full of energy.','Her effervescent laugh brightened the room.'],
-  ['liminal','adjective','At a boundary or between two stages.','Dawn is a liminal moment between night and day.']
+  ['serendipity','ser-uhn-DIP-i-tee','noun','Finding something good when you weren’t looking for it.','Finding our favorite café was pure serendipity.'],
+  ['petrichor','PET-ri-kor','noun','The pleasant smell after rain falls on dry ground.','The open window let in the petrichor.'],
+  ['respite','RES-pit','noun','A short period of rest or relief.','A quiet cup of tea offered a welcome respite.'],
+  ['convivial','kuhn-VIV-ee-uhl','adjective','Friendly, lively, and enjoyable.','It was a convivial dinner around a crowded table.'],
+  ['gumption','GUMP-shuhn','noun','Practical initiative, courage, and resourcefulness.','A little gumption got the project moving.'],
+  ['mellifluous','muh-LIF-loo-uhs','adjective','Smooth and pleasant to hear.','Her mellifluous voice filled the kitchen.'],
+  ['halcyon','HAL-see-uhn','adjective','Calm, peaceful, and happy.','We remembered the halcyon days by the lake.'],
+  ['amble','AM-buhl','verb','To walk at a relaxed, unhurried pace.','Let’s amble around the neighborhood.'],
+  ['solace','SOL-is','noun','Comfort in a difficult or disappointing moment.','He found solace in a familiar song.'],
+  ['verdant','VUR-dnt','adjective','Green with growing plants.','The trail wound through a verdant valley.'],
+  ['kindred','KIN-drid','adjective','Similar in nature or character.','They recognized each other as kindred spirits.'],
+  ['apricity','uh-PRIS-i-tee','noun','The warmth of the sun in winter.','The cat settled into a patch of apricity.'],
+  ['effervescent','ef-er-VES-uhnt','adjective','Lively, enthusiastic, and full of energy.','Her effervescent laugh brightened the room.'],
+  ['liminal','LIM-uh-nuhl','adjective','At a boundary or between two stages.','Dawn is a liminal moment between night and day.']
 ];
 const missions = [
   'Put five little things back where they belong.',
@@ -63,6 +64,6 @@ export function dailyContent(now = new Date()) {
   const key = dateKey(now);
   const ordinal = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86400000);
   const index = ((ordinal % 14) + 14) % 14;
-  const [word, part, definition, example] = words[index];
-  return { key, quote: quotes[index], attribution: 'Hubert’s House', fact: facts[index], word: { word, part, definition, example }, ...dailyJokes(now), mission: missions[index % missions.length] };
+  const [word, say, part, definition, example] = words[index];
+  return { key, quote: quotes[index], attribution: 'Hubert’s House', fact: facts[index], word: { word, say, part, definition, example }, ...dailyJokes(now), mission: missions[index % missions.length] };
 }
