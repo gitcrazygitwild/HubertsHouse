@@ -86,3 +86,9 @@ html, body { overflow-x: clip; max-width: 100%; }
 .pull-refresh.refreshing .pull-refresh-icon { animation:pull-spin .8s linear infinite; }
 @keyframes pull-spin { to { transform:rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .pull-refresh, .pull-refresh-icon { transition:none !important; animation:none !important; } }
+/* Room below the content for the fixed bottom menu. The body is screen-height, so
+   padding on the body ends up behind the menu instead of after the page; pad the
+   content itself: menu (~65px) + the iPhone home-bar area + a little breathing room. */
+@media (max-width: 650px) {
+  .house-main, .display-mode .house-main, :root[data-density="compact"] .house-main { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+}
