@@ -91,6 +91,20 @@ export function dailyBottles(bottles, timezone, days, now = Date.now()) {
   }
   return keys.map(key => ({ ...byDay.get(key), ounces:Math.round(byDay.get(key).ounces * 10) / 10 }));
 }
+// Karena's pumping: ounces per day, split by side. Sessions logged as one total
+// (no sides) count toward the total and show as "unsplit".
+export function dailyPumps(pumps = [], timezone, days, now = Date.now()) {
+  const keys = dayKeys(days, timezone, now), byDay = new Map(keys.map(key => [key, { key, ounces:0, left:0, right:0, unsplit:0, count:0 }]));
+  for (const pump of pumps) {
+    const stamp = Date.parse(pump.start); if (!Number.isFinite(stamp) || stamp > +now) continue;
+    const row = byDay.get(localDay(stamp, timezone)); if (!row) continue;
+    const oz = value => toOunces(Number(value) || 0, pump.units);
+    row.ounces += oz(pump.total); row.count++;
+    if (pump.left == null && pump.right == null) row.unsplit += oz(pump.total); else { row.left += oz(pump.left); row.right += oz(pump.right); }
+  }
+  const r = n => Math.round(n * 10) / 10;
+  return keys.map(key => { const row = byDay.get(key); return { ...row, ounces:r(row.ounces), left:r(row.left), right:r(row.right), unsplit:r(row.unsplit) }; });
+}
 // One row per day; each block is minutes from local midnight, clipped to the day.
 export function timelineRows(sleeps, timezone, days, now = Date.now()) {
   const line = nightLine(sleeps, timezone, now);

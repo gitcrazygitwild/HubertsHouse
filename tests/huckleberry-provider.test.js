@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { authenticateHuckleberry, huckleberryClient, huckleberrySnapshot, normalizeSleepHistory, normalizeFeedHistory, HISTORY_DAYS, validateBabyWrite, writeHuckleberry } from '../functions/huckleberry-provider.js';
+import { normalizePumpHistory, authenticateHuckleberry, huckleberryClient, huckleberrySnapshot, normalizeSleepHistory, normalizeFeedHistory, HISTORY_DAYS, validateBabyWrite, writeHuckleberry } from '../functions/huckleberry-provider.js';
 // The exact gRPC copy Firestore uses, resolved from Firestore's own dependency tree.
 const functionsRequire = createRequire(new URL('../functions/package.json', import.meta.url));
 const grpc = createRequire(functionsRequire.resolve('google-gax'))('@grpc/grpc-js');
@@ -123,7 +123,7 @@ test('invalid writes are rejected before touching provider data', () => {
 test('snapshot selects the saved SweetSpot and exposes only normalized fields', async () => {
   const records = {'childs/child':{childsName:'Frankie',private:'omit',sweetspot:{selectedNapDay:2,sweetSpotTimes:{2:now+3600000,3:now+7200000}}},'sleep/child':{timer:{active:true,timerStartTime:now-3600000,uuid:'timer'},prefs:{lastSleep:{start:(now-7200000)/1000,duration:1800}}},'feed/child':{prefs:{lastBottle:{start:now/1000,bottleAmount:4,bottleUnits:'oz',bottleType:'Formula'}}}};
   const client = {doc:path => ({get:async () => ({exists:!!records[path],data:() => records[path]})})};
-  const snapshot = await huckleberrySnapshot(client,'child','America/New_York',{sleeps:[],bottles:[],historyComplete:true,historyCheckedAt:new Date(now).toISOString()},false,now);
+  const snapshot = await huckleberrySnapshot(client,'child','America/New_York',{sleeps:[],bottles:[],pumps:[],historyComplete:true,historyCheckedAt:new Date(now).toISOString()},false,now);
   assert.equal(snapshot.bottles.length,1); assert.equal(snapshot.bottles[0].amount,4);
   assert.equal(snapshot.sweetspot.time,'2026-11-15T16:00:00.000Z'); assert.equal(snapshot.timer.start,start); assert.equal(snapshot.sleeps.length,1); assert.equal(snapshot.lastBottle.amount,4); assert.equal(snapshot.private,undefined);
 });
@@ -224,4 +224,36 @@ test('SweetSpot follows the household nap plan (4 naps by default), falling back
   const onlyThree = chooseSweetspot({ selectedNapDay:3, sweetSpotTimes:{ 3:now + 3600000 } });
   assert.equal(onlyThree.selectedNapDay, '3'); assert.equal(onlyThree.usingFallback, true);
   assert.equal(validNapPlan(undefined), '4'); assert.throws(() => validNapPlan('nine'));
+});
+
+test('pump history keeps both sides, single totals and archived batches, and drops junk', () => {
+  const s = ms => ms / 1000;
+  const values = normalizePumpHistory([
+    {start:s(now - 3600000),entryMode:'leftright',leftAmount:2.5,rightAmount:3,units:'oz',duration:900,offset:-300},
+    {multi:true,data:{a:{start:s(now - 7200000),entryMode:'leftright',leftAmount:90,units:'ml',offset:-300},b:{start:s(now - 9000000),entryMode:'total',amount:4,units:'oz',offset:-300}}},
+    {start:s(now - 10800000),entryMode:'total',leftAmount:3.5,units:'oz'},                // a total stored in leftAmount
+    {start:s(now - 1000),entryMode:'leftright',leftAmount:0,rightAmount:0,units:'oz'},   // nothing pumped
+    {start:s(now - 2000),entryMode:'leftright',leftAmount:2,units:'cups'},               // bad units
+    {start:s(now - 3000),entryMode:'leftright',leftAmount:50,units:'oz'},                // impossible
+    {start:s(now - 3 * 86400000),entryMode:'leftright',leftAmount:2,units:'oz'}           // too old
+  ], now - 86400000, now);
+  assert.deepEqual(values.map(v => [v.left, v.right, v.total, v.units]), [[null, null, 3.5, 'oz'], [null, null, 4, 'oz'], [90, null, 90, 'ml'], [2.5, 3, 5.5, 'oz']]);
+  assert.equal(values[3].minutes, 15);
+});
+test('snapshot loads pump history, and a cache from before pumps reloads on a full load but not for Siri', async () => {
+  const records = {'childs/child':{childsName:'Frankie'},'sleep/child':{},'feed/child':{},'diaper/child':{},'pump/child':{}};
+  const paths = [];
+  const query = (path, clauses = []) => ({where:(f,o,v) => query(path,[...clauses,[f,o,v]]),orderBy:() => query(path,clauses),limit:() => query(path,clauses),
+    get:async () => { paths.push(path); const multi = clauses.some(([f]) => f === 'multi');
+      const docs = multi || !path.startsWith('pump') ? [] : [{data:() => ({start:(now - 3600000)/1000,entryMode:'leftright',leftAmount:2,rightAmount:2.5,units:'oz'})}];
+      return {docs,size:docs.length}; }});
+  const client = {doc:path => ({get:async () => ({exists:!!records[path],data:() => records[path]})}),collection:path => query(path)};
+  const fresh = {sleeps:[],bottles:[],historyComplete:true,historyCheckedAt:new Date(now).toISOString()}; // no pumps yet
+  const light = await huckleberrySnapshot(client,'child','America/New_York',fresh,false,now,undefined,true);
+  assert.equal(paths.length,0,'Siri stays fast'); assert.deepEqual(light.pumps,[]);
+  const full = await huckleberrySnapshot(client,'child','America/New_York',fresh,false,now);
+  assert.ok(paths.includes('pump/child/intervals')); assert.deepEqual(full.pumps.map(p => p.total),[4.5]);
+  // A pump read error doesn't break the snapshot.
+  const broken = {doc:client.doc,collection:path => path.startsWith('pump') ? { where:() => { throw new Error('nope'); } } : query(path)};
+  assert.deepEqual((await huckleberrySnapshot(broken,'child','America/New_York',null,true,now)).pumps,[]);
 });

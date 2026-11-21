@@ -144,6 +144,30 @@ export function normalizeFeedHistory(documents, from, to) {
   }
   return [...records.values()].sort((a,b) => Date.parse(a.start) - Date.parse(b.start));
 }
+// Pumping sessions (pump/{child}/intervals). Huckleberry saves either both sides
+// (entryMode "leftright": leftAmount and rightAmount) or one total ("total"). The
+// total-only shape isn't documented, so its amount is read from whichever field holds it.
+export function normalizePumpHistory(documents, from, to) {
+  const records = new Map(), num = value => { const n = Number(value); return Number.isFinite(n) && n >= 0 ? n : null; };
+  for (const document of documents) {
+    const value = typeof document.data === 'function' ? document.data() : document;
+    const entries = value?.multi ? Object.values(value.data || {}) : [value];
+    for (const entry of entries) {
+      if (!entry || typeof entry !== 'object') continue;
+      const start = epochMs(entry.start), units = entry.units === 'ml' ? 'ml' : entry.units === 'oz' ? 'oz' : null;
+      if (!Number.isFinite(start) || start < from || start > to || !units) continue;
+      let left = num(entry.leftAmount), right = num(entry.rightAmount), total;
+      const split = entry.entryMode !== 'total';
+      if (split) total = (left ?? 0) + (right ?? 0);
+      else { total = num(entry.totalAmount) ?? num(entry.amount) ?? ((left ?? 0) + (right ?? 0)); left = null; right = null; }
+      const max = units === 'oz' ? 40 : 1200;
+      if (!(total > 0) || total > max) continue;
+      const round = n => n == null ? null : Math.round(n * 100) / 100, duration = num(entry.duration);
+      records.set(`${start}`, { start:new Date(start).toISOString(), left:round(left), right:round(right), total:round(total), units, ...(duration ? { minutes:Math.round(duration / 60) } : {}) });
+    }
+  }
+  return [...records.values()].sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
+}
 async function intervalHistory(client, path, from, now) {
   const intervals = client.collection(path);
   const [regular, batches] = await Promise.all([
@@ -169,24 +193,30 @@ export function readBirthdate(details = {}) {
 // the app refreshes the full history on its next load.
 export async function huckleberrySnapshot(client, childId, timezone, cached, forceHistory = false, now = Date.now(), napPlan = DEFAULT_NAP_PLAN, light = false) {
   const child = id(childId);
-  const [profile, sleepDoc, feedDoc, diaperDoc] = await Promise.all(['childs','sleep','feed','diaper'].map(collection => client.doc(`${collection}/${child}`).get()));
+  const [profile, sleepDoc, feedDoc, diaperDoc, pumpDoc] = await Promise.all(['childs','sleep','feed','diaper','pump'].map(collection => client.doc(`${collection}/${child}`).get()));
   if (!profile.exists) fail('not-found','This Huckleberry child profile is no longer available.');
   const sleep = sleepDoc.data() || {}, feed = feedDoc.data() || {}, diaper = diaperDoc.data() || {}, details = profile.data();
   const from = now - HISTORY_DAYS * 86400000;
-  // A cache from before bottle history existed has no `bottles` field; reload it.
-  let sleeps = cached?.sleeps || [], bottles = cached?.bottles || [], historyComplete = cached?.historyComplete ?? false, feedsComplete = cached?.feedsComplete ?? false, historyCheckedAt = Array.isArray(cached?.bottles) ? cached?.historyCheckedAt : undefined;
-  if (forceHistory || !historyCheckedAt || (!light && now - Date.parse(historyCheckedAt) > 15 * 60000)) {
-    const [sleepHistory, feedHistory] = await Promise.all([intervalHistory(client,`sleep/${child}/intervals`,from,now),intervalHistory(client,`feed/${child}/intervals`,from,now)]);
-    sleeps = normalizeSleepHistory(sleepHistory.docs,from,now); bottles = normalizeFeedHistory(feedHistory.docs,from,now);
+  // A cache from before bottle (or pump) history existed lacks that field; reload it.
+  let sleeps = cached?.sleeps || [], bottles = cached?.bottles || [], pumps = cached?.pumps || [], historyComplete = cached?.historyComplete ?? false, feedsComplete = cached?.feedsComplete ?? false, historyCheckedAt = Array.isArray(cached?.bottles) ? cached?.historyCheckedAt : undefined;
+  // Pumps were added later: a cache without them reloads on the next full (non-Siri) load.
+  const needsPumps = !light && !Array.isArray(cached?.pumps);
+  if (forceHistory || !historyCheckedAt || needsPumps || (!light && now - Date.parse(historyCheckedAt) > 15 * 60000)) {
+    // Pump history is optional: a household that never pumps (or a read error) leaves it empty.
+    const [sleepHistory, feedHistory, pumpHistory] = await Promise.all([intervalHistory(client,`sleep/${child}/intervals`,from,now),intervalHistory(client,`feed/${child}/intervals`,from,now),intervalHistory(client,`pump/${child}/intervals`,from,now).catch(() => ({docs:[]}))]);
+    sleeps = normalizeSleepHistory(sleepHistory.docs,from,now); bottles = normalizeFeedHistory(feedHistory.docs,from,now); pumps = normalizePumpHistory(pumpHistory.docs,from,now);
     historyComplete = sleepHistory.complete; feedsComplete = feedHistory.complete; historyCheckedAt = new Date(now).toISOString();
   }
   const lastSleep = sleep.prefs?.lastSleep;
   if (lastSleep) sleeps = normalizeSleepHistory(sleeps.map(item => ({start:Date.parse(item.start)/1000,duration:(Date.parse(item.end)-Date.parse(item.start))/1000})).concat(lastSleep),from,now);
   const latestBottle = feed.prefs?.lastBottle;
   if (latestBottle) bottles = normalizeFeedHistory(bottles.map(item => ({mode:'bottle',start:Date.parse(item.start),amount:item.amount,units:item.units,bottleType:item.type})).concat({mode:'bottle',start:latestBottle.start,amount:latestBottle.bottleAmount,units:latestBottle.bottleUnits,bottleType:latestBottle.bottleType}),from,now);
+  // The newest pump, if Huckleberry keeps one in prefs like it does for bottles, so a fresh session shows before the next history refresh.
+  const latestPump = pumpDoc?.data?.()?.prefs?.lastPump;
+  if (latestPump && typeof latestPump === 'object') pumps = normalizePumpHistory([...pumps.map(p => ({start:Date.parse(p.start),units:p.units,...(p.left == null && p.right == null ? {entryMode:'total',amount:p.total} : {entryMode:'leftright',leftAmount:p.left,rightAmount:p.right}),...(p.minutes ? {duration:p.minutes * 60} : {})})), latestPump],from,now);
   const sweetspot = chooseSweetspot(details.sweetspot || {}, napPlan);
   const bottle = feed.prefs?.lastBottle, change = diaper.prefs?.lastDiaper;
-  return {childId:child,name:String(details.childsName || 'Baby').slice(0,100),birthdate:readBirthdate(details),timezone,checkedAt:new Date(now).toISOString(),historyCheckedAt,historyComplete,feedsComplete,historyDays:HISTORY_DAYS,sleeps,bottles,
+  return {childId:child,name:String(details.childsName || 'Baby').slice(0,100),birthdate:readBirthdate(details),timezone,checkedAt:new Date(now).toISOString(),historyCheckedAt,historyComplete,feedsComplete,historyDays:HISTORY_DAYS,sleeps,bottles,pumps,
     timer:{active:sleep.timer?.active === true,paused:sleep.timer?.paused === true,start:iso(sleep.timer?.timerStartTime),end:iso(sleep.timer?.timerEndTime),uuid:String(sleep.timer?.uuid || '')},
     sweetspot,
     lastBottle:bottle ? {time:iso(bottle.start),amount:Number.isFinite(bottle.bottleAmount) ? bottle.bottleAmount : null,units:bottle.bottleUnits === 'oz' ? 'oz' : 'ml',type:String(bottle.bottleType || 'Bottle').slice(0,60)} : null,

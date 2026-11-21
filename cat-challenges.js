@@ -1,11 +1,12 @@
 // The cats' other two Frankie challenges (the nap challenge lives in prediction-log.js).
 // - Morning wake-up: at bedtime, each cat calls when Frankie will wake up for the day.
 // - The Bottle Bet: at midnight, each cat guesses how many ounces she'll drink that day.
+// - The Pump Pool: at midnight, each cat guesses how many ounces Karena will pump that day.
 // Every method is deterministic and uses only what was logged before the call, so past
 // nights and days are replayed honestly. If a method ever changes, freeze the old one
 // (as mia-v1.js does for naps) so past scores keep the guesses actually made.
 // No imports beyond the app's own pure modules, so the newsletter can share this file.
-import { nightLine, sleepKind, localDay, clockAt, dailyBottles, dayStart } from './baby-history.js';
+import { nightLine, sleepKind, localDay, clockAt, dailyBottles, dailyPumps, dayStart } from './baby-history.js';
 import { ageInDays, halfLifeFor } from './baby-model.js';
 
 const MINUTE = 60000, HOUR = 3600000, DAY = 86400000;
@@ -27,6 +28,11 @@ export const CHALLENGES = {
     { key:'hubert', owner:'Hubert', name:'The Middle Day', how:'Takes the middle of her last seven days of ounces.' },
     { key:'mia', owner:'Mia', name:'Growth Spurt', how:'Weights the last few days most and adds the trend, because babies keep getting hungrier.' },
     { key:'mack', owner:'Mack', name:'Bottomless Bowl', how:'Picks her biggest day of the last three, because Mack assumes everyone is as hungry as he is.' }
+  ],
+  pump:[
+    { key:'hubert', owner:'Hubert', name:'Same Time Last Week', how:'Takes the middle of Karena’s last seven pumping days, then leans toward the same weekday last week, because routines repeat.' },
+    { key:'mia', owner:'Mia', name:'Supply & Demand', how:'Follows Karena’s recent trend, recent days counting most, and nudges it toward how much Frankie has been drinking.' },
+    { key:'mack', owner:'Mack', name:'Copycat', how:'Says exactly what she pumped yesterday. Mack calls this “consistency”.' }
   ]
 };
 export const MACK_EXCUSE = 'Mack was asleep in the laundry basket while the others built their models, so he copies Huckleberry’s SweetSpot and takes full credit.';
@@ -105,7 +111,28 @@ export function bottlePicks(bottles, timezone, dayKey, { birthdate = null } = {}
   return out;
 }
 
-// ---------- Scoring (both challenges) ----------
+// ---------- The Pump Pool ----------
+// Pumped ounces per day before `dayKey`, oldest first, skipping days with no pumps.
+export function pumpPicks(pumps, timezone, dayKey, { bottles = [] } = {}) {
+  const before = dayStart(dayKey, timezone) - 1, rows = dailyPumps(pumps, timezone, 14, before).filter(row => row.count > 0), out = { hubert:null, mia:null, mack:null };
+  if (rows.length < 3) return out;
+  const oz = rows.map(r => r.ounces), round = value => Math.max(0, Math.round(value * 2) / 2);
+  out.mack = round(oz.at(-1));
+  // Hubert: the 7-day middle, blended a third of the way toward the same weekday a week ago (if logged).
+  const weekAgo = rows.find(r => r.key === localDay(dayStart(dayKey, timezone) - 7 * DAY + 12 * HOUR, timezone));
+  const mid = median(oz.slice(-7));
+  out.hubert = round(weekAgo ? mid + (weekAgo.ounces - mid) / 3 : mid);
+  // Mia: recency-weighted level plus trend (±2 oz), then a small pull toward Frankie's recent intake.
+  const ago = rows.map((_, i) => rows.length - i), weights = ago.map(a => 0.5 ** (a / 4)), base = wmean(oz, weights);
+  const mx = wmean(ago, weights), slope = -ago.reduce((s, a, i) => s + weights[i] * (a - mx) * (oz[i] - base), 0) / Math.max(1e-9, ago.reduce((s, a, i) => s + weights[i] * (a - mx) ** 2, 0));
+  let mia = base + clamp(slope * mx, -2, 2);
+  const drank = dailyBottles(bottles, timezone, 3, before).filter(r => r.count >= 3).map(r => r.ounces);
+  if (drank.length) mia += clamp((wmean(drank, drank.map(() => 1)) - mia) * 0.15, -1.5, 1.5);
+  out.mia = round(mia);
+  return out;
+}
+
+// ---------- Scoring (all challenges) ----------
 function summarize(rows, models, hit) {
   const n = rows.length;
   const summary = models.map(model => {
@@ -117,7 +144,7 @@ function summarize(rows, models, hit) {
   return { summary, leader, scored:n };
 }
 const winnersOf = errors => { const best = Math.min(...Object.values(errors).map(Math.abs)); return Object.keys(errors).filter(key => Math.abs(errors[key]) === best); };
-let morningMemo = { key:null, value:null }, bottleMemo = { key:null, value:null };
+let morningMemo = { key:null, value:null }, bottleMemo = { key:null, value:null }, pumpMemo = { key:null, value:null };
 export function scoreMornings(sleeps, timezone, now = Date.now(), { birthdate = null, days = 30 } = {}) {
   const key = JSON.stringify([timezone, birthdate, days, sleeps.length, sleeps.at(-1)?.end, sleeps[0]?.start, Math.floor(+now / HOUR)]);
   if (morningMemo.key === key) return morningMemo.value;
@@ -144,4 +171,18 @@ export function scoreBottles(bottles, timezone, now = Date.now(), { birthdate = 
   }
   rows.reverse();
   const value = { results:rows, ...summarize(rows, CHALLENGES.bottle, 2) }; bottleMemo = { key, value }; return value;
+}
+export function scorePumps(pumps = [], timezone, now = Date.now(), { bottles = [], days = 30 } = {}) {
+  const key = JSON.stringify([timezone, days, pumps.length, pumps.at(-1)?.start, bottles.length, bottles.at(-1)?.start, localDay(+now, timezone)]);
+  if (pumpMemo.key === key) return pumpMemo.value;
+  // Completed days that had at least one pump logged.
+  const rows = [];
+  for (const day of dailyPumps(pumps, timezone, days + 1, now).slice(0, -1).filter(row => row.count >= 1)) {
+    const picks = pumpPicks(pumps, timezone, day.key, { bottles });
+    if (picks.hubert == null || picks.mia == null || picks.mack == null) continue;
+    const errors = Object.fromEntries(Object.entries(picks).map(([cat, oz]) => [cat, Math.round((day.ounces - oz) * 10) / 10]));
+    rows.push({ key:day.key, actual:day.ounces, picks, errors, winners:winnersOf(errors) });
+  }
+  rows.reverse();
+  const value = { results:rows, ...summarize(rows, CHALLENGES.pump, 2) }; pumpMemo = { key, value }; return value;
 }

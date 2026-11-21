@@ -386,8 +386,8 @@ function openLog(kind, prefill = {}, editing = null) {
   return true;
 }
 function sampleSnapshot() {
-  const now = Date.now(), {sleeps, bottles} = sampleHistory(now), last = bottles.at(-1), wake = Date.parse(sleeps.at(-1).end);
-  return {childId:'sample-frankie',name:'Frankie',birthdate:new Date(now - 125 * 86400000).toISOString().slice(0, 10),timezone:zone(),checkedAt:new Date().toISOString(),historyComplete:true,feedsComplete:true,historyDays:45,sleeps,bottles,timer:{active:false},
+  const now = Date.now(), {sleeps, bottles, pumps} = sampleHistory(now), last = bottles.at(-1), wake = Date.parse(sleeps.at(-1).end);
+  return {childId:'sample-frankie',name:'Frankie',birthdate:new Date(now - 125 * 86400000).toISOString().slice(0, 10),timezone:zone(),checkedAt:new Date().toISOString(),historyComplete:true,feedsComplete:true,historyDays:45,sleeps,bottles,pumps,timer:{active:false},
     sweetspot:{time:new Date(Math.max(now + 20 * 60000, wake + 125 * 60000)).toISOString()},lastBottle:{time:last.start,amount:last.amount,units:last.units,type:last.type},lastDiaper:{time:new Date(now - 60 * 60000).toISOString(),mode:'pee'}};
 }
 function memoryPredictions(seed) {
