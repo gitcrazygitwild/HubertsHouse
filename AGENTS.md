@@ -24,12 +24,13 @@ Two AI assistants work on this repository: **Codex** and **Claude**. They never 
 ## Things that bite
 
 - **Don't upgrade `google-auth-library` in `functions/` past 9.x.** Firestore’s gRPC layer (google-gax) needs v9. v10 silently dropped the Huckleberry token (`tests/huckleberry-provider.test.js` guards this).
-- **New public files must be listed in `scripts/build.mjs`** (images and other binary files go in its `binary` list, which is copied byte for byte) and new JS in the `check` script in `package.json`. The jsdom UI tests load modules by hand, so register new modules in `tests/app.test.js` (and `tests/frankie-ui.test.js` / `tests/baby-ui.test.js` where relevant).
+- **New public files must be listed in `scripts/build.mjs`** (images and other binary files go in its `binary` list, which is copied byte for byte). `npm run check` syntax-checks every `.js`/`.mjs` file on its own, and the jsdom UI tests expose every export of the modules they load. A brand-new module still has to be added, in order, to the module lists in `tests/app.test.js` (and `tests/frankie-ui.test.js` / `tests/baby-ui.test.js` where relevant), but its export names don't.
 - **`functions/shared/` is generated** by `scripts/share.mjs` (copies app modules the newsletter reuses). Don't edit or commit it; edit the root module instead.
 - **The live calendar stays the first thing on Today** (a test enforces it; the household asked for it).
 - **Never let a placeholder replace containers that later code fills.** The Frankie page once crashed that way. Toggle `hidden` instead. A global `[hidden] { display:none !important }` rule exists because components set `display:flex`.
 - **Preview mode:** `?demo=1` runs the whole app on sample data with no Firebase, iCloud or Huckleberry calls. Use it for screenshots and UI checks.
-- Firestore rules were verified in the Firestore emulator; there is no emulator step in CI yet. If you change `firestore.rules`, test it in the emulator (Java + `firebase emulators:exec`) before merging.
+- **Firestore rules are tested in CI** (`npm run rules`: `scripts/rules-check.mjs` against the Firestore emulator; needs Java). Add cases there with every change to `firestore.rules`.
+- **Refactors must not change the screen:** `npm run build && node scripts/visual.mjs capture <dir>` on main and on your branch, then `node scripts/visual.mjs compare <before> <after>` (preview mode, frozen clock, three widths, light and dark, every page). Same machine for both captures.
 - Huckleberry is an unofficial, undocumented API (`functions/huckleberry-provider.js`). Keep requests minimal and never log tokens, emails or passwords.
 
 ## Map

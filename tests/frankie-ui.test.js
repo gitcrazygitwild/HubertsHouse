@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { exportedNames } from './exported-names.js';
 import { JSDOM, VirtualConsole } from 'jsdom';
 process.env.TZ = 'America/New_York';
 const read = path => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
@@ -17,7 +18,8 @@ test('Frankie page survives the empty state and renders once a snapshot arrives'
   for (const [file, names] of [['household-model.js', ['escapeHTML', 'dateKey']], ['dom.js', ['renderHTML']], ['baby-history.js', ['dailySleep', 'dailyBottles', 'dailyPumps', 'timelineRows', 'babySummary', 'dayStart', 'dayKeys', 'localDay', 'sleepKind', 'dayStory', 'dayStoryText', 'nightLine', 'clockAt', 'DEFAULT_NIGHT_LINE', 'toOunces']], ['baby-model.js', ['purrfectWindow', 'miaForecast', 'huckleberryPrediction', 'bottleForecast', 'bottleSleepLinks', 'ageInDays', 'ageLabel', 'halfLifeFor']], ['mia-v1.js', ['miaForecastV1']], ['cat-challenges.js', ['CHALLENGES', 'MACK_EXCUSE', 'nightsFrom', 'currentBedtime', 'morningPicks', 'bottlePicks', 'scoreMornings', 'scoreBottles', 'scorePumps', 'pumpPicks', 'napNightPicks', 'nextSleepKind', 'scoreNapNight']],
     ['prediction-log.js', ['MODELS', 'scorePredictions', 'sweetspotEntry', 'MIA_V2_SINCE', 'isDaytimeWake', 'actualSleepStart', 'replayGuesses', 'predictionId', 'guessRounds']],
     ['baby-sample.js', ['sampleHistory', 'samplePredictions']], ['awards.js', ['frankieAwards']], ['bottle-pace.js', ['bottlePace']], ['mack-hat.js', ['seeded', 'HAT_LINES', 'hatGuess', 'hatSeed', 'scoreHat']], ['frankie.js', ['renderFrankie', 'initFrankie', 'frankieDayText', 'challengeHTML', 'bottleLinksHTML', 'pumpsHTML', 'paceHTML', 'napNightHTML', 'hatHTML', 'callsSlides']]]) {
-    w.eval(`(() => { const esc = window.escapeHTML; ${clean(await read(file))}\nObject.assign(window,{${names.join(',')}}); })();`);
+    const source = await read(file), all = [...new Set([...names, ...exportedNames(source)])]; // every export, not just the listed ones
+    w.eval(`(() => { const esc = window.escapeHTML; ${clean(source)}\nObject.assign(window,{${all.join(',')}}); })();`);
   }
   const doc = w.document, timezone = 'America/New_York';
   w.initFrankie(() => {});

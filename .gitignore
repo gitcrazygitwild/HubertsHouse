@@ -7,3 +7,4 @@ firebase-debug.log
 .firebase/
 functions/shared/
 dist-newsletter-sample.html
+firestore-debug.log

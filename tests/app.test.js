@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { JSDOM, VirtualConsole } from 'jsdom';
+import { exportedNames } from './exported-names.js';
 process.env.TZ = 'America/New_York';
 const read = path => readFile(new URL(`../${path}`,import.meta.url),'utf8');
 const clean = source => source.replace(/^export \{[^}]*\} from [^;]+;$/gm,'').replace(/^import\b[\s\S]*?;\s*$/gm,'').replace(/\bexport\s+(?=(?:async\s+)?(?:function|const|class|let))/g,'');
@@ -15,7 +16,8 @@ async function fixture(options = {}) {
   Object.assign(w,{config:{firebase:{},calendarServiceEnabled:false},initializeApp:() => ({}),getFirestore:() => ({}),collection:() => ({}),getAuth:() => ({}),onAuthStateChanged:(_auth,callback) => callback({uid:'nonmember',email:'outsider@example.com'}),getDoc:async () => ({exists:() => false}),setDoc:async () => {},doc:(...args) => args,signOut:async () => {},serverTimestamp:() => new Date(),getFunctions:() => ({}),httpsCallable:() => {throw new Error('Demo must not call the calendar service');}});
   // Real FullCalendar is exercised in a DOM. This is not a visual browser test.
   w.eval(await read('node_modules/fullcalendar/index.global.js'));
-  async function module(file,names,extra='') { w.eval(`(() => { ${extra}\n${clean(await read(file))}\nObject.assign(window,{${names.join(',')}}); })();`); }
+  // Every export becomes a global for the modules loaded after it (the list in each call is just documentation).
+  async function module(file,names = [],extra='') { const source = await read(file), all = [...new Set([...names, ...exportedNames(source)])]; w.eval(`(() => { ${extra}\n${clean(source)}\nObject.assign(window,{${all.join(',')}}); })();`); }
   await module('household-model.js',['dateKey','dueLabel','completionPatch','validateItem','escapeHTML','OWNERS','CATEGORIES','filterTaskItems','guessAisle']);
   await module('calendar-model.js',['localDate','startOfDay','nextDay','eventEnd','eventsOnDay','checklistProgress']);
   await module('dom.js',['renderHTML']);
