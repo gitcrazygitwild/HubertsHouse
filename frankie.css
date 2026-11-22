@@ -242,3 +242,6 @@ rect.is-hovered.mark-night,rect.is-hovered.mark-nap { stroke:var(--card); stroke
 .calls-more { margin-top:8px; }
 .calls-hint { margin:10px 0 0; text-align:right; }
 @media (prefers-reduced-motion: reduce) { .calls-track { transition:none; scroll-behavior:auto; } }
+/* Each cat's morning call, inside its own card on Today. */
+.nap-card .morning-call { margin:10px 0 0; padding-top:8px; border-top:1px dashed var(--border); font-size:13px; }
+.nap-card .morning-call small { display:block; color:var(--muted); font-size:11px; margin-top:2px; }
