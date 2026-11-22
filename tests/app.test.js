@@ -24,6 +24,9 @@ async function fixture(options = {}) {
   await module('jokes.js',['dadJokes','afterDarkJokes','dailyJokes']);
   await module('daily-content.js',['dailyContent']);
   await module('holidays.js',['usHolidays','holidaysInRange','holidaysEnabled','holidayEvents']);
+  await module('event-data.js',[]);
+  await module('cat-mode.js',[]);
+  await module('stores.js',[]);
   await module('time-dial.js',['initTimeDial','minutesAt','startFrom','endFrom']);
   await module('event-editor.js',['initEventDateEditor','eventRangeSummary']);
   await module('event-planning.js',['overlappingEvents','preferredCalendar']);
