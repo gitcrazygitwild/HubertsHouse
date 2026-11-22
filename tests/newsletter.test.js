@@ -29,7 +29,9 @@ test('all-day dates are local, repeats expand, and old one-offs drop out', () =>
 
 test('the digest gathers today, tomorrow, chores, groceries, rain and free nights', () => {
   const d = buildDigest({ name:'hanry', now, household, icloud, items, forecast });
-  assert.deepEqual(d.today.map(e => e.title), ['Coffee with a friend', 'Walk in the park', 'Trash night']);
+  assert.deepEqual(d.today.map(e => e.title), ['🗑️ Trash', 'Coffee with a friend', 'Walk in the park', 'Trash night'], 'Monday: trash pickup (recycling is the other Monday)');
+  assert.equal(buildDigest({ now, household, icloud, items, forecast, trash:{ trash:{ day:1, every:0, anchor:'2026-11-23' }, recycling:{ day:1, every:1, anchor:'2026-11-23' }, bump:true } }).today[0].title, '♻️ Recycling', 'the saved schedule is used');
+  assert.match(buildDigest({ now:new Date(+now - 86400000), household, icloud, items, forecast }).tomorrow[0].title, /Trash \(bins out tonight\)/);
   assert.deepEqual(d.tomorrow.map(e => e.title), ['Henry in DC', 'Dentist']);
   assert.deepEqual(d.chores.map(c => [c.title, c.overdue]), [['Water the plants', false], ['Recycling', true]]);
   assert.equal(d.groceries, 1); assert.equal(d.rain[0].title, 'Walk in the park'); assert.ok(d.freeNights.length > 0);

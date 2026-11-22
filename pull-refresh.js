@@ -39,7 +39,7 @@ export function initPullRefresh({ win = globalThis, enabled = isStandalone(win),
   }, { passive:true });
   doc.addEventListener('touchmove', event => {
     if (startY == null) return;
-    if ((win.scrollY || doc.documentElement.scrollTop) > 0) { reset(); return; }
+    if ((win.scrollY || doc.documentElement.scrollTop) > 0 || innerScrolled(event.target, doc.body)) { reset(); return; }
     const dy = event.touches[0].clientY - startY, dx = event.touches[0].clientX - startX;
     // A sideways swipe (chore and grocery rows swipe) is not a pull.
     if (distance === 0 && Math.abs(dx) > 12 && Math.abs(dx) > dy) { reset(); return; }

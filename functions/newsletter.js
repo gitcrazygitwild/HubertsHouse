@@ -11,6 +11,7 @@ import { scorePredictions } from './shared/prediction-log.js';
 import { weatherFlags } from './shared/smart-home.js';
 import { frankieAwards } from './shared/awards.js';
 import { isBathDay, cleanBathDays, DEFAULT_BATH_DAYS, BATH_TITLE } from './shared/bath-days.js';
+import { pickupOn } from './shared/trash-days.js';
 import { freeEvenings } from './shared/free-nights.js';
 import { upcomingBirthdays } from './shared/birthdays-model.js';
 import { scoreMornings, scoreBottles, bottlePicks, CHALLENGES } from './shared/cat-challenges.js';
@@ -68,7 +69,14 @@ function bathItem(day, saved) {
   const list = saved == null ? DEFAULT_BATH_DAYS : cleanBathDays(saved) ?? DEFAULT_BATH_DAYS;
   return isBathDay(day, list) ? [{ title:BATH_TITLE, start:new Date(day), end:new Date(+day + DAY), allDay:true, owner:'both', withFrankie:true }] : [];
 }
-export function buildDigest({ name = '', now = new Date(), household = [], icloud = [], items = [], forecast = null, snapshot = null, predictions = [], recent = null, briefing = null, birthdays = [], prefs = {}, skipped = [], bathDays = null }) {
+// Bin day as an all-day item; on the day before, a reminder to put the bins out.
+function trashItem(day, saved, { eve = false } = {}) {
+  const pickup = pickupOn(day, saved ?? undefined);
+  if (!pickup) return [];
+  const title = `${pickup.title}${eve ? ' (bins out tonight)' : ''}${pickup.moved ? ` · moved for ${pickup.moved.holiday}` : ''}`;
+  return [{ title, start:new Date(day), end:new Date(+day + DAY), allDay:true, owner:'both', marker:true }]; // a reminder, not a plan
+}
+export function buildDigest({ name = '', now = new Date(), household = [], icloud = [], items = [], forecast = null, snapshot = null, predictions = [], recent = null, briefing = null, birthdays = [], prefs = {}, skipped = [], bathDays = null, trash = null }) {
   const today = startOfDay(now), horizon = new Date(+today + 15 * DAY);
   const events = eventsInRange(household, icloud, today, horizon), tomorrow = new Date(+today + DAY);
   const week = Array.from({ length:7 }, (_, i) => { const day = new Date(+today + i * DAY); return { day, count:onDay(events, day).length }; });
@@ -83,7 +91,7 @@ export function buildDigest({ name = '', now = new Date(), household = [], iclou
     weather:fc[0] ? { ...fc[0], tomorrow:fc[1] || null } : null, outlook:fc.slice(0, 7),
     rain:weatherFlags(events.map(e => ({ ...e, start:e.start.toISOString(), end:e.end.toISOString() })), fc, now),
     // Bath nights ride along as all-day items at the top of today's and tomorrow's plans.
-    today:[...bathItem(today, bathDays), ...onDay(events, today)], tomorrow:[...bathItem(tomorrow, bathDays), ...onDay(events, tomorrow)], week:{ plans:week.reduce((sum, d) => sum + d.count, 0), busiest:busiest?.count ? busiest : null },
+    today:[...trashItem(today, trash), ...bathItem(today, bathDays), ...onDay(events, today)], tomorrow:[...trashItem(tomorrow, trash, { eve:true }), ...bathItem(tomorrow, bathDays), ...onDay(events, tomorrow)], week:{ plans:week.reduce((sum, d) => sum + d.count, 0), busiest:busiest?.count ? busiest : null },
     freeNights:freeEvenings(events, now, 14, 3).map(n => n.date), birthdays:upcomingBirthdays(now, 7, birthdays), chores, groceries, baby:null, skipped:[...new Set(skipped)].filter(key => SKIPPED_LABELS[key]),
     world:briefing && (briefing.headlines?.length || briefing.markets?.length) ? { headlines:(briefing.headlines || []).slice(0, 6), goodNews:briefing.goodNews || null, markets:briefing.markets || [] } : null
   };
@@ -151,7 +159,8 @@ function planRows(events) {
 export function composeEmail(d) {
   const greeting = `${d.now.getHours() < 12 ? 'Good morning' : d.now.getHours() < 17 ? 'Good afternoon' : 'Good evening'}${d.name ? `, ${esc(d.name)}` : ''}`;
   const w = d.weather, sections = [];
-  const subjectBits = [w ? `${Math.round(w.high)}°` : null, `${d.today.length} plan${d.today.length === 1 ? '' : 's'}`];
+  const planCount = d.today.filter(e => !e.marker).length; // bin day rides along but isn't a plan
+  const subjectBits = [w ? `${Math.round(w.high)}°` : null, `${planCount} plan${planCount === 1 ? '' : 's'}`];
   if (d.birthdays?.today.length) subjectBits.push(`🎂 ${d.birthdays.today.map(b => b.name).join(' & ')}`);
   if (d.baby) subjectBits.push(d.baby.timer?.active ? `${d.baby.name} asleep` : `${d.baby.name}’s day`);
   const subject = `☀ ${d.now.toLocaleDateString('en-US', { weekday:'long' })} at Hubert’s House · ${subjectBits.filter(Boolean).join(' · ')}`;
@@ -159,7 +168,7 @@ export function composeEmail(d) {
   // Today
   const weatherLine = w ? p(`<strong>${Math.round(w.high)}° / ${Math.round(w.low)}°</strong> · ${esc(w.label || '')}${w.rain != null ? ` · ${Math.round(w.rain)}% rain` : ''}${w.tomorrow ? ` ${small(`· Tomorrow ${Math.round(w.tomorrow.high)}° ${esc(w.tomorrow.label || '')}`)}` : ''}`) : '';
   const rain = d.rain.length ? p(`☔ Rain may affect <strong>${esc(d.rain[0].title)}</strong> (${esc(shortDate(new Date(d.rain[0].start)))}${d.rain[0].rain != null ? `, ${d.rain[0].rain}%` : ''})${d.rain.length > 1 ? ` and ${d.rain.length - 1} more` : ''}.`, 'font-size:13px') : '';
-  sections.push(section('Today in Richmond', `${d.today.length ? `${d.today.length} plan${d.today.length === 1 ? '' : 's'} today` : 'A wide-open day'}`,
+  sections.push(section('Today in Richmond', `${planCount ? `${planCount} plan${planCount === 1 ? '' : 's'} today` : 'A wide-open day'}`,
     (d.birthdays?.today.length ? `<div style="margin:0 0 12px;padding:10px 12px;border-radius:12px;background:#fbeef0">${p(d.birthdays.today.map(b => `<strong>${esc(b.title)}</strong>`).join(' · ') + ' today!', 'margin:0;font-size:14px')}</div>` : '') + weatherLine + (d.outlook?.length > 1 ? outlookRow(d.outlook) : '') + rain + (d.today.length ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0">${planRows(d.today)}</table>` : p('Nothing on the calendar. Make it your own.', `color:${C.muted}`))
     + (d.tomorrow.length ? p(`<strong>Tomorrow:</strong> ${d.tomorrow.slice(0, 4).map(e => `${esc(e.title)}${e.allDay ? '' : ` ${small(esc(clock(e.start)))}`}`).join(' · ')}${d.tomorrow.length > 4 ? ` +${d.tomorrow.length - 4}` : ''}`, 'margin-top:12px;font-size:13px') : '')));
 

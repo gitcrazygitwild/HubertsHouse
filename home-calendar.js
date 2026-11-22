@@ -4,6 +4,7 @@ import { renderHTML } from './dom.js';
 import { holidaysInRange, holidaysEnabled } from './holidays.js';
 import { birthdaysInRange, birthdaysShown } from './birthdays-model.js';
 import { bathDaysInRange } from './bath-days.js';
+import { pickupsInRange } from './trash-days.js';
 import { eventWeatherLine } from './place-weather.js';
 import { weatherIcon } from './weather-shared.js';
 
@@ -83,7 +84,7 @@ export function initHomeCalendar({ getEvents, openEvent, addEvent, onRangeChange
     const week = homeCalendarRange(getEvents(), anchor, view), today = dateKey(current);
     const holidays=holidaysEnabled() ? holidaysInRange(week.start,week.end) : [];
     const birthdays=birthdaysShown() ? birthdaysInRange(week.start,week.end) : [];
-    const baths=bathDaysInRange(week.start,week.end);
+    const baths=bathDaysInRange(week.start,week.end), pickups=pickupsInRange(week.start,week.end);
     const last = week.days.at(-1).date;
     const format = new Intl.DateTimeFormat([], { month: 'short', day: 'numeric', ...(anchor.getFullYear() !== current.getFullYear() || last.getFullYear() !== current.getFullYear() ? { year: 'numeric' } : {}) });
     text('homeCalendarTitle', view === 'month' ? 'YOUR MONTH, TOGETHER' : view === 'day' ? 'YOUR DAY, TOGETHER' : 'YOUR WEEK, TOGETHER');
@@ -101,7 +102,7 @@ export function initHomeCalendar({ getEvents, openEvent, addEvent, onRangeChange
       const shown = view === 'month' ? events.slice(0, 3) : events;
       return `<section class="home-week-day${isToday ? ' is-today' : ''}${view === 'month' && date.getMonth() !== anchor.getMonth() ? ' outside-month' : ''}" data-home-date="${key}" aria-label="${esc(longDate)}">
         <button type="button" class="home-day-heading" data-home-add="${key}" aria-label="Add a plan on ${esc(longDate)}"${isToday ? ' aria-current="date"' : ''}><span>${esc(name)}${isToday ? '<small>Today</small>' : ''}</span><strong>${date.getDate()}</strong></button>${dayWeather(forecast, key, units())}
-        <div class="home-day-plans">${baths.filter(b=>b.date===key).map(b=>`<span class="home-holiday home-bath" title="Frankie’s bath night · set in Settings">${esc(b.title)}</span>`).join('')}${birthdays.filter(b=>b.date===key).map(b=>`<span class="home-holiday home-birthday" title="${esc(b.title)} · from Apple Contacts">${esc(b.title)}</span>`).join('')}${holidays.filter(holiday=>holiday.date===key).map(holiday=>`<span class="home-holiday" title="${esc(holiday.name)} · ${holiday.federal?'U.S. federal holiday':'Observance'}">✦ ${esc(holiday.name)}</span>`).join('')}${events.length ? shown.map(event => eventCard(event, date, current)).join('') : view === 'month' ? '' : '<p class="home-day-empty">A little breathing room.</p>'}${events.length > shown.length ? `<button type="button" class="home-more" data-week-day="${key}">+ ${events.length - shown.length} more</button>` : ''}</div>
+        <div class="home-day-plans">${pickups.filter(p=>p.date===key).map(p=>`<span class="home-holiday home-trash" title="${esc(p.moved ? `Moved from ${p.moved.from} for ${p.moved.holiday}` : 'Bin day · set in Settings')}">${esc(p.title)}${p.moved ? ' <small>(holiday)</small>' : ''}</span>`).join('')}${baths.filter(b=>b.date===key).map(b=>`<span class="home-holiday home-bath" title="Frankie’s bath night · set in Settings">${esc(b.title)}</span>`).join('')}${birthdays.filter(b=>b.date===key).map(b=>`<span class="home-holiday home-birthday" title="${esc(b.title)} · from Apple Contacts">${esc(b.title)}</span>`).join('')}${holidays.filter(holiday=>holiday.date===key).map(holiday=>`<span class="home-holiday" title="${esc(holiday.name)} · ${holiday.federal?'U.S. federal holiday':'Observance'}">✦ ${esc(holiday.name)}</span>`).join('')}${events.length ? shown.map(event => eventCard(event, date, current)).join('') : view === 'month' ? '' : '<p class="home-day-empty">A little breathing room.</p>'}${events.length > shown.length ? `<button type="button" class="home-more" data-week-day="${key}">+ ${events.length - shown.length} more</button>` : ''}</div>
         <button type="button" class="home-day-add" data-home-add="${key}" aria-label="Add a plan on ${esc(longDate)}"><span aria-hidden="true">＋</span> Add a plan</button>
       </section>`;
     }).join(''));

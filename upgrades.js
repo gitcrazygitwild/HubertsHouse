@@ -6,6 +6,7 @@ import { parseQuickAdd, describeDraft, parseBabyLog, describeBabyLog } from './q
 import { weatherFlags, nextUp, untilText } from './smart-home.js';
 import { birthdaysInRange, birthdaysShown } from './birthdays-model.js';
 import { isBathDay } from './bath-days.js';
+import { pickupOn } from './trash-days.js';
 import { catsConsensus } from './baby-model.js';
 import { freeEvenings, dateNightDraft } from './free-nights.js';
 import { skyState, skyArt } from './sky.js';
@@ -78,8 +79,13 @@ export function initVoice(form, input, update, Recognition = globalThis.SpeechRe
   let listening = null;
   mic.addEventListener('click', () => {
     if (mode === 'keyboard') {
+      // The tip goes inside the box: a notice at the bottom of the screen sits behind the keyboard.
+      input.dataset.placeholder ||= input.placeholder;
+      input.placeholder = 'Now tap 🎤 on the keyboard and talk';
+      input.classList.add('is-dictating');
+      const restore = () => { input.placeholder = input.dataset.placeholder || ''; input.classList.remove('is-dictating'); };
+      input.addEventListener('blur', restore, { once:true });
       input.focus(); // inside the tap, so the phone opens its keyboard
-      notice('Tap the 🎤 on your keyboard and say it, e.g. “Frankie bottle 4 ounces at 3”.');
       return;
     }
     if (listening) { listening.stop(); return; }
@@ -174,6 +180,11 @@ function renderNowNext() {
   }
   // Bath night, from the afternoon on (mornings are for the day's plans).
   if (isBathDay(now) && now.getHours() >= 12 && now.getHours() < 22) parts.push('<span class="nn-item nn-bath"><span aria-hidden="true">🛁</span><button type="button" class="nn-link" data-nn-view="settings"><strong>Bath night</strong></button><span class="nn-muted">tonight</span></span>');
+  // Bin day: the evening before (bins out tonight) and that morning.
+  { const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1);
+    const today = now.getHours() < 12 ? pickupOn(now) : null, next = now.getHours() >= 15 ? pickupOn(tomorrow) : null;
+    if (today) parts.push(`<span class="nn-item nn-trash"><span aria-hidden="true">🗑️</span><button type="button" class="nn-link" data-nn-view="settings"><strong>${esc(today.title.replace(/^🗑️ |^♻️ /, ''))}</strong></button><span class="nn-muted">today${today.moved ? ` (moved for ${esc(today.moved.holiday)})` : ''}</span></span>`);
+    else if (next) parts.push(`<span class="nn-item nn-trash"><span aria-hidden="true">🗑️</span><button type="button" class="nn-link" data-nn-view="settings"><strong>Bins out tonight</strong></button><span class="nn-muted">${esc(next.title.replace(/^🗑️ |^♻️ /, '').toLowerCase())} tomorrow${next.moved ? ` (moved for ${esc(next.moved.holiday)})` : ''}</span></span>`); }
   if (current) parts.push(`<span class="nn-item"><span class="nn-live" aria-hidden="true"></span>${eventLink(current.event, current.from, `Now: <strong>${esc(current.event.title)}</strong>`)} <span class="nn-muted">${current.minutesLeft}m left</span></span>`);
   if (next) parts.push(`<span class="nn-item"><span aria-hidden="true">◷</span>${eventLink(next.event, next.from, `Next: <strong>${esc(next.event.title)}</strong>`)} <span class="nn-muted">${esc(next.minutesUntil < 1440 ? clock(next.from) : `${dayName(next.from)} ${clock(next.from)}`)} · ${esc(untilText(next.minutesUntil))}</span></span>`);
   if (baby) {

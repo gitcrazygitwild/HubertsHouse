@@ -3,6 +3,7 @@ import { localDate, startOfDay, nextDay, eventEnd, eventsOnDay, checklistProgres
 import { renderHTML } from './dom.js';
 import { birthdaysInRange, birthdaysShown } from './birthdays-model.js';
 import { bathDaysInRange } from './bath-days.js';
+import { pickupsInRange } from './trash-days.js';
 import { showView, showNotice } from './household.js';
 
 const $ = id => document.getElementById(id);
@@ -65,7 +66,7 @@ export function initCalendarExperience({ calendar, getEvents, getFilteredEvents,
     $('selectedDayTitle').textContent = selected.toLocaleDateString([], { month: 'short', day: 'numeric' });
     $('addToDay').setAttribute('aria-label', `Add an event on ${selected.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' })}`);
     const dayEvents = eventsOnDay(filtered, selected), dayAfter = new Date(selected); dayAfter.setDate(dayAfter.getDate() + 1);
-    const bdays = bathDaysInRange(selected, dayAfter).map(b => `<div class="day-birthday day-bath">${esc(b.title)}</div>`).join('') + (birthdaysShown() ? birthdaysInRange(selected, dayAfter).map(b => `<div class="day-birthday">${esc(b.title)}</div>`).join('') : '');
+    const bdays = pickupsInRange(selected, dayAfter).map(p => `<div class="day-birthday day-trash">${esc(p.title)}${p.moved ? ` <small>moved from ${esc(new Date(`${p.moved.from}T12:00:00`).toLocaleDateString([], { weekday:'short' }))} for ${esc(p.moved.holiday)}</small>` : ''}</div>`).join('') + bathDaysInRange(selected, dayAfter).map(b => `<div class="day-birthday day-bath">${esc(b.title)}</div>`).join('') + (birthdaysShown() ? birthdaysInRange(selected, dayAfter).map(b => `<div class="day-birthday">${esc(b.title)}</div>`).join('') : '');
     html('selectedDayEvents', bdays + (dayEvents.length ? dayEvents.map(event => {
       const owner = ownerOf(event), label = event.allDay ? 'All day' : localDate(event.start) < selected ? 'Ongoing' : time(event.start);
       return `<button type="button" class="day-event ${owner}${event.extendedProps?.withFrankie ? ' with-frankie' : ''}" ${eventAttrs(event)}><span class="day-event-time">${esc(label)}</span><span class="day-event-copy"><strong>${esc(event.title)}</strong><small>${esc(ownerNames[owner])}${event.extendedProps?.withFrankie ? ' + Frankie' : ''}${event.extendedProps?.isRepeatOccurrence ? ' · Repeats' : ''}${event.extendedProps?.icloud ? ' · iCloud' : ''}</small></span></button>`;
@@ -99,7 +100,7 @@ export function initCalendarExperience({ calendar, getEvents, getFilteredEvents,
     const card = event.target.closest('[data-calendar-event]');
     if (card) openEvent(card.dataset.calendarEvent, card.dataset.occurrence);
     const day = event.target.closest('[data-week-day]');
-    if (day) { showView('calendar'); selectDay(day.dataset.weekDay, true); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+    if (day) { showView('calendar'); selectDay(day.dataset.weekDay, true); window.scrollTo({ top: 0, behavior: 'smooth' }); document.querySelector('.house-main')?.scrollTo?.({ top: 0, behavior: 'smooth' }); }
   });
   document.addEventListener('fullscreenchange', () => calendar.updateSize());
   setInterval(() => { if (document.visibilityState === 'visible') render(); }, 30000);

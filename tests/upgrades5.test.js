@@ -75,7 +75,9 @@ test('voice input: the installed iPhone app uses keyboard dictation; a browser t
   let [form, input] = fresh();
   const mic = initVoice(form, input, () => {}, Never, { notice:m => notes.push(m), win:iphone(true), storage:memory() });
   assert.equal(mic.getAttribute('aria-label'), 'Dictate with the keyboard');
-  mic.click(); assert.equal(started, 0); assert.equal(w.document.activeElement, input); assert.match(notes.at(-1), /🎤 on your keyboard/);
+  mic.click(); assert.equal(started, 0); assert.equal(w.document.activeElement, input);
+  assert.match(input.placeholder, /tap 🎤 on the keyboard/, 'the tip shows in the box, above the keyboard'); assert.equal(notes.length, 0, 'no notice hidden behind the keyboard');
+  input.dispatchEvent(new w.Event('blur')); assert.equal(input.placeholder, 'Add a plan');
   // Safari tab, blocked: says why (Siri, site microphone setting) and keeps trying next time.
   let tries = 0;
   class Blocked { start() { tries++; this.onerror({ error:'service-not-allowed' }); this.onend(); } stop() {} }
