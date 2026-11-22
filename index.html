@@ -371,7 +371,7 @@
       <div id="detailsScroll" class="modal-scroll">
         <div class="details-hero">
           <div id="detailsTitle" class="details-title">—</div>
-          <div id="detailsWhen" class="tiny muted">—</div><div id="detailsSource" class="tiny muted"></div>
+          <div id="detailsWhen" class="tiny muted">—</div><div id="detailsWhere" class="details-where" hidden></div><div id="detailsSource" class="tiny muted"></div>
         </div>
 
         <div class="details-grid">
@@ -426,6 +426,7 @@
             <input id="evtTitle" class="event-title-input" type="text" required maxlength="500" placeholder="What’s the plan? Try “Dinner Fri 7pm”" autocomplete="off" />
           </label>
           <button type="button" id="evtTitleHint" class="title-hint" hidden></button>
+          <label class="field"><span>Where</span><input id="evtLocation" type="text" maxlength="300" placeholder="Optional: an address or a town, e.g. Nags Head, NC" autocomplete="off" /><small class="muted">Outside the Richmond area? You’ll see the weather there.</small></label>
 
           <p id="eventReadonly" class="connection-note" hidden></p>
           <section class="event-schedule" aria-label="Event date and time">

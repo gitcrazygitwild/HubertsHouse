@@ -9,6 +9,7 @@ import { initWorldBriefing } from './world-briefing.js';
 import { initInstall } from './install-app.js';
 import { initPullRefresh } from './pull-refresh.js';
 import { parseQuickAdd, describeDraft } from './quick-add.js';
+import { createPlaceWeather, usePlaceWeather, eventWeatherLine, sampleWeatherFetch } from './place-weather.js';
 import { initDevices } from './devices.js';
 import { initLitter } from './litter.js';
 import { initFeeders } from './feeders.js';
@@ -38,6 +39,8 @@ import { dateKey } from './household-model.js';
 import { initCalendarExperience, calendarEventContent } from './calendar-view.js';
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence, browserSessionPersistence } from 'https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js';
 const demo = new URLSearchParams(location.search).get('demo') === '1';
+// Weather where events are (outside Richmond): Open-Meteo, or made-up numbers in the preview.
+usePlaceWeather(createPlaceWeather({ fetch:demo ? sampleWeatherFetch() : undefined, onUpdate:() => { homeCalendar?.render(); drawDetailsWhere(); } }));
 const gate = document.getElementById('gate');
 const gateForm = document.getElementById('gateForm');
 const gateInput = document.getElementById('gateInput');
@@ -168,6 +171,17 @@ const detailsChecklist = document.getElementById("detailsChecklist");
 
 let detailsDocId = null;
 let detailsOccurrenceStart = null;
+// Where it is, and (outside the Richmond area) the weather there that day.
+let detailsWhere = { location:'', start:null };
+function drawDetailsWhere() {
+  const el = document.getElementById('detailsWhere'); if (!el) return;
+  const { location, start } = detailsWhere; el.hidden = !location;
+  if (!location) { el.textContent = ''; return; }
+  const line = eventWeatherLine({ location, start });
+  const place = document.createElement('span'); place.textContent = `📍 ${location}`;
+  el.replaceChildren(place);
+  if (line) { const weather = document.createElement('span'); weather.className = 'details-weather'; weather.textContent = line; const source = document.createElement('small'); source.textContent = ' · Open-Meteo'; weather.append(source); el.append(weather); }
+}
 
 function openDetailsModal(payload) {
   detailsDocId = payload.id;
@@ -192,6 +206,7 @@ function openDetailsModal(payload) {
 
   const notesVal = (payload.notes || "").trim();
   if (detailsNotes) detailsNotes.textContent = notesVal ? notesVal : "—";
+  detailsWhere = { location:(payload.location ?? original?.location ?? '').trim(), start:payload.start }; drawDetailsWhere();
 
   const items = Array.isArray(payload.checklist) ? payload.checklist : [];
   if (detailsChecklist) {
@@ -249,6 +264,7 @@ const evtRepeatUntil = document.getElementById("evtRepeatUntil");
 const checklistEl = document.getElementById("checklist");
 const addCheckItemBtn = document.getElementById("addCheckItem");
 const evtNotes = document.getElementById("evtNotes");
+const evtLocation = document.getElementById("evtLocation");
 
 const deleteBtn = document.getElementById("deleteBtn");
 const cancelBtn = document.getElementById("cancelBtn");
@@ -654,7 +670,7 @@ function rebuildEvents() {
   expandedEvents = [...expandRepeats(normalizeDocs(localDocs)),...cloudDocs.map(e => ({
     id:e.id,title:e.title,start:e.start,end:e.cloudEnd,allDay:e.allDay,
     backgroundColor:(OWNER_STYLE[e.owner] || OWNER_STYLE.both).bg,borderColor:(OWNER_STYLE[e.owner] || OWNER_STYLE.both).border,textColor:'#34432e',editable:!e.readOnlyReason,
-    extendedProps:{sourceId:e.id,owner:e.owner || 'both',ownerCustom:e.ownerCustom || '',withFrankie:!!e.withFrankie,type:'general',notes:e.notes,checklist:e.checklist || [],icloud:true,isRepeatOccurrence:!!e.recurring}
+    extendedProps:{sourceId:e.id,location:e.location || '',owner:e.owner || 'both',ownerCustom:e.ownerCustom || '',withFrankie:!!e.withFrankie,type:'general',notes:e.notes,checklist:e.checklist || [],icloud:true,isRepeatOccurrence:!!e.recurring}
   }))];
   renderCalendarFromCache(); renderPanels(); updateHouseholdEvents(expandedEvents); window.dispatchEvent(new Event('hh:events'));
   if (!backdrop?.classList.contains("hidden")) updateEventOverlap();
@@ -692,7 +708,7 @@ async function removeEvent(id) {
 
 // ---------- UI hooks ----------
 let eventDateEditor, cloudEventBaseline = '';
-function cloudDraftKey() { return JSON.stringify([evtTitle.value,evtStart.value,evtEnd.value,evtAllDay.checked,evtNotes.value]); }
+function cloudDraftKey() { return JSON.stringify([evtTitle.value,evtStart.value,evtEnd.value,evtAllDay.checked,evtNotes.value,evtLocation?.value || '']); }
 function initUIHooks() {
   eventDateEditor = initEventDateEditor({onChange:updateEventOverlap});
   const holidays = document.getElementById('calendarHolidays'); holidays.checked=holidaysEnabled();
@@ -1445,6 +1461,7 @@ function openEventModal(payload) {
 
   renderChecklistUI(checklistEl, payload.checklist || []);
   if (evtNotes) evtNotes.value = payload.notes || "";
+  if (evtLocation) evtLocation.value = payload.location ?? original?.location ?? "";
   updateDestinationUI();
   cloudEventBaseline=cloudDraftKey();
 
@@ -1530,7 +1547,7 @@ function updateDestinationUI() {
   document.getElementById('evtCalendarHint').textContent = cloud ? 'Event details save to Apple. People and checklists stay in Hubert’s House.' : 'Shared with everyone in Hubert’s House.';
   document.getElementById('eventReadonly').textContent=readOnly ? `${original.readOnlyReason} People and checklists are still editable below.` : '';
   document.getElementById('eventReadonly').hidden=!readOnly;
-  for (const id of ['evtTitle','evtStartDate','evtEndDate','evtStartTime','evtEndTime','evtAllDay','evtNotes']) document.getElementById(id).disabled=readOnly;
+  for (const id of ['evtTitle','evtLocation','evtStartDate','evtEndDate','evtStartTime','evtEndTime','evtAllDay','evtNotes']) document.getElementById(id).disabled=readOnly;
   document.querySelectorAll('[data-event-date],[data-event-duration]').forEach(button=>{button.disabled=readOnly;});
   deleteBtn.classList.toggle('hidden',!editingDocId || readOnly);
   document.getElementById('eventRepeatNote').hidden=cloud || evtRepeat.value==='none';
@@ -1598,6 +1615,7 @@ async function saveEventValues() {
     withFrankie: document.getElementById("evtWithFrankie").checked && ["hanry","karena","both"].includes(owner),
     type,
     notes,
+    location: (evtLocation?.value || '').trim().slice(0, 300),
     checklist,
     repeat,
     repeatUntil,
@@ -1607,7 +1625,7 @@ async function saveEventValues() {
   };
 
   if (destination !== 'household') {
-    const result=await saveCloudEvent({title,notes,allDay,...assignment,start:start.toISOString(),end:(end || addHours(start,1)).toISOString(),
+    const result=await saveCloudEvent({title,notes,location:(evtLocation?.value || '').trim().slice(0, 300),allDay,...assignment,start:start.toISOString(),end:(end || addHours(start,1)).toISOString(),
       startLocal:evtStart.value,endLocal:evtEnd.value || toInputValue(addHours(start,1),false),startDate:evtStart.value.slice(0,10),endDate:evtEnd.value.slice(0,10) || evtStart.value.slice(0,10),repeat:'none'},original,destination,eventRequestId);
     if(result.assignmentSaved===false) {
       // Apple succeeded. Keep the unsaved checklist visible and make the next
@@ -1766,6 +1784,7 @@ function normalizeDocs(docs) {
       withFrankie: !!d.withFrankie && ["hanry","karena","both"].includes(owner),
       type: d.type || "general",
       notes: d.notes || "",
+      location: d.location || "",
       checklist: Array.isArray(d.checklist) ? d.checklist : [],
       repeat: d.repeat || "none",
       repeatUntil: d.repeatUntil || ""
@@ -1789,6 +1808,7 @@ function expandRepeats(norm) {
       withFrankie: d.withFrankie,
       type: d.type,
       notes: d.notes,
+      location: d.location,
       checklist: d.checklist
     };
 

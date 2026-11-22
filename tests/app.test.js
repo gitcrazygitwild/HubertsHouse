@@ -50,6 +50,7 @@ async function fixture(options = {}) {
   await module('calendar-view.js',['initCalendarExperience','calendarEventContent'],'const esc=escapeHTML;');
   await module('weather-shared.js',['richmondDay','forecastCondition','weatherIcon']);
   await module('birthdays-model.js',['birthdayList','setBirthdayList','birthdaysShown','birthdayTitle','birthdaysInRange','birthdayEvents','upcomingBirthdays']);
+  await module('place-weather.js',['looksLocal','distanceKm','placeQueries','describeCode','createPlaceWeather','placeWeatherText','usePlaceWeather','eventWeatherLine','sampleWeatherFetch']);
   await module('home-calendar.js',['initHomeCalendar','homeCalendarWeek','dayWeather','WEATHER_URL'],'const esc=escapeHTML;');
   await module('weather.js',['initWeather'],'const esc=escapeHTML;');
   await module('week-brief.js',['renderWeekBrief'],'const esc=escapeHTML;');
@@ -702,5 +703,23 @@ test('new event: title first, who’s coming as chips, and "Dinner Fri 7pm" sets
   assert.equal(title.value, 'Dinner with friends'); assert.equal(doc.getElementById('evtStartTime').value, '19:00');
   assert.equal(new Date(`${doc.getElementById('evtStartDate').value}T12:00`).getDay(), 5, 'a Friday');
   assert.equal(hint.hidden, true);
+  assert.deepEqual(errors, []);
+});
+test('events away from Richmond show the weather where they are', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  // The sample "weekend away" is in Nags Head: its Today card gets that town's weather (preview numbers, no network).
+  await new Promise(r => setTimeout(r, 120));
+  doc.querySelector('[data-home-view="week"]').click(); await settle();
+  const line = [...doc.querySelectorAll('.home-event-weather')].map(n => n.textContent);
+  assert.ok(line.some(text => /°\/\d+° in Nags Head/.test(text)), JSON.stringify(line));
+  assert.ok(![...doc.querySelectorAll('.home-week-event')].filter(card => !card.textContent.includes('weekend away')).some(card => card.querySelector('.home-event-weather')), 'only events with a faraway location');
+  // A new event: the Where field saves, and a Richmond address shows no weather line.
+  doc.getElementById('quickEvent').click(); await settle();
+  assert.ok(doc.getElementById('evtLocation'));
+  doc.getElementById('evtTitle').value = 'Dinner at Lemaire'; doc.getElementById('evtLocation').value = '101 W Franklin St, Richmond, VA 23220';
+  doc.getElementById('eventForm').requestSubmit(); await settle();
+  const saved = w.__testApp.getDocs().find(d => d.title === 'Dinner at Lemaire');
+  assert.equal(saved.location, '101 W Franklin St, Richmond, VA 23220');
+  assert.ok(![...doc.querySelectorAll('.home-week-event')].some(card => card.textContent.includes('Lemaire') && card.querySelector('.home-event-weather')));
   assert.deepEqual(errors, []);
 });
