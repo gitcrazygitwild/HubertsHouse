@@ -13,6 +13,11 @@ test('addresses become place names Open-Meteo can find', () => {
   assert.deepEqual(names('Disney World, Orlando, FL'), ['Orlando/Florida', 'Disney World/Florida']);
   assert.deepEqual(names('Kill Devil Hills NC 27948'), ['Kill Devil Hills/North Carolina']);
   assert.deepEqual(names('Paris, France'), ['Paris', 'France'], 'without a state, the last part is likely a country');
+  // Apple Maps style: the venue on its own line, a country at the end, sometimes no commas.
+  assert.deepEqual(names('The Shelburne Inn\n4415 Pacific Hwy, Seaview, WA  98644, United States'), ['Seaview/Washington', 'The Shelburne Inn/Washington']);
+  assert.deepEqual(names('Wintergreen Resort\nWintergreen VA 22967 United States'), ['Wintergreen/Virginia', 'Wintergreen Resort/Virginia']);
+  assert.deepEqual(names('1600 Pennsylvania Ave NW, Washington, DC 20500, United States'), ['Washington/District of Columbia'], 'Washington is the city here, DC the state');
+  assert.deepEqual(names('Hotel X, 12 Main St Suite 4, Asheville, NC 28801'), ['Asheville/North Carolina', 'Hotel X/North Carolina']);
   for (const none of ['Zoom', 'home', 'https://meet.example.com/abc', '']) assert.deepEqual(placeQueries(none), [], none);
   assert.ok(Math.abs(distanceKm({ lat:37.5407, lon:-77.436 }, { lat:38.0293, lon:-78.4767 }) - 105) < 5, 'Richmond → Charlottesville ≈ 105 km');
   assert.deepEqual(describeCode(61), ['Rain', '🌧️']); assert.deepEqual(describeCode(0), ['Clear', '☀️']);
@@ -57,6 +62,12 @@ test('local, too far ahead, unknown or offline: no weather line (or a gentle not
   near.lookup('Ashland, VA', today); await near.whenSettled(); assert.equal(near.lookup('Ashland, VA', today).status, 'local');
   const nowhere = createPlaceWeather({ fetch:openMeteo({ place:null }).fetch, storage:memory(), now:() => NOW });
   nowhere.lookup('Somewhere Made Up, ZZ', today); await nowhere.whenSettled(); assert.equal(nowhere.lookup('Somewhere Made Up, ZZ', today).status, 'unknown');
+  // A miss is retried after a day (a found place is kept for 60 days).
+  let clock = NOW; const kept = memory(), misses = openMeteo({ place:null });
+  const retry = () => createPlaceWeather({ fetch:misses.fetch, storage:kept, now:() => clock });
+  let w = retry(); w.lookup('Nags Head, NC', today); await w.whenSettled(); const first = misses.calls.length;
+  w = retry(); w.lookup('Nags Head, NC', today); await w.whenSettled(); assert.equal(misses.calls.length, first, 'same day: not asked again');
+  clock += 25 * 3600000; w = retry(); w.lookup('Nags Head, NC', '2026-11-23'); await w.whenSettled(); assert.ok(misses.calls.length > first, 'next day: asked again');
   const offline = createPlaceWeather({ fetch:openMeteo({ fail:true }).fetch, storage:memory(), now:() => NOW });
   offline.lookup('Nags Head, NC', today); await offline.whenSettled(); assert.equal(placeWeatherText(offline.lookup('Nags Head, NC', today)), '');
 });

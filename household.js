@@ -40,7 +40,7 @@ async function setDisplayMode(on) {
   document.body.classList.toggle('monitor-mode', on);
   localStorage.setItem('hh_display', on ? '1' : '0');
   $('displayBtn').setAttribute('aria-pressed', String(on));
-  $('displayBtn').textContent = on ? 'Exit monitor' : '⛶ Monitor mode';
+  { const button = $('displayBtn'), label = button.querySelector('.btn-label'), text = on ? 'Exit monitor' : 'Monitor mode'; if (label) { label.textContent = text; button.title = text; } else button.textContent = text; }
   $('settingsDisplayBtn').textContent = on ? 'Exit monitor mode' : 'Open monitor mode';
   if (wakeLock) { await wakeLock.release().catch(() => {}); wakeLock = null; }
   if (on && document.visibilityState === 'visible') {

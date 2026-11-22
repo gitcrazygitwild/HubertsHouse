@@ -441,3 +441,20 @@ export function bottleForecast(bottles = [], { timezone = 'America/New_York', no
     last:{ time:new Date(last.t).toISOString(), amount:last.amount, units:last.units, type:last.type }, typicalMinutes:Math.round(median), samples:values.length, matchedTime,
     phase:+now > end ? 'overdue' : +now >= start ? 'due' : 'upcoming' };
 }
+
+// The cats' pick for Today's top line: the average of Hubert's, Mia's and Mack's next
+// sleep (nap or bedtime). A cat calling a different event (more than 90 minutes from the
+// middle pick) is left out, so a nap guess isn't averaged with a bedtime guess.
+export function catsConsensus({ purr, mia, huck } = {}) {
+  const picks = [
+    purr?.available && Number.isFinite(stamp(purr.target)) ? { cat:'Hubert', at:stamp(purr.target), kind:purr.kind } : null,
+    mia?.available && Number.isFinite(stamp(mia.target)) && ['nap', 'bedtime'].includes(mia.kind) ? { cat:'Mia', at:stamp(mia.target), kind:mia.kind } : null,
+    huck?.available && !huck.expired && !huck.sleeping && Number.isFinite(stamp(huck.time)) ? { cat:'Mack', at:stamp(huck.time), kind:null } : null
+  ].filter(Boolean);
+  if (!picks.length) return null;
+  const sorted = [...picks].sort((a, b) => a.at - b.at), middle = sorted[Math.floor((sorted.length - 1) / 2)].at;
+  const used = picks.filter(p => Math.abs(p.at - middle) <= 90 * MINUTE);
+  const kinds = used.map(p => p.kind).filter(Boolean), bedtime = kinds.filter(k => k === 'bedtime').length;
+  const kind = !kinds.length ? 'nap' : bedtime * 2 > kinds.length ? 'bedtime' : bedtime * 2 < kinds.length ? 'nap' : (used.find(p => p.cat === 'Mia')?.kind || kinds[0]);
+  return { target:new Date(Math.round(used.reduce((s, p) => s + p.at, 0) / used.length)).toISOString(), kind, picks:used.map(p => ({ cat:p.cat, at:new Date(p.at).toISOString() })), left:picks.filter(p => !used.includes(p)).map(p => p.cat) };
+}

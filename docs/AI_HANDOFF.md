@@ -324,3 +324,7 @@ Drag bars in the logging windows (range inputs, .log-slider). When: babyLogStart
 ### Nov 21, 2026, 10:05 PM ET · Claude → Codex
 
 Fixed a CI flake on the drag-bars PR: the time bars now round to the nearest minute instead of chopping seconds, so dragging to 45m reads '45 min ago' (it read 46 when the seconds were past :30).
+
+### Nov 21, 2026, 10:17 PM ET · Claude → Codex
+
+Three fixes. (1) Today's Now & Next nap/bedtime used only Mia's forecast; it now uses catsConsensus({purr,mia,huck}) in baby-model.js: the average of Hubert, Mia and Mack (SweetSpot, unless expired/asleep), leaving out any cat more than 90 min from the middle pick (a nap guess vs a bedtime guess). Shows '(avg of N cats)', hover title lists each pick. (2) place-weather placeQueries: Apple Maps locations ('Venue\nstreet, City, ST ZIP, United States') were collapsed into one line before splitting, and 'Washington, DC' read Washington as the state. Now splits on newlines, the LAST state-looking part is the state, strips country/suite/directional suffixes, and handles comma-less 'Wintergreen VA 22967'. A known state must match the geocode result. Geocode cache key is now hh_geo2: (old misses were cached 60 days); misses retry after a day. (3) Header buttons use matching SVG line icons (search, moon/sun, monitor, plus); dashboard.js/household.js update only .btn-label so the icons survive. Phone: three 44px rounded icon buttons. Codex: Open-Meteo still can't be reached from the sandbox, so the live geocoder wasn't exercised.

@@ -37,3 +37,16 @@ test('Huckleberry stored predictions stay distinct and are marked expired or sta
   assert.equal(huckleberryPrediction({...base,timer:{active:true}},now).sleeping,true);
   assert.equal(huckleberryPrediction({sweetspot:{time:null}},now).available,false);
 });
+
+test('Today’s top line averages the three cats, leaving out a cat calling a different sleep', async () => {
+  const { catsConsensus } = await import('../baby-model.js');
+  const at = hm => `2026-11-22T${hm}:00.000Z`;
+  const all = catsConsensus({ purr:{ available:true, target:at('00:30'), kind:'bedtime' }, mia:{ available:true, target:at('00:45'), kind:'bedtime' }, huck:{ available:true, time:at('01:00') } });
+  assert.equal(all.target, at('00:45')); assert.equal(all.kind, 'bedtime'); assert.deepEqual(all.picks.map(p => p.cat), ['Hubert', 'Mia', 'Mack']);
+  // Hubert still calls a late nap while Mia and Mack call bedtime hours later: he's left out.
+  const split = catsConsensus({ purr:{ available:true, target:at('20:00'), kind:'nap' }, mia:{ available:true, target:at('23:30'), kind:'bedtime' }, huck:{ available:true, time:at('23:40') } });
+  assert.equal(split.target, at('23:35')); assert.equal(split.kind, 'bedtime'); assert.deepEqual(split.left, ['Hubert']);
+  // An expired SweetSpot doesn't count; nothing at all gives null.
+  assert.deepEqual(catsConsensus({ mia:{ available:true, target:at('15:00'), kind:'nap' }, huck:{ available:true, expired:true, time:at('14:00') } }).picks.map(p => p.cat), ['Mia']);
+  assert.equal(catsConsensus({}), null);
+});
