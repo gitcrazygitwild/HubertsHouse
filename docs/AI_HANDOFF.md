@@ -368,3 +368,7 @@ Event window redesign (index.html #eventForm, event-editor.css loaded last, time
 ### Nov 22, 2026, 3:17 AM ET · Claude → Codex
 
 Cleanup step 1 (in progress): app.js 2,022 → 1,605 lines by moving code out unchanged. event-data.js: OWNER_STYLE, normalizeOwner, CHECKLIST_PRESETS, normalizeDocs, expandRepeats, advanceRepeat, makeInclusiveAllDayEnd, makeFcEvent, panel-card HTML, formatWhenForPanel, toInputValue/fromInputValue, roundToNextHour, escapeHtml (pure). cat-mode.js: cat link + cat mode (wires #catModeBtn itself). stores.js: predictionStore/hypothesisStore/settingsStore/trashStore/firestoreStore now take db as the first argument (app.js calls them with db). Registered in build.mjs and tests/app.test.js. Visual before/after check running; tests 318/318.
+
+### Nov 22, 2026, 3:30 AM ET · Claude → Codex
+
+Cleanup step 1, part 2: app.js 1,605 → 1,477 lines. checklist-ui.js: renderChecklistUI / addChecklistItemUI / readChecklistUI (moved unchanged; maybeAutofillChecklist stays in app.js because it uses checklistEl). panels.js: renderUpcomingList(el, events, onOpen) and renderOutstandingList({…, page, pageSize, onOpen}) → returns the page shown; app.js keeps renderUpcoming/renderOutstanding as one-line wrappers that filter expandedEvents and open the window. The rest of app.js (event window logic, calendar rendering, init) shares a lot of module state; splitting it further needs a shared state object, which I'd only do with a clear benefit.

@@ -15,6 +15,8 @@ import { OWNER_STYLE, normalizeOwner, CHECKLIST_PRESETS, normalizeDocs, expandRe
 import { initHypotheses, memoryHypotheses } from './hypotheses-view.js';
 import { ensureCatLinkMarkup, setCatMode, LS_CATMODE } from './cat-mode.js';
 import { predictionStore, hypothesisStore, settingsStore, trashStore, firestoreStore } from './stores.js';
+import { renderChecklistUI, addChecklistItemUI, readChecklistUI } from './checklist-ui.js';
+import { renderUpcomingList, renderOutstandingList } from './panels.js';
 import { initDevices } from './devices.js';
 import { initLitter } from './litter.js';
 import { initFeeders } from './feeders.js';
@@ -1104,50 +1106,7 @@ function openListViewForSearch() {
 
 // ---------- Upcoming ----------
 function renderUpcoming() {
-  if (!upcomingListEl) return;
-
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-
-  let list = expandedEvents.slice();
-  list = list.filter(matchOwnerFilter);
-  list = list.filter(matchSearch);
-
-  const upcoming = [];
-  for (const e of list) {
-    const start = new Date(e.start);
-    const end = e.end ? new Date(e.end) : null;
-    const isAllDay = !!e.allDay;
-
-    if (isAllDay) {
-      if (start.getTime() >= todayStart.getTime()) upcoming.push(e);
-      continue;
-    }
-
-    if (start.toDateString() === now.toDateString()) {
-      const endTime = end ? end.getTime() : start.getTime();
-      if (endTime >= now.getTime()) upcoming.push(e);
-    } else if (start.getTime() > now.getTime()) {
-      upcoming.push(e);
-    }
-  }
-
-  upcoming.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
-
-  const top = upcoming.slice(0, 5);
-  if (top.length === 0) {
-    upcomingListEl.textContent = "No upcoming events.";
-    return;
-  }
-
-  upcomingListEl.innerHTML = top.map(renderPanelCardHTML).join("");
-  upcomingListEl.querySelectorAll("[data-open-id]").forEach((el) => {
-    el.addEventListener("click", () => {
-      const id = el.getAttribute("data-open-id");
-      const occ = el.getAttribute("data-occ");
-      openFromPanel(id, occ, false);
-    });
-  });
+  renderUpcomingList(upcomingListEl, expandedEvents.filter(matchOwnerFilter).filter(matchSearch), (id, occ) => openFromPanel(id, occ, false));
 }
 
 // ---------- Outstanding ----------
@@ -1161,40 +1120,7 @@ outNext?.addEventListener("click", () => {
 });
 
 function renderOutstanding() {
-  if (!outstandingListEl || !outPage) return;
-
-  let list = expandedEvents.slice();
-  list = list.filter(matchOwnerFilter);
-  list = list.filter(matchSearch);
-
-  const withUnchecked = list.filter((e) => {
-    const items = e.extendedProps?.checklist || [];
-    return Array.isArray(items) && items.some(it => !it.done);
-  });
-
-  withUnchecked.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
-
-  const totalPages = Math.max(1, Math.ceil(withUnchecked.length / OUT_PAGE_SIZE));
-  outstandingPage = Math.min(outstandingPage, totalPages);
-
-  const startIdx = (outstandingPage - 1) * OUT_PAGE_SIZE;
-  const pageItems = withUnchecked.slice(startIdx, startIdx + OUT_PAGE_SIZE);
-
-  outPage.textContent = `Page ${outstandingPage} / ${totalPages}`;
-
-  if (pageItems.length === 0) {
-    outstandingListEl.textContent = "No outstanding checklist items 🎉";
-    return;
-  }
-
-  outstandingListEl.innerHTML = pageItems.map(renderPanelCardHTMLWithProgress).join("");
-  outstandingListEl.querySelectorAll("[data-open-id]").forEach((el) => {
-    el.addEventListener("click", () => {
-      const id = el.getAttribute("data-open-id");
-      const occ = el.getAttribute("data-occ");
-      openFromPanel(id, occ, true);
-    });
-  });
+  outstandingPage = renderOutstandingList({ outstandingListEl, outPage, events:expandedEvents.filter(matchOwnerFilter).filter(matchSearch), page:outstandingPage, pageSize:OUT_PAGE_SIZE, onOpen:(id, occ) => openFromPanel(id, occ, true) });
 }
 
 function openFromPanel(sourceId, occurrenceStartISO, checklistView) {
@@ -1534,61 +1460,7 @@ function closeTaskModal() {
   taskBackdrop?.classList.add("hidden");
 }
 
-// ---------- Checklist UI helpers ----------
-function renderChecklistUI(container, items) {
-  if (!container) return;
-  const safe = Array.isArray(items) ? items : [];
-  container.innerHTML = "";
-  for (const it of safe) addChecklistItemUI(container, it, false);
-}
-
-function addChecklistItemUI(container, item, focus) {
-  if (!container) return;
-  const wrap = document.createElement("div");
-  wrap.className = "checkitem";
-  wrap.dataset.itemId=item.id || crypto.randomUUID();
-
-  const cb = document.createElement("input");
-  cb.type = "checkbox";
-  cb.checked = !!item.done;
-
-  const input = document.createElement("input");
-  input.type = "text";
-  input.value = item.text || "";
-  input.placeholder = "Checklist item…";
-  input.maxLength=500;
-  input.setAttribute('aria-label','Checklist item');
-  cb.setAttribute('aria-label',`Complete ${item.text || 'checklist item'}`);
-
-  const del = document.createElement("button");
-  del.type = "button";
-  del.className = "btn btn-ghost";
-  del.textContent = "✕";
-  del.setAttribute('aria-label','Remove checklist item');
-  del.style.width = "44px";
-  del.style.padding = "10px 0";
-
-  del.addEventListener("click", () => wrap.remove());
-
-  wrap.appendChild(cb);
-  wrap.appendChild(input);
-  wrap.appendChild(del);
-
-  container.appendChild(wrap);
-
-  if (focus) input.focus();
-}
-
-function readChecklistUI(container) {
-  if (!container) return [];
-  const rows = Array.from(container.querySelectorAll(".checkitem"));
-  return rows.map((row) => {
-    const cb = row.querySelector('input[type="checkbox"]');
-    const input = row.querySelector('input[type="text"]');
-    return { id:row.dataset.itemId, text: (input?.value || "").trim(), done: !!cb?.checked };
-  }).filter(it => it.text.length > 0);
-}
-
+// ---------- Checklist UI helpers (rows live in checklist-ui.js) ----------
 function maybeAutofillChecklist(type) {
   if (!checklistEl) return;
   const current = readChecklistUI(checklistEl);
