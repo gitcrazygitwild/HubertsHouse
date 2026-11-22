@@ -24,6 +24,7 @@ async function fixture(options = {}) {
   await module('jokes.js',['dadJokes','afterDarkJokes','dailyJokes']);
   await module('daily-content.js',['dailyContent']);
   await module('holidays.js',['usHolidays','holidaysInRange','holidaysEnabled','holidayEvents']);
+  await module('time-dial.js',['initTimeDial','minutesAt','startFrom','endFrom']);
   await module('event-editor.js',['initEventDateEditor','eventRangeSummary']);
   await module('event-planning.js',['overlappingEvents','preferredCalendar']);
   await module('cat-crew.js',['initCatCrew','cats','portrait']);
@@ -746,6 +747,32 @@ test('events away from Richmond show the weather where they are', async t => {
   const saved = w.__testApp.getDocs().find(d => d.title === 'Dinner at Lemaire');
   assert.equal(saved.location, '101 W Franklin St, Richmond, VA 23220');
   assert.ok(![...doc.querySelectorAll('.home-week-event')].some(card => card.textContent.includes('Lemaire') && card.querySelector('.home-event-weather')));
+  assert.deepEqual(errors, []);
+});
+test('event window: day chips, a clock to drag, the extras folded away', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  doc.getElementById('quickEvent').click(); await settle();
+  const days=[...doc.querySelectorAll('#eventDays [data-event-date]')];
+  assert.equal(days.length, 14); assert.equal(days[0].textContent, 'Today'); assert.equal(days[1].textContent, 'Tomorrow');
+  assert.equal(days[0].getAttribute('aria-pressed'), 'true', 'a new event starts today');
+  days[2].click(); await settle();
+  const picked=new Date(); picked.setDate(picked.getDate()+2);
+  assert.equal(doc.getElementById('evtStartDate').value, `${picked.getFullYear()}-${String(picked.getMonth()+1).padStart(2,'0')}-${String(picked.getDate()).padStart(2,'0')}`);
+  assert.equal(doc.querySelector('#eventDays [data-event-date="2"]').getAttribute('aria-pressed'), 'true');
+  // The clock shows the start, and AM/PM switches halves of the day.
+  const readout=doc.querySelector('#eventDial .dial-readout'); assert.ok(readout && doc.querySelector('#eventDial .dial-dot.start') && doc.querySelector('#eventDial .dial-dot.end'));
+  const before=doc.getElementById('evtStartTime').value, hour=Number(before.slice(0,2));
+  doc.querySelector(`#eventDial [data-half="${hour < 12 ? 'PM' : 'AM'}"]`).click(); await settle();
+  assert.equal(Number(doc.getElementById('evtStartTime').value.slice(0,2)), (hour + 12) % 24); assert.match(readout.textContent, hour < 12 ? /PM/ : /AM/);
+  doc.querySelector('[data-event-duration="180"]').click(); await settle();
+  assert.match(doc.getElementById('eventDateSummary').textContent, /3h/);
+  // All day hides the clock and opens the exact dates.
+  const allDay=doc.getElementById('evtAllDay'); allDay.checked=true; allDay.dispatchEvent(new w.Event('change', {bubbles:true})); await settle();
+  assert.equal(doc.getElementById('eventDial').hidden, true); assert.equal(doc.getElementById('eventExact').open, true);
+  // Extras are folded for a new event; Frankie is a chip next to the people.
+  assert.equal(doc.getElementById('eventMore').open, false);
+  assert.ok(doc.querySelector('.owner-chips #evtWithFrankie'), '+ Frankie sits with the who chips');
+  assert.ok(doc.getElementById('saveBtnTop').classList.contains('event-save-top'), 'one Save, at the bottom (the top one is styled away)');
   assert.deepEqual(errors, []);
 });
 test('Got a hunch? Typed words are tested on the spot, and ones it can’t test are saved for Claude', async t => {

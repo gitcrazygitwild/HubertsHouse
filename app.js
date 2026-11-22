@@ -1490,6 +1490,10 @@ function openEventModal(payload) {
   if (evtNotes) evtNotes.value = payload.notes || "";
   if (evtLocation) evtLocation.value = payload.location ?? original?.location ?? "";
   whereBox.close(); whereBox.refresh();
+  // The folded sections open when they hold something (an edit with notes, a repeat, a checklist…).
+  const more = document.getElementById('eventMore'), exact = document.getElementById('eventExact');
+  if (more) more.open = !!((payload.notes || '').trim() || (payload.repeat || 'none') !== 'none' || (payload.type || 'general') !== 'general' || (payload.checklist || []).length);
+  if (exact) exact.open = !!payload.allDay || (!!payload.start && !!payload.end && new Date(payload.start).toDateString() !== new Date(+new Date(payload.end) - (payload.allDay ? 1 : 0)).toDateString());
   updateDestinationUI();
   cloudEventBaseline=cloudDraftKey();
 
@@ -1500,6 +1504,9 @@ function openEventModal(payload) {
   setTimeout(() => (evtTitle?.disabled ? evtOwner : evtTitle)?.focus(), 0);
 }
 
+// A required field inside a folded section: open it so the browser can point at it.
+document.getElementById('eventForm')?.addEventListener('invalid', event => { const fold = event.target.closest?.('details'); if (fold) fold.open = true; }, true);
+document.getElementById('evtAllDay')?.addEventListener('change', event => { if (event.target.checked) { const exact = document.getElementById('eventExact'); if (exact) exact.open = true; } });
 function closeModal() {
   editingDocId = null;
   editingOccurrenceStart = null;

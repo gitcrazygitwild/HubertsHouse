@@ -1,0 +1,115 @@
+/* The event window: a big title, a clock you drag, chips for the rest, and the extras folded
+   away. Loaded last so it wins over the older modal styles (planning.css, styles.css). */
+#modalBackdrop .modal { padding:0; overflow:hidden; }
+#modalBackdrop .modal-header { padding:14px 18px 6px; border-bottom:0; margin:0; }
+#modalBackdrop .modal-title { font-family:var(--font-ui, system-ui); font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+#modalBackdrop .event-save-top { display:none; } /* one Save, at the bottom */
+#modalBackdrop #modalClose { width:36px; height:36px; min-height:36px; border-radius:50%; padding:0; }
+#eventForm.event-sheet { padding:0 18px; gap:16px; }
+
+/* Title: a headline, not a box. */
+.event-title-field { display:block; margin:0; }
+#eventForm .event-title-input { width:100%; box-sizing:border-box; border:0; border-bottom:2px solid transparent; border-radius:0; background:transparent; padding:2px 0 8px; font-family:var(--font-display, Georgia, serif); font-size:28px; line-height:1.2; color:var(--text); outline:none; box-shadow:none; }
+#eventForm .event-title-input:focus { border-bottom-color:var(--accent); }
+#eventForm .event-title-input::placeholder { color:var(--muted); opacity:.65; }
+
+/* Soft fields everywhere else. */
+#eventForm .field > span, #eventForm .where-field label > span, .event-section-label { font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); }
+#eventForm .field input:not([type="checkbox"]), #eventForm .field select, #eventForm .field textarea { background:var(--soft, #f1f2ea); border:1px solid transparent; border-radius:12px; padding:12px 13px; color:var(--text); }
+#eventForm .field input:focus, #eventForm .field select:focus, #eventForm .field textarea:focus { border-color:var(--accent); background:var(--card); outline:none; }
+#eventForm .where-field { margin:0; }
+#eventForm .where-field small { font-size:11px; margin-top:4px; }
+
+/* When. */
+#eventForm .event-schedule { border:0; background:none; padding:0; margin:0; display:grid; gap:12px; }
+.event-when-head { display:flex; align-items:center; justify-content:space-between; }
+.event-all-day { font-size:13px; font-weight:600; color:var(--text); }
+.event-days { display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; margin:0 -18px; padding:2px 18px; scroll-snap-type:x proximity; }
+.event-days::-webkit-scrollbar { display:none; }
+.event-days button { flex:none; scroll-snap-align:start; display:grid; place-items:center; gap:1px; min-width:56px; min-height:52px; padding:6px 10px; border-radius:14px; border:1px solid var(--border); background:var(--card); color:var(--text); font:inherit; cursor:pointer; }
+.event-days button span { font-size:11px; font-weight:600; color:var(--muted); }
+.event-days button b { font-size:17px; font-weight:600; line-height:1; }
+.event-days button[aria-pressed="true"] { background:var(--accent); border-color:var(--accent); color:#fff; }
+.event-days button[aria-pressed="true"] span { color:#ffffffcc; }
+.event-days button:disabled { opacity:.5; cursor:default; }
+
+/* The clock. */
+.time-dial { display:grid; justify-items:center; gap:10px; touch-action:none; user-select:none; -webkit-user-select:none; }
+.time-dial[hidden] { display:none !important; }
+.dial-wrap { position:relative; width:min(250px, 72vw); aspect-ratio:1; }
+.dial-face { width:100%; height:100%; display:block; overflow:visible; cursor:grab; }
+.time-dial.is-dragging .dial-face { cursor:grabbing; }
+.dial-plate { fill:var(--soft, #f1f2ea); }
+.dial-track { fill:none; stroke:var(--border); stroke-width:10; }
+.dial-arc { fill:none; stroke:var(--accent); stroke-width:10; stroke-linecap:round; opacity:.35; }
+.dial-tick { stroke:var(--muted); stroke-width:1; opacity:.35; }
+.dial-tick.big { stroke-width:2; opacity:.6; }
+.dial-hour { font:600 12px var(--font-ui, system-ui); fill:var(--muted); }
+.dial-hand { stroke:var(--accent); stroke-width:2; stroke-linecap:round; opacity:.5; }
+.dial-hub { fill:var(--accent); }
+.dial-dot { cursor:grab; outline:none; transition:r .12s ease; }
+.dial-dot.start { fill:var(--accent); stroke:var(--card); stroke-width:3; filter:drop-shadow(0 2px 4px #0003); }
+.dial-dot.end { fill:var(--card); stroke:var(--accent); stroke-width:3; }
+.dial-dot:focus-visible { stroke:#ab885b; stroke-width:4; }
+.time-dial.is-dragging .dial-dot { r:16; }
+.dial-readout { position:absolute; inset:0; display:grid; place-content:center; justify-items:center; text-align:center; pointer-events:none; }
+.dial-readout strong { font-family:var(--font-display, Georgia, serif); font-size:34px; font-weight:400; line-height:1; letter-spacing:-.02em; }
+.dial-readout strong small { font-family:var(--font-ui, system-ui); font-size:12px; font-weight:700; margin-left:3px; color:var(--muted); }
+.dial-readout span { font-size:12px; color:var(--muted); margin-top:5px; }
+.dial-readout em { font-style:normal; font-size:11px; font-weight:700; color:var(--accent); margin-top:3px; }
+.dial-halves { display:inline-flex; padding:3px; border-radius:999px; background:var(--soft, #f1f2ea); }
+.dial-halves button { border:0; background:none; border-radius:999px; padding:6px 16px; font:inherit; font-size:12px; font-weight:700; color:var(--muted); cursor:pointer; }
+.dial-halves button[aria-pressed="true"] { background:var(--card); color:var(--text); box-shadow:0 1px 3px #0002; }
+.time-dial.is-disabled { opacity:.55; pointer-events:none; }
+
+.event-durations { display:flex; justify-content:center; flex-wrap:wrap; gap:6px; }
+.event-durations[hidden] { display:none !important; }
+.event-durations button { border:1px solid var(--border); background:var(--card); color:var(--text); border-radius:999px; padding:6px 13px; min-height:32px; font:inherit; font-size:12px; cursor:pointer; }
+.event-durations button[aria-pressed="true"] { background:var(--accent); border-color:var(--accent); color:#fff; }
+#eventForm .event-date-summary { border:0; margin:0; padding:0; text-align:center; font-size:13px; font-weight:600; }
+.event-exact > summary, .event-more > summary { cursor:pointer; list-style:none; }
+.event-exact > summary::-webkit-details-marker, .event-more > summary::-webkit-details-marker { display:none; }
+.event-exact > summary { text-align:center; font-size:12px; font-weight:600; color:var(--accent); }
+.event-exact > summary::after { content:' ›'; }
+.event-exact[open] > summary::after { content:' ‹'; }
+.event-exact[open] { padding-top:4px; }
+.event-exact small { display:block; text-align:center; font-size:10px; }
+
+/* Who's coming: one row of chips, Frankie included. */
+#eventForm .owner-chips { gap:6px; }
+#eventForm .owner-chips button, .owner-frankie span { min-height:36px; padding:6px 14px; font-size:13px; }
+.owner-frankie { position:relative; display:inline-flex; cursor:pointer; }
+.owner-frankie input { position:absolute; opacity:0; width:1px; height:1px; }
+.owner-frankie span { display:inline-flex; align-items:center; border-radius:999px; border:1px dashed #d58aac; color:#a24a74; background:var(--card); font-weight:600; }
+.owner-frankie input:checked + span { background:#f6dbe7; border-style:solid; border-color:#d58aac; }
+.owner-frankie input:focus-visible + span { outline:3px solid #ab885b; outline-offset:2px; }
+.owner-frankie input:disabled + span { opacity:.55; cursor:default; }
+[data-theme="dark"] .owner-frankie span { color:#efb5d0; border-color:#8a5a72; }
+[data-theme="dark"] .owner-frankie input:checked + span { background:#483142; }
+
+/* More: the rarely changed bits, folded away. */
+.event-more { border-top:1px solid var(--border); padding-top:12px; }
+.event-more > summary { display:flex; align-items:baseline; gap:10px; }
+.event-more > summary small { color:var(--muted); font-size:12px; flex:1; }
+.event-more > summary::after { content:'+'; font-size:18px; color:var(--muted); line-height:1; }
+.event-more[open] > summary::after { content:'–'; }
+.event-more[open] > summary { margin-bottom:12px; }
+.event-more > .field, .event-more-grid { margin-bottom:12px; }
+.event-more-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.event-more-grid .row { display:contents; }
+
+/* One Save, always in reach. */
+#eventForm .modal-actions { position:sticky; bottom:0; z-index:3; margin:4px -18px 0; padding:12px 18px calc(12px + env(safe-area-inset-bottom, 0px)); background:var(--card); border-top:1px solid var(--border); }
+#eventForm .modal-actions #saveBtn { flex:1 1 auto; max-width:240px; min-height:48px; font-size:15px; }
+#eventForm .modal-actions #cancelBtn { border:0; }
+@media (max-width:650px) {
+  #eventForm.event-sheet { padding:0 16px; }
+  .event-days { margin:0 -16px; padding:2px 16px; }
+  #eventForm .modal-actions { margin:4px -16px 0; padding-left:16px; padding-right:16px; }
+  #eventForm .modal-actions #saveBtn { max-width:none; }
+  .event-more-grid { grid-template-columns:1fr; }
+}
+#eventForm .owner-row { display:contents; }
+/* iPhones force text boxes to at least 16px (to stop zooming); the title stays a headline. */
+#eventForm input.event-title-input { font-size:28px !important; }
+@media (max-width:650px) { .dial-wrap { width:min(228px, 64vw); } }
