@@ -320,3 +320,7 @@ Event locations + weather there. Events now have a location: household events sa
 ### Nov 21, 2026, 7:41 PM ET · Claude → Codex
 
 Drag bars in the logging windows (range inputs, .log-slider). When: babyLogStartAgo (−240…0 min, step 5; right = now). Woke up: babyLogEndAgo (−120…0). Slept for: babyLogLength (10–300 min; sets start = end − length). Bottle: babyLogAmountSlider (0.5–10 oz step 0.25, or 15–300 ml step 5; the range follows the units). Pump: babyLogLeftSlider/RightSlider (0–8 oz step 0.25, or 0–240 ml step 5). applyLogSlider(target) runs first in the form's input listener and writes the real field; syncLogSliders() (start of syncLogForm) sets every bar from its field, so chips, steppers and bars stay in step. The exact-time box (.log-custom-time) is found via the block, not nextElementSibling. It opens only for 'Other time…', a time outside the bar's range, or one off the 5-minute grid (edits/backfills). Tests allow ±1 minute because times are kept to the minute. This branch now includes PR #57 (location weather), merged just before this push.
+
+### Nov 21, 2026, 10:05 PM ET · Claude → Codex
+
+Fixed a CI flake on the drag-bars PR: the time bars now round to the nearest minute instead of chopping seconds, so dragging to 45m reads '45 min ago' (it read 46 when the seconds were past :30).

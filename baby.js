@@ -383,9 +383,9 @@ function relativeTime(value) {
 const SLIDER_FIELD = { babyLogAmountSlider:'babyLogAmount', babyLogLeftSlider:'babyLogLeft', babyLogRightSlider:'babyLogRight' };
 function applyLogSlider(target) {
   if (!target?.classList?.contains('log-slider')) return;
-  const value = Number(target.value);
-  if (target.id === 'babyLogStartAgo') $('babyLogStart').value = inputTime(Date.now() + value * 60000);
-  else if (target.id === 'babyLogEndAgo') $('babyLogEnd').value = inputTime(Date.now() + value * 60000);
+  const value = Number(target.value), agoTime = () => inputTime(Math.round((Date.now() + value * 60000) / 60000) * 60000); // nearest minute, so "45m" reads "45 min ago"
+  if (target.id === 'babyLogStartAgo') $('babyLogStart').value = agoTime();
+  else if (target.id === 'babyLogEndAgo') $('babyLogEnd').value = agoTime();
   else if (target.id === 'babyLogLength') $('babyLogStart').value = inputTime(new Date($('babyLogEnd').value) - value * 60000);
   else if (SLIDER_FIELD[target.id]) $(SLIDER_FIELD[target.id]).value = String(value);
 }
