@@ -118,12 +118,3 @@ test('a slow service is left out and named instead of stalling the send', async 
   assert.match(email.text, /Left out or older this time \(slow to answer\)/);
   assert.doesNotMatch(composeEmail(buildDigest({ now, forecast })).html, /Left out/);
 });
-
-test('the email warns when Huckleberry or Publix stopped working (not about itself)', async () => {
-  const failing = [{ service:'huckleberry', problem:'signed-out', failingSince:new Date(+now - 3 * 3600000).toISOString(), failures:4 }, { service:'email', problem:'failed', failingSince:new Date(+now - 86400000).toISOString(), failures:1 }];
-  const d = buildDigest({ now, household, icloud, items, forecast, health:failing });
-  assert.deepEqual(d.alerts.map(a => a.service), ['huckleberry']);
-  const { html, text } = composeEmail(d);
-  assert.match(html, /⚠ Huckleberry stopped accepting the saved sign-in/); assert.match(text, /⚠ Huckleberry stopped accepting/);
-  assert.deepEqual(buildDigest({ now, household, icloud, items, forecast }).alerts, [], 'all fine: no note');
-});

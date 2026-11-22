@@ -14,8 +14,7 @@ import { initPlaceSuggest } from './place-suggest.js';
 import { OWNER_STYLE, normalizeOwner, CHECKLIST_PRESETS, normalizeDocs, expandRepeats, advanceRepeat, makeInclusiveAllDayEnd, makeFcEvent, renderPanelCardHTML, renderPanelCardHTMLWithProgress, formatWhenForPanel, toInputValue, fromInputValue, roundToNextHour, escapeHtml } from './event-data.js';
 import { initHypotheses, memoryHypotheses } from './hypotheses-view.js';
 import { ensureCatLinkMarkup, setCatMode, LS_CATMODE } from './cat-mode.js';
-import { predictionStore, hypothesisStore, settingsStore, trashStore, firestoreStore, healthStore } from './stores.js';
-import { initHealth, memoryHealthStore } from './health-view.js';
+import { predictionStore, hypothesisStore, settingsStore, trashStore, firestoreStore } from './stores.js';
 import { renderChecklistUI, addChecklistItemUI, readChecklistUI } from './checklist-ui.js';
 import { renderUpcomingList, renderOutstandingList } from './panels.js';
 import { initDevices } from './devices.js';
@@ -396,7 +395,7 @@ async function initApp() {
     document.getElementById('accountLabel').textContent = 'Preview mode. No real household or Apple data is loaded.';
     startHousehold(demoStore()); localDocs = demoEvents(); rebuildEvents();
     setCalendarStatus('Sample calendar', 'ready');
-    initCloudCalendar(null,{demo:true,onEvents:() => {},onCalendars:() => {}}); startUpgrades(); initHypotheses({store:memoryHypotheses([{text:'She sleeps longer on bath nights',factor:'bath',outcome:'nightLength',direction:'more'},{text:'She’s fussier on days Hubert sits on her play mat'}])}); initHuckleberry(null,{demo:true}); initNewsletterSettings(null); initSiriSettings(null); initWorldBriefing(null,{demo:true}); initInstall(); initPullRefresh(); initDevices(null,{demo:true}); initLitter(null,{demo:true}); initFeeders(null,{demo:true}); initMeals(null,{demo:true,store:demoMealStore()}); initBirthdays(null,{demo:true,onChange:() => { renderCalendarFromCache(); homeCalendar?.render(); }}); initBathDays({store:memoryBathStore(),onChange:bathChanged}); initTrashDays({store:memoryTrashStore(),onChange:bathChanged}); initHealth({store:memoryHealthStore(['huckleberry','publix','email'].map(service => ({service,lastOk:new Date(Date.now() - 20 * 60000).toISOString(),problem:null})))}); return;
+    initCloudCalendar(null,{demo:true,onEvents:() => {},onCalendars:() => {}}); startUpgrades(); initHypotheses({store:memoryHypotheses([{text:'She sleeps longer on bath nights',factor:'bath',outcome:'nightLength',direction:'more'},{text:'She’s fussier on days Hubert sits on her play mat'}])}); initHuckleberry(null,{demo:true}); initNewsletterSettings(null); initSiriSettings(null); initWorldBriefing(null,{demo:true}); initInstall(); initPullRefresh(); initDevices(null,{demo:true}); initLitter(null,{demo:true}); initFeeders(null,{demo:true}); initMeals(null,{demo:true,store:demoMealStore()}); initBirthdays(null,{demo:true,onChange:() => { renderCalendarFromCache(); homeCalendar?.render(); }}); initBathDays({store:memoryBathStore(),onChange:bathChanged}); initTrashDays({store:memoryTrashStore(),onChange:bathChanged}); return;
   }
   onAuthStateChanged(auth,async user => {
     if (!user) { memberVerified = false; gate.classList.remove('hidden'); if (dataStarted) location.reload(); return; }
@@ -417,7 +416,7 @@ async function initApp() {
         setCalendarStatus('Sync unavailable', 'offline');
         showNotice('The calendar could not sync. Check your connection and household access.');
       });
-      startUpgrades(); initHypotheses({store:hypothesisStore(db)}); initHuckleberry(app,{predictions:predictionStore(db)}); initNewsletterSettings(app); initSiriSettings(app); initWorldBriefing(app); initInstall(); initPullRefresh(); initDevices(app); initLitter(app); initFeeders(app); initMeals(app,{store:firestoreStore('householdMeals')}); initBirthdays(app,{onChange:() => { renderCalendarFromCache(); homeCalendar?.render(); }}); initBathDays({store:settingsStore(db),onChange:bathChanged}); initTrashDays({store:trashStore(db),onChange:bathChanged}); initHealth({store:healthStore(db)});
+      startUpgrades(); initHypotheses({store:hypothesisStore(db)}); initHuckleberry(app,{predictions:predictionStore(db)}); initNewsletterSettings(app); initSiriSettings(app); initWorldBriefing(app); initInstall(); initPullRefresh(); initDevices(app); initLitter(app); initFeeders(app); initMeals(app,{store:firestoreStore('householdMeals')}); initBirthdays(app,{onChange:() => { renderCalendarFromCache(); homeCalendar?.render(); }}); initBathDays({store:settingsStore(db),onChange:bathChanged}); initTrashDays({store:trashStore(db),onChange:bathChanged});
       await initCloudCalendar(app,{
         onEvents:records => { cloudDocs = records.map(e => ({...e,end:e.editEnd,cloudEnd:e.end,owner:e.owner || 'both',type:'general',checklist:e.checklist || [],repeat:'none'})); rebuildEvents(); },
         onChecklists:records => {cloudChecklistDocs=records;},

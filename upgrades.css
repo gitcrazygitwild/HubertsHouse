@@ -142,14 +142,3 @@
 .trash-soon span { display:inline-block; min-width:96px; color:var(--muted); }
 .trash-soon small { color:var(--muted); }
 @media (max-width:650px) { .trash-grid { grid-template-columns:1fr; } }
-/* Settings → Connections */
-.health-list { list-style:none; margin:8px 0; padding:0; display:grid; gap:8px; }
-.health-list li { display:flex; gap:10px; align-items:flex-start; padding:10px 12px; border-radius:12px; background:var(--soft, #f1f2ea); }
-.health-list b { display:block; font-weight:600; }
-.health-list small { display:block; color:var(--muted); font-size:12px; line-height:1.45; }
-.health-icon { width:20px; text-align:center; font-weight:700; color:var(--accent); flex:none; }
-.health-warning { background:#fbf1dc !important; } .health-warning .health-icon { color:#a0701c; }
-[data-theme="dark"] .health-warning { background:#3d3322 !important; } [data-theme="dark"] .health-warning .health-icon { color:#e3b765; }
-.nn-health .nn-link strong { color:#a0701c; } [data-theme="dark"] .nn-health .nn-link strong { color:#e3b765; }
-/* Phones: long Now & Next details (Frankie's line) wrap instead of running off the card. */
-@media (max-width:650px) { .nn-muted { white-space:normal; } }

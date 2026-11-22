@@ -97,8 +97,6 @@ service cloud.firestore {
       allow read, delete: if member();
       allow create, update: if member() && valid();
     }
-    // Whether Huckleberry, Publix and the morning email are working: written by the server only.
-    match /serviceHealth/{name} { allow read: if member(); allow write: if false; }
     // Siri Shortcut keys (stored as SHA-256 hashes) are server-only.
     match /siriKeys/{hash} { allow read, write: if false; }
     // Newsletter preferences, the encrypted sending account and the send log are server-only.
