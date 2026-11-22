@@ -199,3 +199,34 @@ rect.is-hovered.mark-night,rect.is-hovered.mark-nap { stroke:var(--card); stroke
 .pace-legend b { color:var(--text); font-weight:600; }
 .pace-tiles { grid-template-columns:repeat(3, minmax(0, 1fr)); margin:14px 0 4px; }
 @media (max-width:520px) { .pace-tiles { grid-template-columns:1fr 1fr; } }
+/* Mack's hat (just for fun) */
+.hat-stats { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:10px; margin:4px 0 10px; }
+.hat-stats > div { background:var(--surface-2, #f1f2ea); border-radius:12px; padding:10px 12px; }
+.hat-stats strong { display:block; font-size:20px; font-weight:600; font-variant-numeric:tabular-nums; }
+.hat-stats small { display:block; font-size:11px; color:var(--muted); line-height:1.35; }
+.hat-verdict { font-size:13px; margin:0 0 6px; }
+[data-theme="dark"] .hat-stats > div { background:#ffffff0d; }
+@media (max-width:650px) { .hat-stats { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
+/* Got a hunch? */
+.hunch-box { margin-top:22px; padding-top:18px; border-top:1px solid var(--border2, var(--border)); }
+.hunch-box h3 { font-size:15px; letter-spacing:0; margin:0 0 4px; }
+.hunch-form { display:grid; gap:10px; margin-top:10px; }
+.hunch-builder { display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; font-size:13px; color:var(--muted); }
+.hunch-builder select { flex:1 1 180px; min-width:0; border:1px solid var(--border); border-radius:9px; padding:8px; background:var(--card); color:var(--text); font:inherit; font-size:13px; }
+.hunch-builder #hunchDirection { flex:0 1 110px; }
+.hunch-form .btn { justify-self:start; }
+.hunch-verdict { display:grid; gap:3px; margin:10px 0 0; padding:10px 12px; border-radius:12px; background:var(--surface-2, #f1f2ea); font-size:13px; }
+.hunch-verdict strong { font-size:13px; }
+.hunch-verdict span { color:var(--muted); line-height:1.45; }
+.hunch-verdict.is-true { background:#e3eedb; } .hunch-verdict.is-opposite { background:#f3e3d4; } .hunch-verdict.is-maybe { background:#efe9d6; }
+[data-theme="dark"] .hunch-verdict { background:#ffffff0d; } [data-theme="dark"] .hunch-verdict.is-true { background:#5f8a4a33; } [data-theme="dark"] .hunch-verdict.is-opposite { background:#c0784a33; } [data-theme="dark"] .hunch-verdict.is-maybe { background:#c9a64a2b; }
+.hunch-box h4 { font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:18px 0 6px; }
+.hunch-list { list-style:none; margin:0; padding:0; display:grid; gap:10px; }
+.hunch-list li { display:flex; gap:10px; justify-content:space-between; align-items:flex-start; padding:10px 0; border-bottom:1px solid var(--border2, var(--border)); }
+.hunch-list li > div:first-child { min-width:0; }
+.hunch-list b { font-weight:600; font-size:14px; display:block; overflow-wrap:anywhere; }
+.hunch-list small { display:block; color:var(--muted); font-size:11px; margin-top:2px; }
+.hunch-claude { display:block; font-size:12px; color:var(--muted); margin-top:6px; }
+.hunch-actions { display:flex; gap:6px; flex-shrink:0; }
+.hunch-actions .btn { min-height:36px; padding:6px 10px; font-size:12px; }
+.hunch-copy { width:100%; font:12px/1.4 ui-monospace, monospace; }

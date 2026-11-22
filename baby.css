@@ -146,3 +146,6 @@ html.night-open { overflow: hidden; }
 .score-table.fit-table th, .score-table.fit-table td { padding:6px 4px; white-space:normal; }
 .score-table.fit-table th:first-child, .score-table.fit-table td:first-child { padding-left:0; }
 .score-table.fit-table td small { display:block; color:var(--muted); font-size:10px; }
+/* Mack's hat guesses: a hollow, dashed dot (they're not in the competition). */
+.strip-dot.hat { fill:var(--card); stroke:#7a63b5; stroke-width:2; stroke-dasharray:2 2; }
+.guess-list li.is-hat .guess-dot { background:transparent; border:2px dashed #7a63b5; }

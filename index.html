@@ -288,12 +288,25 @@
           <div class="log-toolbar"><div class="home-view-toggle" role="group" aria-label="Show logs"><button type="button" data-log-filter="all" aria-pressed="true">All</button><button type="button" data-log-filter="sleep" aria-pressed="false">Sleep</button><button type="button" data-log-filter="bottle" aria-pressed="false">Bottles</button><button type="button" data-log-filter="diaper" aria-pressed="false">Diapers</button></div><button type="button" class="btn log-refresh" data-log-refresh>Refresh</button></div>
           <div id="frankieLogs" aria-live="polite"></div><p id="frankieLogsError" class="form-error" role="alert"></p></details></section>
         <section class="home-card frankie-card"><div class="section-heading"><div><span class="eyebrow">CHALLENGE 1 · THE NEXT NAP</span><h2>Who knows Frankie best?</h2></div></div><div id="rewindPanel" hidden></div><div id="frankieScore"></div></section>
+        <section id="mackHatCard" class="home-card frankie-card" hidden><div class="section-heading"><div><span class="eyebrow">JUST FOR FUN · NOT IN THE COMPETITION</span><h2>🎩 Mack’s hat</h2></div></div><div id="frankieHat"></div></section>
         <section class="home-card frankie-card"><div class="section-heading"><div><span class="eyebrow">CHALLENGE 2 · NAP OR NIGHT?</span><h2>Is the next sleep the big one?</h2></div></div><div id="frankieNapNight"></div></section>
         <section class="home-card frankie-card"><div class="section-heading"><div><span class="eyebrow">CHALLENGE 3 · RISE AND SHINE</span><h2>Morning wake-up</h2></div></div><div id="frankieMorning"></div></section>
         <section class="home-card frankie-card"><div class="section-heading"><div><span class="eyebrow">CHALLENGE 4 · THE BOTTLE BET</span><h2>How many ounces today?</h2></div></div><div id="frankieBottleBet"></div></section>
         <section id="pumpCard" class="home-card frankie-card pump-card"><div class="section-heading"><div><span class="eyebrow">KARENA’S PUMPS</span><h2>Pumping</h2></div></div><div id="frankiePumps"></div></section>
         <section id="pumpPoolCard" class="home-card frankie-card" hidden><div class="section-heading"><div><span class="eyebrow">CHALLENGE 5 · THE PUMP POOL</span><h2>How much will Karena pump today?</h2></div></div><div id="frankiePumpPool"></div></section>
-        <section class="home-card frankie-card"><div class="section-heading"><div><span class="eyebrow">WHAT MIA HAS NOTICED</span><h2>Bottles &amp; sleep</h2></div></div><div id="frankieLinks"></div></section>
+        <section class="home-card frankie-card"><div class="section-heading"><div><span class="eyebrow">WHAT MIA HAS NOTICED</span><h2>Bottles &amp; sleep</h2></div></div><div id="frankieLinks"></div>
+          <div id="hunchBox" class="hunch-box">
+            <h3>Got a hunch? Test it.</h3>
+            <p class="tiny muted">Say it in your own words, like “she sleeps longer on bath nights”, or build it from the menus. Hubert’s House checks it against Frankie’s last six weeks right away. If it can’t, it saves it so you can hand it to Claude.</p>
+            <form id="hunchForm" class="hunch-form" autocomplete="off">
+              <label class="field"><span>Your hunch</span><input id="hunchText" type="text" maxlength="300" placeholder="e.g. A bigger evening bottle means fewer night wake-ups" /></label>
+              <div class="hunch-builder" role="group" aria-label="Build it from menus"><span>When</span><select id="hunchFactor" aria-label="When…"></select><select id="hunchOutcome" aria-label="…this"></select><span>is</span><select id="hunchDirection" aria-label="…more or less"></select></div>
+              <p id="hunchRead" class="tiny muted" aria-live="polite"></p>
+              <button class="btn btn-primary" type="submit" id="hunchSubmit">Test it</button>
+            </form>
+            <div id="hunchResult" aria-live="polite"></div>
+            <div id="hunchList"></div>
+          </div></section>
         <section class="home-card frankie-card"><div class="section-heading"><div><span class="eyebrow">THE PAST SEVEN DAYS</span><h2>Frankie’s Weekly Awards</h2></div><span id="frankieAwardsRange" class="tiny muted"></span></div><div id="frankieAwards" class="awards-grid"></div></section>
         <section class="home-card frankie-card"><div class="section-heading"><div><span class="eyebrow">THE LAST TWO WEEKS</span><h2>Sleep timeline</h2></div></div><div id="frankieTimeline" class="chart-wrap"></div></section>
         <div class="frankie-range-row"><span class="tiny muted">Charts show</span><div class="home-view-toggle" role="group" aria-label="Chart range"><button type="button" data-frankie-range="14" aria-pressed="false">14 days</button><button type="button" data-frankie-range="30" aria-pressed="true">30 days</button><button type="button" data-frankie-range="60" aria-pressed="false">60 days</button></div></div>

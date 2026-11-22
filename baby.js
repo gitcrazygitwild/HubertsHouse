@@ -10,6 +10,7 @@ import { renderFrankie, initFrankie } from './frankie.js';
 import { renderHTML } from './dom.js';
 import { dayStripSVG, STRIP_LANES, CATS } from './day-strip.js';
 import { logsHTML, describeLog, logKey } from './baby-logs.js';
+import { hatGuess, hatSeed } from './mack-hat.js';
 
 const $ = id => document.getElementById(id);
 let service, demo = false, connection = {connected:false}, snapshot = null, error = '', busy = false, inFlight, lastAttempt = 0, pendingTimer;
@@ -62,6 +63,7 @@ function frankieGuesses(picks, morning) {
   const rows = ['hubert', 'mia', 'mack'].map(key => {
     const p = picks.find(pick => pick.key === key);
     if (!p) return `<li class="guess-${key} is-quiet"><span class="guess-dot" aria-hidden="true"></span><span><b>${esc(names[key])}</b><small>No call right now</small></span></li>`;
+    if (p.hat) return `<li class="guess-${key} is-hat"><span class="guess-dot" aria-hidden="true"></span><span><b>Mack’s hat guess</b><small>${esc(p.label.replace('🎩 hat · ', ''))} · not in the competition · ${esc(p.why || '')}</small></span><strong>🎩 ${esc(time(p.target))}</strong></li>`;
     const window = p.start && p.end ? `${esc(time(p.start))} – ${esc(time(p.end))}` : esc(time(p.target));
     return `<li class="guess-${key}"><span class="guess-dot" aria-hidden="true"></span><span><b>${esc(names[key])}</b><small>${esc(p.label)}${p.start && p.end ? ` · best guess ${esc(time(p.target))}` : ''}</small></span><strong>${window}</strong></li>`;
   }).join('');
@@ -115,11 +117,21 @@ function drawHome() {
       ? `After waking around this time, she usually went down for the night about ${hmText(own.typicalMinutes)} later (${own.samples} evenings). Center: ${time(own.target)}.`
       : `Based on ${own.samples} logged wake windows across ${own.days} days${own.matchedTime ? ', around this time of day' : ''}. Center: ${time(own.target)}.`;
   const outdated = Date.now() - Date.parse(snapshot.checkedAt) > 10 * 60000;
+  // Mack's hat: when SweetSpot has nothing to say, Mack pulls a guess (never in the competition).
+  const hat = safely('Mack’s hat', () => {
+    if (huck.available && !huck.expired && !huck.sleeping) return null;
+    const timer = snapshot.timer, began = timer?.active ? Date.parse(timer.start) : null, lastWake = Date.parse(snapshot.sleeps.at(-1)?.end);
+    if (morning) { const bedtime = currentBedtime(snapshot.sleeps, timer, zone()); return { what:'morning wake-up', ...hatGuess({ bases:[morning.hubert?.target, morning.mia?.target], fallback:bedtime + 10.5 * 3600000, seed:hatSeed('night', bedtime), firedAt:bedtime }) }; }
+    if (Number.isFinite(began)) return { what:'wake-up', ...hatGuess({ bases:[miaShown.available && miaShown.kind === 'wake' ? miaShown.target : null, own.available && own.kind === 'wake' ? own.target : null], fallback:began + 55 * 60000, seed:hatSeed('nap', began), firedAt:began }) };
+    if (!Number.isFinite(lastWake)) return null;
+    const fired = huck.available && Date.parse(huck.time) > lastWake ? Date.parse(huck.time) : lastWake;
+    return { what:'next sleep', ...hatGuess({ bases:[own.available ? own.target : null, mia.available ? mia.target : null], fallback:lastWake + 2 * 3600000, seed:hatSeed('wake', lastWake), firedAt:fired }) };
+  });
   // Frankie's day strip: her sleeps today plus each cat's window, Hubert, Mia, Mack.
   const label = p => p.kind === 'bedtime' ? 'bedtime' : p.kind === 'wake' || p.kind === 'morning' ? 'wake-up' : 'nap';
   const stripPicks = morning ? [['hubert', 'Hubert', morning.hubert], ['mia', 'Mia', morning.mia], ['mack', 'Mack', morning.mack]].filter(([, , p]) => p).map(([key, cat, p]) => ({ key, cat, ...p, label:'wake-up' }))
     : [own.available ? { key:'hubert', cat:'Hubert', start:own.start, end:own.end, target:own.target, label:label(own) } : null, miaShown.available ? { key:'mia', cat:'Mia', start:miaShown.start, end:miaShown.end, target:miaShown.target, label:label(miaShown) } : null,
-      huck.available && !huck.expired && !huck.sleeping ? { key:'mack', cat:'Mack', target:huck.time, label:'SweetSpot' } : null].filter(Boolean);
+      huck.available && !huck.expired && !huck.sleeping ? { key:'mack', cat:'Mack', target:huck.time, label:'SweetSpot' } : hat?.target ? { key:'mack', cat:'Mack', target:hat.target, label:`🎩 hat · ${hat.what}`, hat:true, why:hat.line } : null].filter(Boolean);
   // The same windows on the Frankie page, with a line per cat.
   // A failure here hides the Frankie page card; it isn't reported on Today's card.
   try { frankieGuesses(stripPicks, morning); } catch (e) { console.error('Frankie guesses failed', e); if ($('frankieGuessCard')) $('frankieGuessCard').hidden = true; }
@@ -130,7 +142,7 @@ function drawHome() {
   }
   renderHTML($('babyPredictions'), `<article class="nap-card purr-nap"><div class="nap-label"><span>HUBERT’S PURRFECT WINDOW</span><span aria-hidden="true">🐾</span></div><h3>${own.available ? `${esc(time(own.start))} – ${esc(time(own.end))}` : 'Learning your rhythm'}</h3><span class="nap-state">${outdated ? 'Saved history · refresh needed' : own.available ? `${esc(own.pattern)} · ${esc(purrWhat)}` : 'Your own sleep-history estimate'}</span><p>${own.available ? esc(purrWhy) : esc(own.reason)}</p></article>
     <article class="nap-card mia-nap"><div class="nap-label"><span>MIA’S CATNAP FORECAST</span><span aria-hidden="true">🌤</span></div><h3>${miaShown.available ? `${esc(time(miaShown.start))} – ${esc(time(miaShown.end))}` : 'Gathering clues'}</h3><span class="nap-state">${outdated ? 'Saved history · refresh needed' : miaShown.available ? `${esc(miaShown.confidence)} · ${esc(miaWhat)}${miaShown.phase ? ` · ${miaShown.phase === 'passed' ? 'window passed' : miaShown.phase === 'within' ? 'in the window' : 'up next'}` : ''}` : 'Naps, bedtime and wake-ups'}</span><p>${miaShown.available ? `${esc(miaWhy.charAt(0).toUpperCase() + miaWhy.slice(1))}. Best guess: ${esc(time(miaShown.target))}.` : esc(mia.reason)}</p></article>
-    <article class="nap-card huck-nap"><div class="nap-label"><span>MACK’S BORROWED SWEETSPOT</span><span>${demo ? 'Sample prediction' : `SweetSpot® · ${esc(napPlanLabel())}`}</span></div><h3>${huck.available ? esc(time(huck.time)) : 'Waiting for a prediction'}</h3><span class="nap-state">${huck.sleeping ? 'Sleep in progress' : huck.expired ? 'Previous prediction · passed' : huck.staleRead ? 'Saved prediction · stale' : huck.available ? 'Stored in Huckleberry' : 'From your Huckleberry account'}</span><p>${esc(huck.available ? huck.note : huck.reason)} <span class="mack-excuse">${esc(MACK_EXCUSE)}</span></p></article>${morningLine}${problems.length ? `<p class="forecast-problem" role="status">Part of the forecast couldn’t be drawn (${esc(problems.join('; ').slice(0, 200))}). The predictions above are fine; send this to Claude.</p>` : ''}`);
+    <article class="nap-card huck-nap"><div class="nap-label"><span>MACK’S BORROWED SWEETSPOT</span><span>${demo ? 'Sample prediction' : `SweetSpot® · ${esc(napPlanLabel())}`}</span></div>${hat?.target ? `<h3>🎩 ${esc(time(hat.target))}</h3><span class="nap-state">Out of the hat · ${esc(hat.what)} · just for fun, not in the competition</span><p>${esc(hat.line)} <span class="mack-excuse">${huck.sleeping ? 'SweetSpot doesn’t guess while she sleeps' : huck.available ? `SweetSpot’s last call (${esc(time(huck.time))}) already passed` : 'Huckleberry has no SweetSpot right now'}, so this one’s all Mack.</span></p>` : `<h3>${huck.available ? esc(time(huck.time)) : 'Waiting for a prediction'}</h3><span class="nap-state">${huck.sleeping ? 'Sleep in progress' : huck.expired ? 'Previous prediction · passed' : huck.staleRead ? 'Saved prediction · stale' : huck.available ? 'Stored in Huckleberry' : 'From your Huckleberry account'}</span><p>${esc(huck.available ? huck.note : huck.reason)} <span class="mack-excuse">${esc(MACK_EXCUSE)}</span></p>`}</article>${morningLine}${problems.length ? `<p class="forecast-problem" role="status">Part of the forecast couldn’t be drawn (${esc(problems.join('; ').slice(0, 200))}). The predictions above are fine; send this to Claude.</p>` : ''}`);
   renderHTML($('babyScore'), score.scoredNaps ? `<button type="button" class="baby-score" data-go="frankie"><span aria-hidden="true">🏆</span><span>${leader ? `<strong>${esc(leader.owner)}’s ${esc(leader.name)}</strong> is most accurate so far · ±${leader.mae} min across ${leader.n} naps` : `${score.scoredNaps} nap${score.scoredNaps === 1 ? '' : 's'} scored · a leader appears after three scored naps`}</span><span class="baby-score-link">Scoreboard →</span></button>` : '');
   const timer = snapshot.timer, elapsed = timer?.start ? Math.max(0,Math.floor(((timer.paused ? Date.parse(timer.end) : Date.now()) - Date.parse(timer.start)) / 60000)) : 0;
   const latest = snapshot.sleeps.at(-1), bottle = snapshot.lastBottle, diaper = snapshot.lastDiaper;

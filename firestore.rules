@@ -77,6 +77,20 @@ service cloud.firestore {
         && request.resource.data.sweetspot.loggedAt > resource.data.sweetspot.loggedAt;
       allow delete: if false;
     }
+    // "Got a hunch?" on the Frankie page: hypotheses the household wants tested.
+    match /babyHypotheses/{id} {
+      function valid() {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['text','factor','outcome','direction','createdAt','note'])
+          && d.text is string && d.text.size() > 0 && d.text.size() <= 300
+          && (!('factor' in d) || (d.factor is string && d.factor.size() <= 40))
+          && (!('outcome' in d) || (d.outcome is string && d.outcome.size() <= 40))
+          && (!('direction' in d) || d.direction in ['more','less'])
+          && (!('note' in d) || (d.note is string && d.note.size() <= 1000));
+      }
+      allow read, delete: if member();
+      allow create, update: if member() && valid();
+    }
     // Siri Shortcut keys (stored as SHA-256 hashes) are server-only.
     match /siriKeys/{hash} { allow read, write: if false; }
     // Newsletter preferences, the encrypted sending account and the send log are server-only.
