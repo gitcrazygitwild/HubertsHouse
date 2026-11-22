@@ -124,3 +124,25 @@ html.night-open { overflow: hidden; }
 .log-slider { -webkit-appearance:none; appearance:none; background:transparent; }
 .log-sheet input.log-slider { border:0; padding:0; background:transparent; border-radius:0; box-shadow:none; height:32px; }
 .log-sheet input.log-slider:focus-visible { outline:2px solid var(--accent); outline-offset:4px; border-radius:8px; }
+/* Frankie page: the whole day, swiped sideways, with cat names pinned on the left. */
+.strip-frame { position:relative; }
+.strip-scroll { overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain; -webkit-overflow-scrolling:touch; scrollbar-width:thin; border-radius:10px; }
+.strip-scroll .day-strip.is-scrolling { width:auto; max-width:none; }
+.strip-names { position:absolute; left:0; top:0; bottom:0; width:66px; z-index:1; pointer-events:none; background:linear-gradient(90deg, var(--card) 72%, transparent); }
+.strip-name { position:absolute; left:0; font:600 11px/14px var(--font-ui, system-ui); color:var(--muted); }
+.strip-band.past { opacity:.2; } .strip-dot.past { opacity:.6; }
+.strip-none { font:italic 10px var(--font-ui, system-ui); fill:var(--muted); opacity:.85; }
+.strip-actual { stroke:var(--text); stroke-width:1; stroke-dasharray:3 3; opacity:.4; }
+.strip-legend { display:flex; gap:14px; justify-content:flex-end; flex-wrap:wrap; font-size:11px; color:var(--muted); margin:-4px 0 4px; }
+.strip-legend i { display:inline-block; width:10px; height:8px; border-radius:2px; background:#c9bfe3; margin-right:5px; }
+.strip-legend i.night { background:#7d72a8; }
+.strip-legend i.actual { width:12px; height:0; border-radius:0; border-top:1.5px dashed currentColor; background:none; vertical-align:middle; }
+[data-theme="dark"] .strip-legend i { background:#5c5480; } [data-theme="dark"] .strip-legend i.night { background:#8f84c0; } [data-theme="dark"] .strip-legend i.actual { background:none; }
+.guess-table caption { caption-side:top; text-align:left; padding:0 0 6px; }
+.guess-table td small { display:block; color:var(--muted); font-size:10px; }
+.guess-table td.is-quiet { color:var(--muted); font-style:italic; }
+/* Short tables that should fit a phone without sideways scrolling. */
+.score-table.fit-table { min-width:0 !important; table-layout:fixed; }
+.score-table.fit-table th, .score-table.fit-table td { padding:6px 4px; white-space:normal; }
+.score-table.fit-table th:first-child, .score-table.fit-table td:first-child { padding-left:0; }
+.score-table.fit-table td small { display:block; color:var(--muted); font-size:10px; }

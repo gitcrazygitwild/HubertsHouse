@@ -36,15 +36,15 @@ async function fixture(options = {}) {
   await module('household.js',['initHousehold','updateHouseholdEvents','showNotice','showView','householdItems','addHouseholdItems'],'const esc=escapeHTML;');
   await module('cloud-calendar.js',['initCloudCalendar','setCloudRange','refreshCloud','saveCloudEvent','saveCloudAssignment','deleteCloudEvent'],'const esc=escapeHTML;');
   await module('baby-history.js',['toOunces','localDay','dayStart','dayKeys','sleepKind','dayStory','dayStoryText','nightLine','clockAt','DEFAULT_NIGHT_LINE','dailySleep','dailyBottles', 'dailyPumps','timelineRows','babySummary']);
-  await module('day-strip.js',['stripRange','dayStripSVG'],'const esc=escapeHTML;');
+  await module('day-strip.js',['stripRange','dayStripSVG','STRIP_LANES','CATS'],'const esc=escapeHTML;');
   await module('baby-model.js',['purrfectWindow','huckleberryPrediction','miaForecast','indexedWakeWindows','bottleForecast','correlation','ageInDays','ageLabel','halfLifeFor','typicalWindow','bottleSleepLinks','catsConsensus']);
   await module('mia-v1.js',['miaForecastV1']);
-  await module('cat-challenges.js',['CHALLENGES','MACK_EXCUSE','nightsFrom','currentBedtime','morningPicks','bottlePicks','scoreMornings','scoreBottles', 'scorePumps', 'pumpPicks']);
-  await module('prediction-log.js',['MODELS','predictionId','isDaytimeWake','sweetspotEntry','sweetspotPatch','previousSweetspot','actualSleepStart','replayGuesses','scorePredictions','MIA_V2_SINCE','miaVersionAt','recoveredEntry']);
+  await module('cat-challenges.js',['CHALLENGES','MACK_EXCUSE','nightsFrom','currentBedtime','morningPicks','bottlePicks','scoreMornings','scoreBottles', 'scorePumps', 'pumpPicks','napNightPicks','nextSleepKind','scoreNapNight']);
+  await module('prediction-log.js',['MODELS','predictionId','isDaytimeWake','sweetspotEntry','sweetspotPatch','previousSweetspot','actualSleepStart','replayGuesses','scorePredictions','MIA_V2_SINCE','miaVersionAt','recoveredEntry','guessRounds']);
   await module('baby-sample.js',['sampleHistory','samplePredictions']);
   await module('awards.js',['frankieAwards']);
   await module('bottle-pace.js',['bottlePace']);
-  await module('frankie.js',['renderFrankie','initFrankie','frankieDayText','bottleLinksHTML', 'pumpsHTML', 'paceHTML','challengeHTML'],'const esc=escapeHTML;');
+  await module('frankie.js',['renderFrankie','initFrankie','frankieDayText','bottleLinksHTML', 'pumpsHTML', 'paceHTML','challengeHTML','napNightHTML'],'const esc=escapeHTML;');
   await module('baby-logs.js',['LOG_FILTERS','describeLog','logKey','logsHTML'],'const esc=escapeHTML;');
   await module('baby.js',['initHuckleberry','logBabyFromText'],'const esc=escapeHTML;');
   await module('calendar-view.js',['initCalendarExperience','calendarEventContent'],'const esc=escapeHTML;');
@@ -643,8 +643,18 @@ test('Frankie page: the cats’ windows on a day strip, and a bottle pace tracke
   assert.ok(doc.querySelector('#frankieStrip svg.day-strip'), 'the same strip as Today');
   assert.deepEqual([...doc.querySelectorAll('#frankieGuessList li')].map(li => li.className.split(' ')[0]), ['guess-hubert', 'guess-mia', 'guess-mack'], 'Hubert, Mia, Mack');
   // Each cat with a call shows its window; the strip draws the same picks as Today's.
-  const todayLanes = [...doc.querySelectorAll('#babyStrip .strip-cat')].map(n => n.textContent), frankieLanes = [...doc.querySelectorAll('#frankieStrip .strip-cat')].map(n => n.textContent);
-  assert.deepEqual(frankieLanes, todayLanes);
+  // The Frankie strip always has all three lanes, names pinned on the left, and scrolls sideways.
+  assert.deepEqual([...doc.querySelectorAll('#frankieStrip .strip-name')].map(n => n.textContent), ['Hubert', 'Mia', 'Mack']);
+  const scroller = doc.querySelector('#frankieStrip .strip-scroll'), svg = scroller.querySelector('svg.is-scrolling');
+  assert.ok(Number(svg.getAttribute('width')) >= 64 * 10, 'drawn at about an hour per 64px, wider than a phone');
+  // Earlier sleeps today keep each cat's guess (faded), with the moment she fell asleep marked.
+  const earlierRows = doc.querySelectorAll('#frankieGuessList .guess-table tbody tr');
+  assert.equal(svg.querySelectorAll('.strip-actual').length, earlierRows.length);
+  if (earlierRows.length) assert.ok(svg.querySelector('.strip-dot.past'), 'earlier guesses are drawn');
+  // Nap or night: a card per cat and a recent-wake-ups table.
+  const napNight = doc.getElementById('frankieNapNight');
+  assert.deepEqual([...napNight.querySelectorAll('.score-card h3')].map(h => h.textContent), ['Evening Instinct', 'Nap Counter', 'The Nap Plan']);
+  assert.match(napNight.textContent, /called right/); assert.match(napNight.textContent, /4-nap SweetSpot plan/);
   // Bottle pace.
   assert.equal(doc.getElementById('frankiePaceCard').hidden, false);
   const pace = doc.getElementById('frankiePace');

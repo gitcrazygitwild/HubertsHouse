@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { nightsFrom, currentBedtime, morningPicks, bottlePicks, scoreMornings, scoreBottles, pumpPicks, scorePumps, CHALLENGES, MACK_EXCUSE } from '../cat-challenges.js';
+import { nightsFrom, currentBedtime, morningPicks, bottlePicks, scoreMornings, scoreBottles, pumpPicks, scorePumps, CHALLENGES, MACK_EXCUSE, napNightPicks, nextSleepKind, scoreNapNight } from '../cat-challenges.js';
 import { dailyPumps } from '../baby-history.js';
 import { miaForecast } from '../baby-model.js';
 import { MODELS } from '../prediction-log.js';
@@ -115,4 +115,30 @@ test('the Pump Pool: same time last week, supply & demand, and copycat', () => {
   const score = scorePumps(pumps, zone, today + 9 * H);
   assert.ok(score.scored >= 10); assert.equal(score.summary.length, 3); assert.ok(['hubert', 'mia', 'mack'].includes(score.leader));
   assert.deepEqual(CHALLENGES.pump.map(m => m.owner), ['Hubert', 'Mia', 'Mack']);
+});
+
+test('nap or night: each cat calls the next sleep from its own method, and the scoreboard counts right calls', () => {
+  // Ten regular days: three naps, then the night at 20:00.
+  const sleeps = iso(history(10)), now = today + 8 * H;
+  assert.deepEqual(CHALLENGES.napnight.map(c => c.owner), ['Hubert', 'Mia', 'Mack']);
+  // After the third nap (woke 16:45 yesterday), Hubert and Mia call night; Mack's 4-nap plan still says nap.
+  const evening = today - DAY + 16.75 * H, picks = napNightPicks(sleeps, zone, evening, { plan:4 });
+  assert.deepEqual([picks.hubert, picks.mia, picks.mack, picks.napsToday], ['night', 'night', 'nap', 3]);
+  assert.equal(napNightPicks(sleeps, zone, evening, { plan:3 }).mack, 'night', 'a 3-nap plan: SweetSpot is bedtime now');
+  assert.equal(napNightPicks(sleeps, zone, today - DAY + 10 * H, { plan:3 }).mack, 'nap');
+  // What actually came next.
+  assert.equal(nextSleepKind(sleeps, null, zone, evening, now).kind, 'night');
+  assert.equal(nextSleepKind(sleeps, null, zone, today - DAY + 10 * H, now).kind, 'nap');
+  // A nap still running isn't settled; once it passes four hours it's the night.
+  const wake = today + 9 * H, running = { active:true, start:new Date(today + 9.5 * H).toISOString() };
+  assert.equal(nextSleepKind(sleeps, running, zone, wake, today + 10 * H), null);
+  assert.equal(nextSleepKind(sleeps, running, zone, wake, today + 14 * H).kind, 'night');
+  const score = scoreNapNight(sleeps, zone, now, { plan:4 });
+  const by = Object.fromEntries(score.summary.map(m => [m.key, m]));
+  assert.ok(score.scored >= 10);
+  assert.equal(by.mack.nightsRight, 0, 'the 4-nap plan never calls bedtime after three naps');
+  assert.equal(by.mack.napsRight, by.mack.naps);
+  assert.ok(by.hubert.hitRate > by.mack.hitRate && by.mia.hitRate > by.mack.hitRate);
+  assert.notEqual(score.leader, 'mack');
+  assert.equal(scoreNapNight(sleeps, zone, now, { plan:3 }).summary.find(m => m.key === 'mack').hitRate, 100);
 });

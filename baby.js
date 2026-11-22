@@ -4,11 +4,11 @@ import { escapeHTML as esc } from './household-model.js';
 import { showNotice, showView } from './household.js';
 import { purrfectWindow, huckleberryPrediction, miaForecast, bottleForecast, ageLabel } from './baby-model.js';
 import { currentBedtime, morningPicks, MACK_EXCUSE } from './cat-challenges.js';
-import { sweetspotEntry, sweetspotPatch, previousSweetspot, scorePredictions, recoveredEntry } from './prediction-log.js';
+import { sweetspotEntry, sweetspotPatch, previousSweetspot, scorePredictions, recoveredEntry, guessRounds } from './prediction-log.js';
 import { sampleHistory, samplePredictions } from './baby-sample.js';
 import { renderFrankie, initFrankie } from './frankie.js';
 import { renderHTML } from './dom.js';
-import { dayStripSVG } from './day-strip.js';
+import { dayStripSVG, STRIP_LANES, CATS } from './day-strip.js';
 import { logsHTML, describeLog, logKey } from './baby-logs.js';
 
 const $ = id => document.getElementById(id);
@@ -42,7 +42,22 @@ function frankieGuesses(picks, morning) {
   if (!card || !strip || !list) return;
   card.hidden = !snapshot;
   if (!snapshot) return;
-  renderHTML(strip, dayStripSVG({ sleeps:snapshot.sleeps, timer:snapshot.timer, picks, timezone:zone(), now:Date.now(), width:Math.max(320, Math.round(strip.clientWidth || card.clientWidth || 640)) }));
+  // The whole day, wider than the screen: swipe sideways for every sleep's guesses.
+  const now = Date.now(), rounds = guessRounds(predictions, snapshot.sleeps, snapshot.timer, zone(), now, { bottles:snapshot.bottles || [], birthdate:snapshot.birthdate });
+  const old = strip.querySelector('.strip-scroll'), kept = old && strip.dataset.touched && now - Number(strip.dataset.touched) < 5 * 60000 ? old.scrollLeft : null;
+  const svg = dayStripSVG({ sleeps:snapshot.sleeps, timer:snapshot.timer, picks, rounds, timezone:zone(), now, width:Math.max(300, Math.round((strip.clientWidth || card.clientWidth || 640))), scroll:true });
+  const nameTags = CATS.map(([key, cat], i) => `<span class="strip-name ${key}" style="top:${STRIP_LANES.top + i * (STRIP_LANES.height + STRIP_LANES.gap) - 2}px">${esc(cat)}</span>`).join('');
+  renderHTML(strip, `<div class="strip-legend"><span><i class="night"></i>Night</span><span><i></i>Nap</span><span><i class="actual"></i>fell asleep</span></div><div class="strip-frame"><div class="strip-names" aria-hidden="true">${nameTags}</div><div class="strip-scroll" tabindex="0" aria-label="Frankie’s day; scroll sideways to see every guess">${svg}</div></div>`);
+  const scroller = strip.querySelector('.strip-scroll'), nowX = Number(strip.querySelector('[data-now-x]')?.dataset.nowX) || 0;
+  strip.dataset.nowX = String(nowX);
+  const toNow = () => { const el = strip.querySelector('.strip-scroll'); if (el?.clientWidth) el.scrollLeft = Math.max(0, Number(strip.dataset.nowX) - el.clientWidth * 0.6); };
+  if (kept != null) scroller.scrollLeft = kept; else toNow();
+  if (!strip.dataset.bound) {
+    strip.dataset.bound = '1';
+    for (const type of ['pointerdown', 'wheel', 'touchstart', 'keydown']) strip.addEventListener(type, () => { strip.dataset.touched = String(Date.now()); }, { passive:true });
+    // Drawn while the Frankie page was hidden? Scroll to now once it has a size.
+    if ('ResizeObserver' in window) new ResizeObserver(() => { if (!strip.dataset.touched) toNow(); }).observe(strip);
+  }
   const names = { hubert:'Hubert’s Purrfect Window', mia:'Mia’s Catnap Forecast', mack:'Mack’s borrowed SweetSpot' };
   const rows = ['hubert', 'mia', 'mack'].map(key => {
     const p = picks.find(pick => pick.key === key);
@@ -50,7 +65,11 @@ function frankieGuesses(picks, morning) {
     const window = p.start && p.end ? `${esc(time(p.start))} – ${esc(time(p.end))}` : esc(time(p.target));
     return `<li class="guess-${key}"><span class="guess-dot" aria-hidden="true"></span><span><b>${esc(names[key])}</b><small>${esc(p.label)}${p.start && p.end ? ` · best guess ${esc(time(p.target))}` : ''}</small></span><strong>${window}</strong></li>`;
   }).join('');
-  renderHTML(list, `<ul>${rows}</ul><p class="tiny muted">${morning ? 'She’s down for the night: these are the cats’ morning wake-up calls.' : 'Bands are each cat’s window; dots are their best guess. Shaded blocks are her sleeps so far today.'}</p>`);
+  // Earlier today: each sleep and how close each cat came (or that it had no call).
+  const miss = (p, actual) => { if (!p) return '<td class="is-quiet">no call</td>'; const m = Math.round((Date.parse(actual) - Date.parse(p.target)) / 60000); return `<td class="${Math.abs(m) <= 15 ? 'is-hit' : 'is-miss'}">${esc(time(p.target))} <small>${m === 0 ? 'spot on' : `${Math.abs(m)}m ${m > 0 ? 'early' : 'late'}`}</small></td>`; };
+  const earlier = rounds.length ? `<div class="score-table-wrap"><table class="score-table guess-table fit-table"><caption class="tiny muted">Earlier today</caption><thead><tr><th>Fell asleep</th>${CATS.map(([, cat]) => `<th>${esc(cat)}</th>`).join('')}</tr></thead><tbody>${[...rounds].reverse().map(r => `<tr><td>${esc(time(r.actual))}</td>${CATS.map(([key]) => miss(r[key], r.actual)).join('')}</tr>`).join('')}</tbody></table></div>` : '';
+  const quiet = rounds.some(r => CATS.some(([key]) => !r[key]));
+  renderHTML(list, `<ul>${rows}</ul>${earlier}<p class="tiny muted">${morning ? 'She’s down for the night: the dots after now are the cats’ morning wake-up calls. ' : ''}Swipe the strip sideways to see the whole day. Bands are each cat’s window and dots their best guess; faded ones are guesses for earlier sleeps, and the dashed line is when she actually fell asleep.${quiet ? ' “No call” means that cat didn’t have a guess then: Hubert and Mia need a few days of naps, and Mack’s SweetSpot is only saved while the app is open and she’s awake.' : ''}</p>`);
 }
 function drawHome() {
   if ($('huckNapPlanHint')) $('huckNapPlanHint').textContent = napPlanHint();

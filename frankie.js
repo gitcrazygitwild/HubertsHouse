@@ -7,7 +7,7 @@ import { dailySleep, dailyBottles, dailyPumps, toOunces, timelineRows, babySumma
 import { MODELS, scorePredictions, MIA_V2_SINCE } from './prediction-log.js';
 import { bottleSleepLinks, ageInDays, ageLabel } from './baby-model.js';
 import { bottlePace } from './bottle-pace.js';
-import { CHALLENGES, MACK_EXCUSE, scoreMornings, scoreBottles, scorePumps, morningPicks, bottlePicks, pumpPicks, currentBedtime, nightsFrom } from './cat-challenges.js';
+import { CHALLENGES, MACK_EXCUSE, scoreMornings, scoreBottles, scorePumps, morningPicks, bottlePicks, pumpPicks, currentBedtime, nightsFrom, scoreNapNight, napNightPicks } from './cat-challenges.js';
 import { frankieAwards } from './awards.js';
 
 const $ = id => document.getElementById(id);
@@ -181,6 +181,18 @@ export function challengeHTML(kind, score, timezone, upcoming = null) {
   return `${calls}<div class="score-grid">${cards}</div>${rows ? `<div class="score-table-wrap"><table class="score-table"><thead><tr><th>${morning ? 'Woke up' : pump ? 'Pumped' : 'Drank'}</th>${models.map(m => `<th>${esc(m.owner)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>` : ''}
     <p class="tiny muted">${morning ? 'Each cat makes its call at bedtime, from nights logged before it. The morning wake-up is when the night’s last stretch ended (4 AM to noon).' : pump ? 'Each cat guesses at midnight from earlier days. Days with no pumps logged aren’t scored.' : 'Each cat guesses at midnight from earlier days. Days with fewer than three bottles logged aren’t scored.'} Recalculated from ${pump ? 'Huckleberry’s' : 'Frankie’s'} logs, so backfilled ${morning ? 'nights' : 'days'} count too.</p>`;
 }
+// Nap or night? One card per cat, the calls for the sleep coming up, then recent wake-ups.
+const NN = { night:'🌙 Night', nap:'😴 Nap' };
+export function napNightHTML(score, timezone, upcoming = null, plan = 4) {
+  const models = CHALLENGES.napnight;
+  const cards = score.summary.map(model => `<article class="score-card score-${model.key}${score.leader === model.key ? ' is-leader' : ''}"><div class="score-head"><span>${esc(model.owner.toUpperCase())}</span>${score.leader === model.key ? '<span class="leader-badge">🏆 Leading</span>' : ''}</div><h3>${esc(model.name)}</h3>
+    <div class="score-stats"><div><strong>${model.hitRate == null ? '—' : `${model.hitRate}%`}</strong><small>called right</small></div><div><strong>${model.nights ? `${model.nightsRight}/${model.nights}` : '—'}</strong><small>bedtimes</small></div><div><strong>${model.naps ? `${model.napsRight}/${model.naps}` : '—'}</strong><small>naps</small></div></div>
+    <p class="score-width">${esc(model.how)}</p><p>${model.n ? `${model.n} wake-up${model.n === 1 ? '' : 's'} scored` : 'No wake-ups scored yet'}</p></article>`).join('');
+  const calls = upcoming && models.some(m => upcoming[m.key]) ? `<p class="challenge-calls"><strong>Her next sleep:</strong> ${models.map(m => `${esc(m.owner)} ${upcoming[m.key] ? esc(NN[upcoming[m.key]]) : '<span class="muted">no call yet</span>'}`).join(' · ')}${upcoming.napsToday != null ? ` <span class="muted">(${upcoming.napsToday} nap${upcoming.napsToday === 1 ? '' : 's'} so far today)</span>` : ''}</p>` : '';
+  const rows = score.results.slice(0, 6).map(row => `<tr><td>${esc(new Date(row.asleep).toLocaleDateString([], { weekday:'short', timeZone:timezone }))} ${esc(clock(row.asleep, timezone))}<small>${esc(NN[row.actual])}</small></td>${models.map(m => `<td class="${row.right[m.key] ? 'is-hit' : 'is-miss'}">${row.right[m.key] ? '✓' : '✗'} ${esc(row.picks[m.key] === 'night' ? 'Night' : 'Nap')}</td>`).join('')}</tr>`).join('');
+  return `${calls}<div class="score-grid">${cards}</div>${rows ? `<div class="score-table-wrap"><table class="score-table fit-table"><thead><tr><th>Fell asleep</th>${models.map(m => `<th>${esc(m.owner)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>` : ''}
+    <p class="tiny muted">Each cat calls it when she wakes up, from what was logged by then, so backfilled sleeps count too. Night means the sleep started after her usual evening line or lasted four hours or more. Mack follows the ${esc(String(plan))}-nap SweetSpot plan chosen in Settings: after that many naps, Huckleberry’s next SweetSpot is bedtime. A wake-up counts once all three have a call.</p>`;
+}
 export function renderFrankie({ snapshot, timezone, predictions = [], demo = false, connected = false }) {
   shared = snapshot ? { snapshot, timezone, demo } : null;
   const share = $('frankieShare'); if (share) share.disabled = !snapshot;
@@ -211,6 +223,11 @@ export function renderFrankie({ snapshot, timezone, predictions = [], demo = fal
   if ($('frankieMorning')) {
     const bedtime = currentBedtime(sleeps, timer, timezone, now);
     renderHTML($('frankieMorning'), challengeHTML('morning', scoreMornings(sleeps, timezone, now, { birthdate:snapshot.birthdate }), timezone, bedtime ? morningPicks(sleeps, timezone, bedtime, { birthdate:snapshot.birthdate }) : null));
+  }
+  if ($('frankieNapNight')) {
+    const plan = Number(snapshot.sweetspot?.selectedNapDay) || Number(snapshot.napPlan) || 4, extra = { bottles, birthdate:snapshot.birthdate, plan };
+    const awake = !timer?.active && last ? Date.parse(last.end) : null;
+    renderHTML($('frankieNapNight'), napNightHTML(scoreNapNight(sleeps, timezone, now, { ...extra, timer }), timezone, awake ? napNightPicks(sleeps, timezone, awake, extra) : null, plan));
   }
   if ($('frankieBottleBet')) renderHTML($('frankieBottleBet'), challengeHTML('bottle', scoreBottles(bottles, timezone, now, { birthdate:snapshot.birthdate }), timezone, bottlePicks(bottles, timezone, localDay(now, timezone), { birthdate:snapshot.birthdate })));
   const width = id => Math.max(280, Math.round($(id).clientWidth || 720));

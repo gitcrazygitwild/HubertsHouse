@@ -16,7 +16,7 @@
 //   separately so a cautious, wide window is visible.
 import { purrfectWindow, miaForecast } from './baby-model.js';
 import { miaForecastV1 } from './mia-v1.js';
-import { nightLine, sleepKind } from './baby-history.js';
+import { nightLine, sleepKind, localDay, dayStart } from './baby-history.js';
 
 export const MODELS = [
   // Same order everywhere: Hubert, Mia, Mack.
@@ -87,7 +87,7 @@ export const miaVersionAt = lastWake => ms(lastWake) >= MIA_V2_SINCE ? 2 : 1;
 // using the version of each model that was live at that moment.
 export function replayGuesses(sleeps, lastWake, timezone, { bottles = [], birthdate = null } = {}) {
   const wake = ms(lastWake), known = sleeps.filter(sleep => ms(sleep.end) <= wake), at = new Date(wake + MINUTE);
-  const pick = model => model.available ? { start:model.start, end:model.end, target:model.target } : null;
+  const pick = model => model.available ? { start:model.start, end:model.end, target:model.target, kind:model.kind } : null;
   const mia = miaVersionAt(wake) === 2 ? miaForecast({ sleeps:known, bottles:bottles.filter(bottle => ms(bottle.start) <= +at), birthdate, timezone }, at) : miaForecastV1({ sleeps:known, timezone }, at);
   return { purrfect:pick(purrfectWindow({ sleeps:known, timezone }, at)), mia:pick(mia) };
 }
@@ -139,4 +139,23 @@ function computeScores(entries, sleeps, timer, timezone, extra) {
   const leader = n >= 3 ? [...summary].sort((a, b) => a.mae - b.mae || b.hitRate - a.hitRate)[0].key : null;
   missed.sort((a, b) => ms(b.lastWake) - ms(a.lastWake));
   return { results, summary, leader, scoredNaps:n, skipped, missed:missed.slice(0, 6) };
+}
+
+// Today's earlier wake-ups and each cat's guess for the sleep that followed, for the
+// Frankie page strip: { wake, actual, hubert, mia, mack } (null = that cat had no call).
+// The wake-up she's awake from now isn't here; its guesses are the live ones.
+export function guessRounds(entries = [], sleeps = [], timer = null, timezone = 'America/New_York', now = Date.now(), extra = {}) {
+  const day = dayStart(localDay(+now, timezone), timezone), saved = new Map(entries.map(entry => [entry.id, entry]));
+  const line = nightLine(sleeps, timezone, now);
+  const wakes = [...new Set(sleeps.map(sleep => ms(sleep.end)))].filter(end => end >= day && end <= +now && isDaytimeWake(end, timezone, sleeps, line)).sort((a, b) => a - b);
+  const label = kind => kind === 'bedtime' ? 'bedtime' : 'nap';
+  return wakes.map(wake => {
+    const actual = actualSleepStart(wake, sleeps, timer);
+    if (!actual) return null;
+    const replay = replayGuesses(sleeps, wake, timezone, extra), sweet = saved.get(predictionId(wake))?.sweetspot;
+    return { wake:new Date(wake).toISOString(), actual:new Date(actual).toISOString(),
+      hubert:replay.purrfect ? { ...replay.purrfect, label:label(replay.purrfect.kind) } : null,
+      mia:replay.mia ? { ...replay.mia, label:label(replay.mia.kind) } : null,
+      mack:sweet?.target ? { target:sweet.target, label:'SweetSpot' } : null };
+  }).filter(Boolean);
 }
