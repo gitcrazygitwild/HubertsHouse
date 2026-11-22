@@ -112,3 +112,15 @@ html.night-open { overflow: hidden; }
 .pump-side-name { font-size:12px; font-weight:650; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
 .pump-side .amount-stepper { grid-template-columns:40px 1fr 40px; }
 #babyLogZone:empty { display:none; }
+/* Drag bars in the logging windows: big thumb, easy to grab. */
+.log-slider-wrap { margin:6px 0 10px; }
+.log-slider { width:100%; height:32px; margin:0; accent-color:var(--accent); cursor:pointer; touch-action:pan-y; }
+.log-slider:disabled { opacity:.4; }
+.log-slider::-webkit-slider-runnable-track { height:8px; border-radius:4px; background:var(--soft, #e7eadf); }
+.log-slider::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:28px; height:28px; margin-top:-10px; border-radius:50%; background:var(--accent); border:3px solid var(--card); box-shadow:0 1px 4px #0003; }
+.log-slider::-moz-range-track { height:8px; border-radius:4px; background:var(--soft, #e7eadf); }
+.log-slider::-moz-range-thumb { width:24px; height:24px; border-radius:50%; background:var(--accent); border:3px solid var(--card); box-shadow:0 1px 4px #0003; }
+.log-slider-ends { display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-top:-2px; }
+.log-slider { -webkit-appearance:none; appearance:none; background:transparent; }
+.log-sheet input.log-slider { border:0; padding:0; background:transparent; border-radius:0; box-shadow:none; height:32px; }
+.log-sheet input.log-slider:focus-visible { outline:2px solid var(--accent); outline-offset:4px; border-radius:8px; }

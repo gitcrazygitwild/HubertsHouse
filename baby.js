@@ -379,7 +379,30 @@ function relativeTime(value) {
   return minutes <= 1 && minutes >= -1 ? `Now · ${clock}` : `${label} · ${clock}${minutes > 1 && minutes < 600 ? ` · ${minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`} ago` : ''}`;
 }
 // Readouts, chip and pill states follow the form's real inputs.
+// Drag bars: each one sets its real field, then the window refreshes from the fields.
+const SLIDER_FIELD = { babyLogAmountSlider:'babyLogAmount', babyLogLeftSlider:'babyLogLeft', babyLogRightSlider:'babyLogRight' };
+function applyLogSlider(target) {
+  if (!target?.classList?.contains('log-slider')) return;
+  const value = Number(target.value), agoTime = () => inputTime(Math.round((Date.now() + value * 60000) / 60000) * 60000); // nearest minute, so "45m" reads "45 min ago"
+  if (target.id === 'babyLogStartAgo') $('babyLogStart').value = agoTime();
+  else if (target.id === 'babyLogEndAgo') $('babyLogEnd').value = agoTime();
+  else if (target.id === 'babyLogLength') $('babyLogStart').value = inputTime(new Date($('babyLogEnd').value) - value * 60000);
+  else if (SLIDER_FIELD[target.id]) $(SLIDER_FIELD[target.id]).value = String(value);
+}
+function syncLogSliders() {
+  const clamp = (input, value) => { input.value = String(Math.min(Number(input.max), Math.max(Number(input.min), value))); };
+  const ago = id => -Math.round((Date.now() - new Date($(id).value)) / 300000) * 5; // minutes, to the nearest 5
+  clamp($('babyLogStartAgo'), ago('babyLogStart')); clamp($('babyLogEndAgo'), ago('babyLogEnd'));
+  clamp($('babyLogLength'), Math.round((new Date($('babyLogEnd').value) - new Date($('babyLogStart').value)) / 60000));
+  // Bottle and pump ranges follow the units.
+  const ranges = { oz:{ bottle:[0.5, 10, 0.25], side:[0, 8, 0.25] }, ml:{ bottle:[15, 300, 5], side:[0, 240, 5] } };
+  const set = (input, [min, max, step], value, label) => { input.min = min; input.max = max; input.step = step; clamp(input, value); const ends = input.nextElementSibling?.children; if (ends) { ends[0].textContent = label(min); ends[1].textContent = label(max); } };
+  const bottleUnits = $('babyLogUnits').value === 'ml' ? 'ml' : 'oz', pumpUnits = $('babyLogPumpUnits').value === 'ml' ? 'ml' : 'oz';
+  set($('babyLogAmountSlider'), ranges[bottleUnits].bottle, Number($('babyLogAmount').value) || 0, v => v === 0.5 ? '½' : `${v} ${bottleUnits}`);
+  for (const side of ['Left', 'Right']) set($(`babyLog${side}Slider`), ranges[pumpUnits].side, Number($(`babyLog${side}`).value) || 0, v => `${v}`);
+}
 function syncLogForm() {
+  syncLogSliders();
   const kind = $('babyLogKind').value, start = $('babyLogStart').value, end = $('babyLogEnd').value;
   $('babyLogStartText').textContent = relativeTime(start);
   if (kind === 'sleep-log') {
@@ -402,8 +425,11 @@ function syncLogForm() {
   $('babyLogAmountChips').querySelectorAll('[data-amount]').forEach(chip => chip.setAttribute('aria-pressed', String(Number(chip.dataset.amount) === amount)));
   // The exact time box stays tucked away unless "Other time…" is chosen or no chip matches.
   for (const group of document.querySelectorAll('[data-time-chips]')) {
-    const box = group.nextElementSibling, matched = [...group.querySelectorAll('[data-ago]')].some(chip => chip.getAttribute('aria-pressed') === 'true');
-    if (box?.classList.contains('log-custom-time')) box.hidden = matched && box.dataset.open !== 'true';
+    const block = group.parentElement, box = block.querySelector('.log-custom-time'), slider = block.querySelector('.log-slider');
+    const ago = (Date.now() - new Date($(group.dataset.timeChips).value)) / 60000;
+    // On the drag bar's 5-minute grid and within its range: no need for the exact box.
+    const onSlider = slider && ago >= -1 && ago <= -Number(slider.min) + 1 && Math.abs(ago - Math.round(ago / 5) * 5) <= 1;
+    if (box) box.hidden = onSlider && box.dataset.open !== 'true';
     group.querySelector('[data-other-time]')?.setAttribute('aria-pressed', String(!!box && !box.hidden));
   }
   const slept = Math.round((new Date(end) - new Date(start)) / 60000);
@@ -525,14 +551,14 @@ export async function initHuckleberry(app, options = {}) {
   document.addEventListener('visibilitychange', async () => { if (document.visibilityState === 'visible' && $('nightMode') && !$('nightMode').hidden && !nightLock) { try { nightLock = await navigator.wakeLock?.request('screen'); } catch {} } });
   $('babyLogCancel').addEventListener('click', () => { if (!busy) $('babyLogDialog').close(); });
   $('babyLogDialog').addEventListener('cancel', e => { if (busy) e.preventDefault(); });
-  $('babyLogForm').addEventListener('input', () => { formId = crypto.randomUUID(); syncLogForm(); });
+  $('babyLogForm').addEventListener('input', e => { applyLogSlider(e.target); formId = crypto.randomUUID(); syncLogForm(); });
   $('babyLogClose').addEventListener('click', () => { if (!busy) $('babyLogDialog').close(); });
   // Chips, stepper and pills set the real inputs, then count as an edit.
   const changed = () => { formId = crypto.randomUUID(); syncLogForm(); };
   $('babyLogForm').addEventListener('click', e => {
     const chip = e.target.closest('[data-ago]'), step = e.target.closest('[data-step]'), amount = e.target.closest('[data-amount]'), pill = e.target.closest('[data-pills] [data-value]'), same = e.target.closest('#babyLogSame');
     const other = e.target.closest('[data-other-time]'), length = e.target.closest('[data-length]'), pumpStep = e.target.closest('[data-pump-step]');
-    if (other) { const box = other.closest('[data-time-chips]').nextElementSibling; box.dataset.open = 'true'; box.hidden = false; syncLogForm(); box.querySelector('input')?.focus(); return; }
+    if (other) { const box = other.closest('.log-block').querySelector('.log-custom-time'); box.dataset.open = 'true'; box.hidden = false; syncLogForm(); box.querySelector('input')?.focus(); return; }
     if (length) { $('babyLogStart').value = inputTime(new Date($('babyLogEnd').value) - Number(length.dataset.length) * 60000); changed(); return; }
     if (pumpStep) { const [id, dir] = pumpStep.dataset.pumpStep.split(':'), ml = $('babyLogPumpUnits').value === 'ml', input = $(id); input.value = String(Math.max(0, Math.round((Number(input.value || 0) + Number(dir) * (ml ? 10 : 0.25)) * 100) / 100)); changed(); return; }
     if (chip) { const input = $(chip.closest('[data-time-chips]').dataset.timeChips); input.value = inputTime(Date.now() - Number(chip.dataset.ago) * 60000); changed(); }
