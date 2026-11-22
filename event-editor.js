@@ -1,5 +1,6 @@
 import { dateKey } from './household-model.js';
 import { localDate } from './calendar-model.js';
+import { initTimeDial } from './time-dial.js';
 
 const clock = date => `${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
 const dayNumber = value => Date.parse(`${value}T00:00:00Z`)/86400000;
@@ -33,6 +34,16 @@ export function initEventDateEditor({onChange=()=>{}}={}) {
     $('eventDateSummary').textContent=eventRangeSummary(start.value,end.value,isAllDay);
     $('eventTimezone').textContent=`Times shown in ${Intl.DateTimeFormat().resolvedOptions().timeZone.replaceAll('_',' ')}.`;
     document.querySelectorAll('[data-event-duration]').forEach(button => button.setAttribute('aria-pressed',String(!isAllDay && to-from===Number(button.dataset.eventDuration)*60000)));
+    drawDays(from); dial?.draw();
+  }
+  // Two weeks of day chips (Today, Tomorrow, Tue 24…), redrawn so "Today" is always right.
+  function drawDays(from) {
+    const box=$('eventDays'); if (!box) return;
+    const today=new Date(); today.setHours(12,0,0,0);
+    const picked=from && !isNaN(from) ? dateKey(from) : '';
+    box.innerHTML=Array.from({length:14},(_,i)=>{ const d=new Date(today); d.setDate(d.getDate()+i);
+      const name=i===0?'Today':i===1?'Tomorrow':d.toLocaleDateString([], {weekday:'short'}), num=i>1?`<b>${d.getDate()}</b>`:'';
+      return `<button type="button" data-event-date="${i}" aria-pressed="${dateKey(d)===picked}"><span>${name}</span>${num}</button>`; }).join('');
   }
   function set(isAllDay,from,to) {
     allDay.checked=isAllDay; start.type=isAllDay?'date':'datetime-local'; end.type=start.type;
@@ -61,9 +72,18 @@ export function initEventDateEditor({onChange=()=>{}}={}) {
     if (!allDay.checked && localDate(end.value)<=localDate(start.value)) end.value=value(new Date(+localDate(start.value)+3600000),false);
     changed();
   });
-  document.querySelectorAll('[data-event-date]').forEach(button=>button.addEventListener('click',()=>{
+  // Day chips (the strip, and any fixed Today/Tomorrow buttons): one listener for all of them.
+  document.addEventListener('click',event=>{
+    const button=event.target.closest('[data-event-date]'); if (!button || button.disabled || fields[0].disabled) return;
     const date=new Date();date.setDate(date.getDate()+Number(button.dataset.eventDate)); moveStart(dateKey(date)+(allDay.checked?'':`T${fields[1].value || '09:00'}`));
-  }));
+  });
+  // The clock dial edits the same fields.
+  const dial=$('eventDial') ? initTimeDial($('eventDial'),{
+    getRange:()=>({start:localDate(start.value),end:localDate(end.value),allDay:allDay.checked}),
+    setStart:date=>moveStart(value(date,false)),
+    setEnd:date=>{end.value=value(date,false);changed();},
+    isDisabled:()=>fields[1].disabled
+  }) : null;
   document.querySelectorAll('[data-event-duration]').forEach(button=>button.addEventListener('click',()=>{end.value=value(new Date(+localDate(start.value)+Number(button.dataset.eventDuration)*60000),false);changed();}));
   for (const field of [start,end]) field.addEventListener('change',changed);
   return {set,render};

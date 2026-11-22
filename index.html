@@ -29,6 +29,7 @@
   <link rel="stylesheet" href="./devices.css?v=20261118_v1" />
   <link rel="stylesheet" href="./life.css?v=20261121_v1" />
   <link rel="stylesheet" href="./mobile.css?v=20261117_v1" />
+  <link rel="stylesheet" href="./event-editor.css?v=20261122_v1" />
 </head>
 <body>
 
@@ -437,32 +438,29 @@
       <div class="modal-header">
         <div id="modalTitle" class="modal-title">New event</div>
         <div style="display:flex; gap:8px; align-items:center;">
-          <button id="saveBtnTop" class="btn btn-primary" type="submit" form="eventForm">Save</button>
+          <button id="saveBtnTop" class="btn btn-primary event-save-top" type="submit" form="eventForm">Save</button>
           <button id="modalClose" class="btn btn-icon" type="button" aria-label="Close">✕</button>
         </div>
       </div>
 
       <div id="editScroll" class="modal-scroll">
-        <form id="eventForm" class="modal-body">
-          <label class="field">
-            <span>Title</span>
-            <input id="evtTitle" class="event-title-input" type="text" required maxlength="500" placeholder="What’s the plan? Try “Dinner Fri 7pm”" autocomplete="off" />
-          </label>
+        <form id="eventForm" class="modal-body event-sheet">
+          <label class="event-title-field"><span class="sr-only">Title</span><input id="evtTitle" class="event-title-input" type="text" required maxlength="500" placeholder="What’s happening?" autocomplete="off" /></label>
           <button type="button" id="evtTitleHint" class="title-hint" hidden></button>
-          <div class="field where-field"><label for="evtLocation"><span>Where</span></label><div class="place-suggest-wrap"><input id="evtLocation" type="text" maxlength="300" placeholder="Start typing a town, a venue you’ve used, or an address" autocomplete="off" /><div id="evtLocationList" class="place-suggest" role="listbox" aria-label="Suggested places" hidden></div></div><small id="evtLocationWeather" class="muted where-weather" aria-live="polite">Outside the Richmond area? You’ll see the weather there.</small></div>
-
           <p id="eventReadonly" class="connection-note" hidden></p>
-          <section class="event-schedule" aria-label="Event date and time">
-            <div class="event-schedule-heading"><span class="eyebrow">MAKE A LITTLE TIME</span><label class="event-all-day"><input id="evtAllDay" type="checkbox" /> All day</label></div>
+          <section class="event-schedule" aria-label="When">
+            <div class="event-when-head"><span class="event-section-label">When</span><label class="event-all-day"><input id="evtAllDay" type="checkbox" /> All day</label></div>
             <input id="evtStart" type="datetime-local" hidden tabindex="-1" /><input id="evtEnd" type="datetime-local" hidden tabindex="-1" />
-            <div class="event-date-columns"><div><label class="field"><span>Start date</span><input id="evtStartDate" type="date" required /></label><label class="field event-time-field"><span>Start time</span><input id="evtStartTime" type="time" required /></label></div><div><label class="field"><span id="eventEndDateLabel">End date</span><input id="evtEndDate" type="date" required /></label><label class="field event-time-field"><span>End time</span><input id="evtEndTime" type="time" required /></label></div></div>
-            <div class="event-shortcuts"><div role="group" aria-label="Start date shortcuts"><button type="button" data-event-date="0">Today</button><button type="button" data-event-date="1">Tomorrow</button></div><div id="eventDurations" role="group" aria-label="Event duration"><button type="button" data-event-duration="30">30 min</button><button type="button" data-event-duration="60">1 hour</button><button type="button" data-event-duration="120">2 hours</button></div></div>
-            <p id="eventDateSummary" class="event-date-summary" aria-live="polite"></p><small id="eventTimezone" class="muted"></small>
+            <div id="eventDays" class="event-days" role="group" aria-label="Day"></div>
+            <div id="eventDial" class="time-dial"></div>
+            <div id="eventDurations" class="event-durations" role="group" aria-label="How long"><button type="button" data-event-duration="30">30 min</button><button type="button" data-event-duration="60">1 hour</button><button type="button" data-event-duration="120">2 hours</button><button type="button" data-event-duration="180">3 hours</button></div>
+            <p id="eventDateSummary" class="event-date-summary" aria-live="polite"></p>
+            <details id="eventExact" class="event-exact"><summary>Exact dates &amp; times</summary><div class="event-date-columns"><div><label class="field"><span>Start date</span><input id="evtStartDate" type="date" required /></label><label class="field event-time-field"><span>Start time</span><input id="evtStartTime" type="time" required /></label></div><div><label class="field"><span id="eventEndDateLabel">End date</span><input id="evtEndDate" type="date" required /></label><label class="field event-time-field"><span>End time</span><input id="evtEndTime" type="time" required /></label></div></div><small id="eventTimezone" class="muted"></small></details>
           </section>
+          <div class="field where-field"><label for="evtLocation"><span>Where</span></label><div class="place-suggest-wrap"><input id="evtLocation" type="text" maxlength="300" placeholder="Start typing a town, a venue you’ve used, or an address" autocomplete="off" /><div id="evtLocationList" class="place-suggest" role="listbox" aria-label="Suggested places" hidden></div></div><small id="evtLocationWeather" class="muted where-weather" aria-live="polite">Outside the Richmond area? You’ll see the weather there.</small></div>
           <div id="eventOverlap" class="event-overlap hidden" role="status" aria-live="polite"></div>
-          <div class="field"><span id="evtOwnerLabel">Who’s coming?</span><div class="owner-chips" role="group" aria-labelledby="evtOwnerLabel"><button type="button" data-owner-chip="both">Both</button><button type="button" data-owner-chip="hanry">hanry</button><button type="button" data-owner-chip="karena">Karena</button><button type="button" data-owner-chip="custom">Other…</button></div></div>
-          <div class="row">
-            <label class="field owner-select-field" hidden>
+          <div class="field"><span id="evtOwnerLabel">Who’s coming?</span><div class="owner-chips" role="group" aria-labelledby="evtOwnerLabel"><button type="button" data-owner-chip="both">Both</button><button type="button" data-owner-chip="hanry">hanry</button><button type="button" data-owner-chip="karena">Karena</button><button type="button" data-owner-chip="custom">Other…</button><label class="owner-frankie" title="Frankie comes along"><input id="evtWithFrankie" type="checkbox" /><span>＋ Frankie</span></label></div></div>
+          <div class="row owner-row"><label class="field owner-select-field" hidden>
               <span class="sr-only">Who’s coming?</span>
               <select id="evtOwner" class="owner-select" tabindex="-1" aria-hidden="true">
                 <option value="hanry">hanry</option>
@@ -470,9 +468,13 @@
                 <option value="both" selected>Both</option>
                 <option value="custom">Other…</option>
               </select>
-            </label>
-
-            <label class="field">
+            </label></div>
+          <label id="ownerCustomWrap" class="field hidden">
+            <span>Who (custom)</span>
+            <input id="evtOwnerCustom" type="text" placeholder="Type a name…" />
+          </label>
+          <details id="eventMore" class="event-more"><summary><span class="event-section-label">More</span><small>Type, repeat, calendar, checklist, notes</small></summary>
+            <div class="event-more-grid"><label class="field">
               <span>Type</span>
               <select id="evtType">
                 <option value="general" selected>General</option>
@@ -481,16 +483,7 @@
                 <option value="appointment">Appointment</option>
                 <option value="party">Party</option>
               </select>
-            </label>
-          </div>
-
-          <label class="frankie-choice"><input id="evtWithFrankie" type="checkbox" /><span><b>＋ Frankie</b><small>Along with hanry, Karena, or both</small></span></label>
-          <label id="ownerCustomWrap" class="field hidden">
-            <span>Who (custom)</span>
-            <input id="evtOwnerCustom" type="text" placeholder="Type a name…" />
-          </label>
-
-          <div class="row">
+            </label><div class="row">
             <label class="field">
               <span>Repeat</span>
               <select id="evtRepeat">
@@ -506,20 +499,19 @@
               <span>Repeat until</span>
               <input id="evtRepeatUntil" type="date" />
             </label>
-          </div>
-
-          <label class="field"><span>Calendar</span><select id="evtCalendar"><option value="household">Hubert’s House</option></select><small id="evtCalendarHint" class="muted"></small></label>
-          <div class="field">
+          </div></div>
+            <label class="field"><span>Calendar</span><select id="evtCalendar"><option value="household">Hubert’s House</option></select><small id="evtCalendarHint" class="muted"></small></label>
+            <div class="field">
             <span>Checklist</span>
             <div id="checklist" class="checklist"></div>
             <button id="addCheckItem" type="button" class="btn btn-ghost" style="margin-top:8px;">+ Add item</button>
             <div id="eventChecklistHint" class="tiny muted" style="margin-top:8px;">Also shows in Life → To-dos.</div>
           </div>
-
-          <label class="field">
+            <label class="field">
             <span>Notes</span>
             <textarea id="evtNotes" rows="4" placeholder="Anything helpful…"></textarea>
           </label>
+          </details>
 
           <div class="modal-actions">
             <button id="deleteBtn" type="button" class="btn btn-danger hidden">Delete</button>
