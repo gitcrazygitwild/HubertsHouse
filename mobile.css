@@ -74,6 +74,13 @@
    the phone turns sideways. `clip` (unlike `hidden`) keeps sticky headers working. */
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 html, body { overflow-x: clip; max-width: 100%; }
+/* iPhone: the bottom tabs stay put. A see-through blur behind a fixed bar makes Safari
+   redraw it late while scrolling (it drifts), and the page's rubber-band bounce dragged it
+   along. The bar is opaque on phones anyway; pull to refresh is our own, so no bounce needed. */
+@media (max-width: 650px) {
+  html, body { overscroll-behavior-y: none; }
+  .house-sidebar, .display-mode .house-sidebar { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; transform: translateZ(0); backface-visibility: hidden; }
+}
 @media (max-width: 650px) {
   input, select, textarea { min-width: 0; max-width: 100%; }
   /* Safari's date and time pickers are wider than Chrome's: one per row on phones. */

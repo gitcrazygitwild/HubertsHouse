@@ -426,7 +426,7 @@
             <input id="evtTitle" class="event-title-input" type="text" required maxlength="500" placeholder="What’s the plan? Try “Dinner Fri 7pm”" autocomplete="off" />
           </label>
           <button type="button" id="evtTitleHint" class="title-hint" hidden></button>
-          <label class="field"><span>Where</span><input id="evtLocation" type="text" maxlength="300" placeholder="Optional: an address or a town, e.g. Nags Head, NC" autocomplete="off" /><small class="muted">Outside the Richmond area? You’ll see the weather there.</small></label>
+          <div class="field where-field"><label for="evtLocation"><span>Where</span></label><div class="place-suggest-wrap"><input id="evtLocation" type="text" maxlength="300" placeholder="Start typing a town, a venue you’ve used, or an address" autocomplete="off" /><div id="evtLocationList" class="place-suggest" role="listbox" aria-label="Suggested places" hidden></div></div><small id="evtLocationWeather" class="muted where-weather" aria-live="polite">Outside the Richmond area? You’ll see the weather there.</small></div>
 
           <p id="eventReadonly" class="connection-note" hidden></p>
           <section class="event-schedule" aria-label="Event date and time">

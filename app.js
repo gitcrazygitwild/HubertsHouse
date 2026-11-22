@@ -9,7 +9,8 @@ import { initWorldBriefing } from './world-briefing.js';
 import { initInstall } from './install-app.js';
 import { initPullRefresh } from './pull-refresh.js';
 import { parseQuickAdd, describeDraft } from './quick-add.js';
-import { createPlaceWeather, usePlaceWeather, eventWeatherLine, sampleWeatherFetch } from './place-weather.js';
+import { createPlaceWeather, usePlaceWeather, eventWeatherLine, sampleWeatherFetch, searchPlaces, whereBoxText } from './place-weather.js';
+import { initPlaceSuggest } from './place-suggest.js';
 import { initDevices } from './devices.js';
 import { initLitter } from './litter.js';
 import { initFeeders } from './feeders.js';
@@ -40,7 +41,7 @@ import { initCalendarExperience, calendarEventContent } from './calendar-view.js
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence, browserSessionPersistence } from 'https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js';
 const demo = new URLSearchParams(location.search).get('demo') === '1';
 // Weather where events are (outside Richmond): Open-Meteo, or made-up numbers in the preview.
-usePlaceWeather(createPlaceWeather({ fetch:demo ? sampleWeatherFetch() : undefined, onUpdate:() => { homeCalendar?.render(); drawDetailsWhere(); } }));
+usePlaceWeather(createPlaceWeather({ fetch:demo ? sampleWeatherFetch() : undefined, onUpdate:() => { homeCalendar?.render(); drawDetailsWhere(); whereBox?.refresh(); } }));
 const gate = document.getElementById('gate');
 const gateForm = document.getElementById('gateForm');
 const gateInput = document.getElementById('gateInput');
@@ -265,6 +266,11 @@ const checklistEl = document.getElementById("checklist");
 const addCheckItemBtn = document.getElementById("addCheckItem");
 const evtNotes = document.getElementById("evtNotes");
 const evtLocation = document.getElementById("evtLocation");
+// Where: suggestions from earlier events' places, then towns; the weather there underneath.
+const whereBox = initPlaceSuggest({ input:evtLocation, list:document.getElementById('evtLocationList'), preview:document.getElementById('evtLocationWeather'), search:searchPlaces,
+  known:() => [...localDocs, ...cloudDocs].filter(d => d?.location).sort((a, b) => String(b.start || '').localeCompare(String(a.start || ''))).map(d => d.location),
+  previewText:location => whereBoxText(location, evtStart?.value) });
+for (const id of ['evtStartDate', 'evtStartTime', 'evtAllDay']) document.getElementById(id)?.addEventListener('change', () => setTimeout(() => whereBox.refresh()));
 
 const deleteBtn = document.getElementById("deleteBtn");
 const cancelBtn = document.getElementById("cancelBtn");
@@ -1462,6 +1468,7 @@ function openEventModal(payload) {
   renderChecklistUI(checklistEl, payload.checklist || []);
   if (evtNotes) evtNotes.value = payload.notes || "";
   if (evtLocation) evtLocation.value = payload.location ?? original?.location ?? "";
+  whereBox.close(); whereBox.refresh();
   updateDestinationUI();
   cloudEventBaseline=cloudDraftKey();
 
