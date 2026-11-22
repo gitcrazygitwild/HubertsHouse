@@ -46,11 +46,13 @@
 @media (max-width: 650px) {
   /* One tidy row of header buttons: search, theme, add. */
   .header-actions { flex-wrap: nowrap; gap: 6px; }
-  .header-actions .theme-toggle { width: 42px !important; min-width: 42px; height: 42px; min-height: 42px; padding: 0 !important; font-size: 0 !important; line-height: 0; display: inline-grid; place-items: center; overflow: hidden; }
-  .header-actions .theme-toggle::before { content: '☾'; font-size: 17px; line-height: 1; }
-  .header-actions .theme-toggle[aria-pressed="true"]::before { content: '☀'; }
+  /* Three matching icon buttons: same size, same corners, icons centred. */
+  .house-header .header-actions .hdr-btn { width: 44px !important; min-width: 44px; height: 44px; min-height: 44px; padding: 0 !important; justify-content: center; border-radius: 14px; font-size: 0 !important; }
+  .house-header .header-actions .hdr-btn:not(.btn-primary) { background: var(--card); box-shadow: 0 1px 2px #30372d0d; }
+  .house-header .header-actions .hdr-btn .btn-label, .house-header .header-actions #quickEvent span { display: none; }
+  .house-header .header-actions .hdr-icon { width: 20px; height: 20px; }
+  .house-header .header-actions #quickEvent .hdr-icon { width: 22px; height: 22px; stroke-width: 2.3; }
   .home-calendar-controls [data-go="calendar"] { display: none; }
-  #quickEvent { min-width: 42px; }
   /* Calendar controls on one row; the colour key gets smaller. */
   .home-calendar-heading { gap: 10px; }
   .home-calendar-controls { display: flex; flex-wrap: nowrap; align-items: center; gap: 6px; width: 100%; }

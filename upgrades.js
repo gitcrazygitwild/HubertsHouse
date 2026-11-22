@@ -6,6 +6,7 @@ import { parseQuickAdd, describeDraft, parseBabyLog, describeBabyLog } from './q
 import { weatherFlags, nextUp, untilText } from './smart-home.js';
 import { birthdaysInRange, birthdaysShown } from './birthdays-model.js';
 import { isBathDay } from './bath-days.js';
+import { catsConsensus } from './baby-model.js';
 import { freeEvenings, dateNightDraft } from './free-nights.js';
 import { skyState, skyArt } from './sky.js';
 
@@ -178,8 +179,11 @@ function renderNowNext() {
   if (baby) {
     const minutes = stamp => Math.max(0, Math.round((+now - Date.parse(stamp)) / 60000)), hm = m => m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`;
     const status = baby.timer?.active ? `asleep ${hm(minutes(baby.timer.start))}` : baby.lastWake ? `awake ${hm(minutes(baby.lastWake))}` : 'no sleep logged';
-    const nap = !baby.timer?.active && baby.mia?.available ? ` · ${baby.mia.kind === 'bedtime' ? 'bedtime' : 'nap'} ~${clock(baby.mia.target)}` : '';
-    parts.push(`<span class="nn-item"><span aria-hidden="true">${baby.timer?.active ? '☾' : '☀'}</span><button type="button" class="nn-link" data-nn-view="frankie">${esc(baby.name)} <strong>${esc(status)}</strong></button><span class="nn-muted">${esc(nap)}${baby.lastBottle ? ` · bottle ${esc(hm(minutes(baby.lastBottle)))} ago` : ''}${baby.nextBottle?.available ? ` · next ~${esc(clock(baby.nextBottle.target))}` : ''}</span></span>`);
+    // Average of the three cats' calls (Hubert, Mia, Mack); hover to see each one.
+    const cats = !baby.timer?.active ? catsConsensus(baby) : null;
+    const nap = cats ? ` · ${cats.kind} ~${clock(cats.target)}${cats.picks.length > 1 ? ` (avg of ${cats.picks.length} cats)` : ` (${cats.picks[0].cat})`}` : '';
+    const napTitle = cats ? cats.picks.map(p => `${p.cat} ${clock(p.at)}`).join(' · ') + (cats.left.length ? ` · left out: ${cats.left.join(', ')} (a different sleep)` : '') : '';
+    parts.push(`<span class="nn-item"><span aria-hidden="true">${baby.timer?.active ? '☾' : '☀'}</span><button type="button" class="nn-link" data-nn-view="frankie">${esc(baby.name)} <strong>${esc(status)}</strong></button><span class="nn-muted"${napTitle ? ` title="${esc(napTitle)}"` : ''}>${esc(nap)}${baby.lastBottle ? ` · bottle ${esc(hm(minutes(baby.lastBottle)))} ago` : ''}${baby.nextBottle?.available ? ` · next ~${esc(clock(baby.nextBottle.target))}` : ''}</span></span>`);
   }
   if (litter) parts.push(`<span class="nn-item"><span aria-hidden="true">🐈</span><button type="button" class="nn-link" data-nn-view="devices"><strong>${esc(litter.name)}</strong></button><span class="nn-muted">${litter.full ? 'drawer full' : `drawer ${litter.drawer}% full`}</span></span>`);
   if (feeders) parts.push(`<span class="nn-item"><span aria-hidden="true">🥣</span><button type="button" class="nn-link" data-nn-view="devices"><strong>${esc(feeders.name)}</strong></button><span class="nn-muted">${feeders.blocked ? 'outlet may be blocked' : 'food low'}${feeders.more ? ` · +${feeders.more} more` : ''}</span></span>`);

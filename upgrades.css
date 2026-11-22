@@ -112,3 +112,10 @@
 @keyframes mic-pulse { 50% { box-shadow: 0 0 0 6px rgba(210,139,114,.18); } }
 @media (prefers-reduced-motion: reduce) { .smart-mic.is-listening { animation: none; } }
 .newsletter-last-fail { color: #a54f39 !important; }
+
+/* Header buttons: line icons drawn the same way (search, dark mode, monitor, add). */
+.hdr-btn { display:inline-flex; align-items:center; gap:7px; }
+.hdr-icon { width:17px; height:17px; flex:none; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; }
+.theme-toggle .theme-sun, .theme-toggle[aria-pressed="true"] .theme-moon { display:none; }
+.theme-toggle[aria-pressed="true"] .theme-sun { display:block; }
+.palette-trigger .hdr-icon { color:var(--muted); }

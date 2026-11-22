@@ -11,7 +11,8 @@ export function initDashboard({ onAppearanceChange = () => {} } = {}) {
     for (const id of ['themeToggle', 'settingsThemeToggle']) {
       const button = $(id); if (!button) continue;
       button.setAttribute('aria-pressed', String(selected === 'dark'));
-      button.textContent = selected === 'dark' ? '☀ Light mode' : '☾ Dark mode';
+      const text = selected === 'dark' ? 'Light mode' : 'Dark mode', label = button.querySelector('.btn-label'); // the header button keeps its icons
+      if (label) { label.textContent = text; button.title = text; } else button.textContent = `${selected === 'dark' ? '☀' : '☾'} ${text}`;
     }
     write('hh_theme', selected);
   }

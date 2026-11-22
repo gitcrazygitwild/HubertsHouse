@@ -22,19 +22,24 @@ export function distanceKm(a, b) {
 // What to search for. Open-Meteo matches place names, not street addresses, so
 // "Main St, Charlottesville, VA 22902" tries "Charlottesville" (in Virginia) and so on.
 export function placeQueries(location = '') {
-  const text = String(location).replace(/\s+/g, ' ').trim();
+  const raw = String(location).trim(), text = raw.replace(/\s+/g, ' ');
   if (!text || text.length > 300 || /^(zoom|teams|google meet|facetime|online|virtual|phone|tbd|home|our house)$/i.test(text) || /^https?:\/\//i.test(text)) return [];
-  let state = null;
   const stateName = token => US_STATES[token] || Object.values(US_STATES).find(s => s.toLowerCase() === token.toLowerCase()) || null;
+  const COUNTRY = /\s*\b(usa|u\.s\.a?\.?|united states( of america)?)$/i;
+  // Apple Maps puts the venue on its own line ("Lemaire\n101 W Franklin St, Richmond, VA 23220, United States"),
+  // so split on line breaks as well as commas, then tidy each part.
+  const pieces = raw.split(/[,\n]+/).map(p => p.replace(/\s+/g, ' ').replace(COUNTRY, '').replace(/\b\d{5}(-\d{4})?\b/g, '').replace(/\s+/g, ' ').trim()).filter(Boolean);
+  // The state is the LAST state-looking part, so "Washington, DC" keeps Washington as the city.
+  let state = null, stateAt = -1;
+  pieces.forEach((part, i) => { const whole = stateName(part), tail = part.match(/^(.*\S)\s+([A-Z]{2})$/); if (whole || (tail && US_STATES[tail[2]])) stateAt = i; });
   const parts = [];
-  for (let part of text.split(/[,\n]+/).map(p => p.trim()).filter(Boolean)) {
-    part = part.replace(/\b\d{5}(-\d{4})?\b/g, '').trim();                       // ZIP codes
-    const whole = stateName(part); if (whole) { state = whole; continue; }          // "VA", "Virginia"
-    const tail = part.match(/^(.*\S)\s+([A-Z]{2})$/); if (tail && US_STATES[tail[2]]) { state = US_STATES[tail[2]]; part = tail[1]; } // "Orlando FL"
-    if (/^\d+\s+.+\s(st|street|ave|avenue|rd|road|blvd|boulevard|dr|drive|ln|lane|way|ct|court|pkwy|parkway|hwy|highway|pl|place|cir|circle|ter|terrace)\b\.?$/i.test(part)) continue; // street line
+  pieces.forEach((part, i) => {
+    if (i === stateAt) { const whole = stateName(part); if (whole) { state = whole; return; } const tail = part.match(/^(.*\S)\s+([A-Z]{2})$/); state = US_STATES[tail[2]]; part = tail[1]; } // "Orlando FL"
+    part = part.replace(/\s+(#\s*\S+|(suite|ste|unit|apt|floor|fl)\.?\s+\S+)$/i, '');
+    if (/^\d+[a-z]?\s+.+\s(st|street|ave|avenue|rd|road|blvd|boulevard|dr|drive|ln|lane|way|ct|court|pkwy|parkway|hwy|highway|pl|place|cir|circle|ter|terrace|tpke|turnpike|sq|square|trl|trail)\b\.?(\s+(n|s|e|w|ne|nw|se|sw)\.?)?$/i.test(part)) return; // street line
     part = part.replace(/^\d+\s+/, '').trim();
     if (part.length >= 2 && !/^(usa|us|united states|united states of america)$/i.test(part) && !parts.includes(part)) parts.push(part);
-  }
+  });
   // With a state, the city sits just before it; without one, the last part is often a country.
   const order = state ? [...parts].reverse() : parts.length >= 2 ? [parts.at(-2), parts.at(-1), ...parts.slice(0, -2).reverse()] : parts;
   return order.slice(0, 4).map(name => ({ name, state }));
@@ -52,13 +57,14 @@ export function createPlaceWeather({ fetch = globalThis.fetch?.bind(globalThis),
   const memory = new Map(), pending = new Map();
   async function getJSON(url) { const response = await fetch(url); if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.json(); }
   async function geocode(location) {
-    const key = `hh_geo:${location.toLowerCase()}`, cached = read(storage, key);
-    if (cached && now() - cached.at < GEO_DAYS * 86400000) return cached.place;
+    // hh_geo2: the address reader changed, so places the old one missed are looked up again.
+    const key = `hh_geo2:${location.toLowerCase()}`, cached = read(storage, key);
+    if (cached && now() - cached.at < (cached.place ? GEO_DAYS : 1) * 86400000) return cached.place; // a miss is retried after a day
     let place = null;
     for (const { name, state } of placeQueries(location)) {
       const json = await getJSON(`${GEO_URL}?name=${encodeURIComponent(name)}&count=10&language=en&format=json`);
       const results = Array.isArray(json?.results) ? json.results : [];
-      const pick = (state && results.find(r => r.admin1 === state)) || results.find(r => r.country_code === 'US') || results[0];
+      const pick = state ? results.find(r => r.admin1 === state) : results.find(r => r.country_code === 'US') || results[0]; // a known state must match
       if (pick && Number.isFinite(pick.latitude) && Number.isFinite(pick.longitude)) { place = { name:[pick.name, pick.admin1 && pick.country_code === 'US' ? pick.admin1 : pick.country].filter(Boolean).join(', '), lat:pick.latitude, lon:pick.longitude }; break; }
     }
     write(storage, key, { at:now(), place });
@@ -98,7 +104,7 @@ export function createPlaceWeather({ fetch = globalThis.fetch?.bind(globalThis),
 // One short line for a card: "📍 Charlottesville, Virginia · ⛅ 58°/41° · 20% rain".
 export function placeWeatherText(result, location = '') {
   if (!result || ['local', 'past'].includes(result.status)) return '';
-  const where = result.place?.name || location;
+  const where = result.place?.name || String(location).split('\n')[0].trim(); // Apple puts the venue on the first line
   if (result.status === 'ready') { const [word, icon] = describeCode(result.day.code); return `${icon} ${Math.round(result.day.high)}°/${Math.round(result.day.low)}° in ${where}${Number.isFinite(result.day.rain) && result.day.rain >= 20 ? ` · ${Math.round(result.day.rain)}% rain` : ''} · ${word.toLowerCase()}`; }
   if (result.status === 'far-off') return `Weather in ${where} shows up about two weeks before`;
   if (result.status === 'loading') return `Checking the weather in ${where}…`;
