@@ -8,6 +8,7 @@ import { initSiriSettings } from './siri-settings.js';
 import { initWorldBriefing } from './world-briefing.js';
 import { initInstall } from './install-app.js';
 import { initPullRefresh } from './pull-refresh.js';
+import { parseQuickAdd, describeDraft } from './quick-add.js';
 import { initDevices } from './devices.js';
 import { initLitter } from './litter.js';
 import { initFeeders } from './feeders.js';
@@ -1366,6 +1367,39 @@ function openFromPanel(sourceId, occurrenceStartISO, checklistView) {
 }
 
 // ---------- Event modal ----------
+// Who's coming: one tap on a chip instead of a dropdown (the select stays as the source of truth).
+function syncOwnerChips() {
+  document.querySelectorAll('[data-owner-chip]').forEach(chip => { chip.setAttribute('aria-pressed', String(chip.dataset.ownerChip === evtOwner?.value)); chip.disabled = !!evtOwner?.disabled; });
+}
+document.querySelector('.owner-chips')?.addEventListener('click', e => {
+  const chip = e.target.closest('[data-owner-chip]'); if (!chip || !evtOwner || evtOwner.disabled) return;
+  evtOwner.value = chip.dataset.ownerChip; evtOwner.dispatchEvent(new Event('change', { bubbles:true })); syncOwnerChips();
+  if (chip.dataset.ownerChip === 'custom') setTimeout(() => evtOwnerCustom?.focus(), 0);
+});
+// Typing a day or time in the title ("Dinner Fri 7pm") offers to set the date and time from it.
+let titleDraft = null;
+function titleHint(draft) {
+  const hint = document.getElementById('evtTitleHint'); titleDraft = draft;
+  if (!hint) return;
+  hint.hidden = !draft;
+  if (draft) hint.textContent = `📅 Use ${describeDraft(draft).split(' · ').slice(1, 3).join(' · ')}${draft.title ? ` · “${draft.title}”` : ''}`;
+}
+evtTitle?.addEventListener('input', () => {
+  if (editingDocId) return titleHint(null);
+  const draft = parseQuickAdd(evtTitle.value);
+  titleHint(draft && draft.title ? draft : null);
+});
+document.getElementById('evtTitleHint')?.addEventListener('click', () => {
+  const draft = titleDraft; if (!draft) return;
+  evtTitle.value = draft.title;
+  if (evtAllDay) evtAllDay.checked = !!draft.allDay;
+  setDateTimeInputs(!!draft.allDay, draft.start, draft.end);
+  if (draft.owner && draft.owner !== 'both') { evtOwner.value = draft.owner; evtOwner.dispatchEvent(new Event('change', { bubbles:true })); syncOwnerChips(); }
+  if (draft.withFrankie) document.getElementById('evtWithFrankie').checked = true;
+  if (draft.type && evtType) evtType.value = draft.type;
+  titleHint(null); updateEventOverlap();
+  showNotice(`Set to ${describeDraft(draft).split(' · ').slice(1, 3).join(' · ')}.`);
+});
 function openEventModal(payload) {
   const isEdit = payload.mode === "edit";
 
@@ -1388,12 +1422,15 @@ function openEventModal(payload) {
   deleteBtn?.classList.toggle("hidden", !isEdit);
 
   if (saveBtnTop) saveBtnTop.textContent = isEdit ? "Save" : "Add";
+  if (saveBtn) saveBtn.textContent = isEdit ? "Save changes" : "Add event";
+  titleHint(null);
 
   if (evtTitle) evtTitle.value = payload.title ?? "";
   if (evtAllDay) evtAllDay.checked = !!payload.allDay;
 
   const owner = normalizeOwner(payload.owner);
   if (evtOwner) evtOwner.value = owner;
+  syncOwnerChips();
   document.getElementById("evtWithFrankie").checked = !!(payload.withFrankie ?? original?.withFrankie);
   ownerCustomWrap?.classList.toggle("hidden", owner !== "custom");
   if (evtOwnerCustom) evtOwnerCustom.value = payload.ownerCustom || "";
@@ -1499,7 +1536,7 @@ function updateDestinationUI() {
   document.getElementById('eventRepeatNote').hidden=cloud || evtRepeat.value==='none';
   evtRepeat.closest('.row').classList.toggle('hidden',cloud);
   checklistEl.closest('.field').classList.remove('hidden');
-  document.getElementById('eventChecklistHint').textContent=cloud ? `Saved in Hubert’s House and shared with Chores & Lists.${original?.recurring ? ' One checklist for the whole series.' : ''}` : 'Also available in Chores & Lists. Repeating events share one checklist.';
+  document.getElementById('eventChecklistHint').textContent=cloud ? `Saved in Hubert’s House and shown in Life → To-dos.${original?.recurring ? ' One checklist for the whole series.' : ''}` : 'Also shows in Life → To-dos. Repeating events share one checklist.';
   evtOwner.closest('.row').classList.remove('hidden');
   evtType.closest('.field').classList.toggle('hidden',cloud);
   const frankie = document.getElementById('evtWithFrankie');

@@ -120,7 +120,7 @@
         <section class="baby-card" aria-labelledby="babyTitle">
           <div class="baby-heading"><div><span class="eyebrow">LITTLE MOMENTS, BIG LOVE</span><h2 id="babyTitle">Little rhythms, together.</h2></div><div class="baby-heading-actions"><span class="status-badge" id="babyBadge">Connect Huckleberry</span><button type="button" class="text-link" id="babySettings">Baby settings →</button></div></div>
           <div id="babyStrip" class="baby-strip" hidden></div><div class="baby-predictions" id="babyPredictions"></div><div id="babyScore"></div><div class="baby-stats" id="babyStats"></div>
-          <div class="baby-actions"><button class="btn btn-primary" type="button" id="babySleep" disabled>☾ Start sleep</button><button class="btn" type="button" data-baby-log="bottle" disabled>＋ Bottle</button><button class="btn" type="button" data-baby-log="diaper" disabled>＋ Diaper</button><button class="btn" type="button" data-baby-log="sleep-log" disabled>＋ Finished sleep</button><button class="btn" type="button" id="babyNight" disabled>🌙 Night mode</button><button class="btn" type="button" id="babyRefresh" disabled>↻ Refresh</button></div>
+          <div class="baby-actions"><button class="btn btn-primary" type="button" id="babySleep" disabled>☾ Start sleep</button><button class="btn" type="button" data-baby-log="bottle" disabled>＋ Bottle</button><button class="btn" type="button" data-baby-log="diaper" disabled>＋ Diaper</button><button class="btn" type="button" data-baby-log="pump" disabled>＋ Pump</button><button class="btn" type="button" data-baby-log="sleep-log" disabled>＋ Finished sleep</button><button class="btn" type="button" id="babyNight" disabled>🌙 Night mode</button><button class="btn" type="button" id="babyRefresh" disabled>↻ Refresh</button></div>
           <p id="babyError" class="form-error" role="alert"></p><div class="baby-footer"><span id="babyChecked"></span><details class="baby-method"><summary>How the three predictions work (Hubert, Mia, Mack)</summary><p>Hubert’s Purrfect Window is an independent estimate using up to 14 days of logged sleep. It prefers wake windows around the same time of day, uses the median of up to 20 recent windows, and shows a tight window around it: a quarter of the spread of those windows, 5–12 minutes either side. It needs at least three windows across two days. In the evening, when most wake-ups around this time were followed by the night’s sleep, it forecasts bedtime the same way. Overnight, while the sleep timer runs, it forecasts her next wake-up from night stretches that started around the same time of night. Mia’s Catnap Forecast works differently: it compares only the same nap of the day (wake-up → nap 1, nap 1 → nap 2…), counts recent days more, sets aside logging outliers (like a forgotten nap), and follows how her windows grow. With Frankie’s birthdate from Huckleberry, that growth follows her age (fast in the early months, gentler later), and older babies’ history counts for longer (each day’s weight halves every 3 days under 3 months, up to 8 days after a year). It nudges the window when the last nap or last night was shorter or longer than usual, and for an early or late wake-up or a bigger or smaller bottle when her history shows those matter, each by how much is learned from Frankie’s own logs. If she usually falls asleep a steady time after a bottle, Mia leans on today’s bottle once it’s given. After her usual number of naps (or when another nap would run into bedtime), Mia forecasts bedtime instead, blending the usual gap from the last nap, her usual bedtime and her pre-bed bottle, trusting whichever has been steadiest. Nap or night isn’t a fixed hour: Mia learns Frankie’s own bedtimes, so a late catnap before a 10 PM bedtime still counts as a nap. It needs that nap, or bedtime, on at least three days (two with her birthdate). While she naps, Mia also calls the wake-up from how long that nap of the day usually lasts. Mia’s windows are kept tight (5–10 minutes either side). At night, all three cats make a morning wake-up call (Challenge 2 on the Frankie page), and each day they bet on her ounces (Challenge 3). Mack’s pick is Huckleberry’s SweetSpot: he was asleep in the laundry basket while the others built their models, so he copies it and takes full credit. It’s Huckleberry’s last stored prediction; opening Huckleberry may be needed to calculate a new one. Hubert and Mia recalculate after every nap, including backfilled ones; SweetSpot is Huckleberry’s latest prediction while Frankie is awake. Naps with all three guesses are scored on the Frankie page, each by the model version that was live at the time. Missing logs can skew it. Follow your baby’s cues; this is a pattern estimate, not medical advice.</p></details></div>
         </section>
         <div class="welcome-card compact-welcome">
@@ -421,11 +421,11 @@
 
       <div id="editScroll" class="modal-scroll">
         <form id="eventForm" class="modal-body">
-          <label class="field"><span>Calendar</span><select id="evtCalendar"><option value="household">Hubert’s House</option></select><small id="evtCalendarHint" class="muted"></small></label>
           <label class="field">
             <span>Title</span>
-            <input id="evtTitle" class="event-title-input" type="text" required maxlength="500" placeholder="What’s the plan?" />
+            <input id="evtTitle" class="event-title-input" type="text" required maxlength="500" placeholder="What’s the plan? Try “Dinner Fri 7pm”" autocomplete="off" />
           </label>
+          <button type="button" id="evtTitleHint" class="title-hint" hidden></button>
 
           <p id="eventReadonly" class="connection-note" hidden></p>
           <section class="event-schedule" aria-label="Event date and time">
@@ -436,10 +436,11 @@
             <p id="eventDateSummary" class="event-date-summary" aria-live="polite"></p><small id="eventTimezone" class="muted"></small>
           </section>
           <div id="eventOverlap" class="event-overlap hidden" role="status" aria-live="polite"></div>
+          <div class="field"><span id="evtOwnerLabel">Who’s coming?</span><div class="owner-chips" role="group" aria-labelledby="evtOwnerLabel"><button type="button" data-owner-chip="both">Both</button><button type="button" data-owner-chip="hanry">hanry</button><button type="button" data-owner-chip="karena">Karena</button><button type="button" data-owner-chip="custom">Other…</button></div></div>
           <div class="row">
-            <label class="field">
-              <span>Who’s coming?</span>
-              <select id="evtOwner">
+            <label class="field owner-select-field" hidden>
+              <span class="sr-only">Who’s coming?</span>
+              <select id="evtOwner" class="owner-select" tabindex="-1" aria-hidden="true">
                 <option value="hanry">hanry</option>
                 <option value="karena">Karena</option>
                 <option value="both" selected>Both</option>
@@ -483,11 +484,12 @@
             </label>
           </div>
 
+          <label class="field"><span>Calendar</span><select id="evtCalendar"><option value="household">Hubert’s House</option></select><small id="evtCalendarHint" class="muted"></small></label>
           <div class="field">
             <span>Checklist</span>
             <div id="checklist" class="checklist"></div>
             <button id="addCheckItem" type="button" class="btn btn-ghost" style="margin-top:8px;">+ Add item</button>
-            <div id="eventChecklistHint" class="tiny muted" style="margin-top:8px;">Also available in Chores & Lists.</div>
+            <div id="eventChecklistHint" class="tiny muted" style="margin-top:8px;">Also shows in Life → To-dos.</div>
           </div>
 
           <label class="field">
@@ -597,20 +599,26 @@
   </form></dialog>
   <dialog id="paletteDialog" class="palette-dialog" aria-label="Search and actions"><div class="palette-search"><span aria-hidden="true">⌕</span><input id="paletteInput" role="combobox" aria-expanded="true" aria-controls="paletteList" aria-autocomplete="list" placeholder="Search plans, jump anywhere, or type “Brunch Sun 11am”…" autocomplete="off" /><kbd>esc</kbd></div><ul id="paletteList" class="palette-list" role="listbox"></ul><div class="palette-foot"><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>↵</kbd> choose</span><span><kbd><span data-mod-key>⌘</span>K</kbd> toggle</span></div></dialog>
   <dialog id="babyLogDialog" class="baby-dialog log-sheet" aria-labelledby="babyLogTitle"><form id="babyLogForm">
-    <header class="log-head"><span class="log-icon" id="babyLogIcon" aria-hidden="true">🍼</span><div><span class="eyebrow">FOR FRANKIE</span><h2 id="babyLogTitle">Bottle</h2></div><button type="button" class="log-close" id="babyLogClose" aria-label="Close">✕</button></header>
+    <header class="log-head"><span class="log-icon" id="babyLogIcon" aria-hidden="true">🍼</span><div><span class="eyebrow" id="babyLogFor">FOR FRANKIE</span><h2 id="babyLogTitle">Bottle</h2></div><button type="button" class="log-close" id="babyLogClose" aria-label="Close">✕</button></header>
     <input id="babyLogKind" type="hidden" />
     <section class="log-block"><div class="log-label"><span id="babyLogStartLabel">When</span><output id="babyLogStartText" class="log-readout"></output></div>
-      <div class="log-chips" data-time-chips="babyLogStart"><button type="button" data-ago="0">Now</button><button type="button" data-ago="15">15 min ago</button><button type="button" data-ago="30">30 min ago</button><button type="button" data-ago="60">1 hr ago</button></div>
-      <input id="babyLogStart" type="datetime-local" required aria-labelledby="babyLogStartLabel" /></section>
+      <div class="log-chips" data-time-chips="babyLogStart"><button type="button" data-ago="0">Now</button><button type="button" data-ago="15">15 min ago</button><button type="button" data-ago="30">30 min ago</button><button type="button" data-ago="60">1 hr ago</button><button type="button" data-ago="120">2 hr ago</button><button type="button" class="log-other" data-other-time>Other time…</button></div>
+      <div class="log-custom-time" hidden><input id="babyLogStart" type="datetime-local" required aria-labelledby="babyLogStartLabel" /></div></section>
     <section class="log-block" data-log-fields="sleep-log" hidden><div class="log-label"><span id="babyLogEndLabel">Woke up</span><output id="babyLogDuration" class="log-readout"></output></div>
-      <div class="log-chips" data-time-chips="babyLogEnd"><button type="button" data-ago="0">Now</button><button type="button" data-ago="10">10 min ago</button><button type="button" data-ago="30">30 min ago</button></div>
-      <input id="babyLogEnd" type="datetime-local" required disabled aria-labelledby="babyLogEndLabel" /></section>
+      <div class="log-chips" data-time-chips="babyLogEnd"><button type="button" data-ago="0">Now</button><button type="button" data-ago="10">10 min ago</button><button type="button" data-ago="30">30 min ago</button><button type="button" class="log-other" data-other-time>Other time…</button></div>
+      <div class="log-custom-time" hidden><input id="babyLogEnd" type="datetime-local" required disabled aria-labelledby="babyLogEndLabel" /></div>
+      <div class="log-label log-sublabel"><span>Slept for</span></div>
+      <div class="log-chips" id="babyLogLengths"><button type="button" data-length="30">30m</button><button type="button" data-length="45">45m</button><button type="button" data-length="60">1h</button><button type="button" data-length="90">1½h</button><button type="button" data-length="120">2h</button><button type="button" data-length="180">3h</button></div></section>
     <section class="log-block" data-log-fields="bottle" hidden><div class="log-label"><span id="babyLogAmountLabel">Amount</span><button type="button" class="text-link" id="babyLogSame" hidden></button></div>
       <div class="amount-stepper"><button type="button" data-step="-1" aria-label="Less">−</button><input id="babyLogAmount" type="number" inputmode="decimal" min="0.1" max="2000" step="0.1" value="4" required disabled aria-labelledby="babyLogAmountLabel" /><select id="babyLogUnits" disabled aria-label="Units"><option value="oz">oz</option><option value="ml">ml</option></select><button type="button" data-step="1" aria-label="More">+</button></div>
       <div class="log-chips" id="babyLogAmountChips"></div>
       <div class="log-label"><span>Milk</span></div>
       <div class="log-pills" data-pills="babyLogMilk"><button type="button" data-value="Formula">Formula</button><button type="button" data-value="Breast Milk">Breast milk</button><button type="button" data-value="Cow Milk">Cow</button><button type="button" data-value="Soy Milk">Soy</button><button type="button" data-value="Other">Other</button></div>
       <select id="babyLogMilk" class="pill-select" disabled aria-label="Milk"><option>Formula</option><option>Breast Milk</option><option>Cow Milk</option><option>Soy Milk</option><option>Other</option></select></section>
+    <section class="log-block" data-log-fields="pump" hidden><div class="log-label"><span>How much?</span><output id="babyLogPumpTotal" class="log-readout"></output></div>
+      <div class="pump-sides"><div class="pump-side"><span class="pump-side-name">Left</span><div class="amount-stepper"><button type="button" data-pump-step="babyLogLeft:-1" aria-label="Less on the left">−</button><input id="babyLogLeft" type="number" inputmode="decimal" min="0" max="600" step="0.25" value="2" required disabled aria-label="Left side amount" /><button type="button" data-pump-step="babyLogLeft:1" aria-label="More on the left">+</button></div></div>
+      <div class="pump-side"><span class="pump-side-name">Right</span><div class="amount-stepper"><button type="button" data-pump-step="babyLogRight:-1" aria-label="Less on the right">−</button><input id="babyLogRight" type="number" inputmode="decimal" min="0" max="600" step="0.25" value="2" required disabled aria-label="Right side amount" /><button type="button" data-pump-step="babyLogRight:1" aria-label="More on the right">+</button></div></div></div>
+      <div class="log-label log-sublabel"><span>Units</span></div><div class="log-pills" data-pills="babyLogPumpUnits"><button type="button" data-value="oz">oz</button><button type="button" data-value="ml">ml</button></div><select id="babyLogPumpUnits" class="pill-select" disabled aria-label="Units"><option>oz</option><option>ml</option></select></section>
     <section class="log-block" data-log-fields="diaper" hidden><div class="log-label"><span>What kind?</span></div>
       <div class="log-pills big" data-pills="babyLogDiaper"><button type="button" data-value="pee"><b aria-hidden="true">💧</b>Wet</button><button type="button" data-value="poo"><b aria-hidden="true">💩</b>Dirty</button><button type="button" data-value="both"><b aria-hidden="true">💧💩</b>Both</button><button type="button" data-value="dry"><b aria-hidden="true">✨</b>Dry</button></div>
       <select id="babyLogDiaper" class="pill-select" disabled aria-label="Diaper"><option value="pee">Wet</option><option value="poo">Dirty / poop</option><option value="both">Wet + dirty</option><option value="dry">Dry</option></select></section>

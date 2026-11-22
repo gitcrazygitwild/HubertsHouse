@@ -98,3 +98,17 @@ html.night-open { overflow: hidden; }
 .strip-key text { font:10px var(--font-ui, system-ui); fill:var(--muted); }
 .forecast-problem { grid-column:1 / -1; margin:6px 0 0; padding:10px 14px; border-radius:12px; background:#fbeee6; color:#9a4f2a; font-size:13px; }
 [data-theme="dark"] .forecast-problem { background:#45322a; color:#f0c3a8; }
+/* Logging windows: a big Save that stays in reach, tucked-away exact times, sleep lengths, pump sides. */
+.log-sheet .log-actions { position:sticky; bottom:0; z-index:2; display:grid; grid-template-columns:1fr 2.2fr; gap:10px; margin:12px -22px -18px; padding:12px 22px calc(14px + env(safe-area-inset-bottom, 0px)); background:var(--card); border-top:1px solid var(--border2); }
+.log-sheet .log-actions .btn { min-height:50px; font-size:15px; padding:10px 14px; }
+.log-sheet .log-actions .btn-primary { font-weight:650; }
+.log-custom-time { margin-top:4px; }
+.log-chips .log-other { border-style:dashed; color:var(--muted); }
+.log-chips .log-other[aria-pressed="true"] { border-style:solid; }
+.log-sublabel { margin-top:10px; }
+.log-sublabel span { font-size:12px; color:var(--muted); font-weight:500; }
+.pump-sides { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.pump-side { display:flex; flex-direction:column; gap:6px; }
+.pump-side-name { font-size:12px; font-weight:650; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
+.pump-side .amount-stepper { grid-template-columns:40px 1fr 40px; }
+#babyLogZone:empty { display:none; }

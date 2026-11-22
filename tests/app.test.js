@@ -606,7 +606,11 @@ test('quick add logs Karena’s pumps (both sides) straight to the Frankie page'
   type('karena pumped 5 oz');
   assert.match(doc.getElementById('quickAddPreview').textContent, /Pump for Karena .* 5 oz total, add left and right/);
   form.dispatchEvent(new w.Event('submit', { cancelable:true })); await settle();
-  assert.match(doc.getElementById('notice').textContent, /each side/); assert.equal(parseFloat(today()), before);
+  // A total alone opens the Pump window, split evenly to start, so the sides can be set.
+  assert.equal(doc.getElementById('babyLogDialog').open, true); assert.equal(doc.getElementById('babyLogTitle').textContent, 'Pump');
+  assert.equal(doc.getElementById('babyLogFor').textContent, 'FOR KARENA');
+  assert.deepEqual([doc.getElementById('babyLogLeft').value, doc.getElementById('babyLogRight').value], ['2.5', '2.5']);
+  doc.getElementById('babyLogClose').click(); assert.equal(parseFloat(today()), before);
   type('karena pumped left 2 right 2.5');
   assert.match(doc.getElementById('quickAddPreview').textContent, /Pump for Karena · .* · L 2 oz · R 2\.5 oz/);
   form.dispatchEvent(new w.Event('submit', { cancelable:true })); await settle();
@@ -646,5 +650,57 @@ test('Frankie page: the cats’ windows on a day strip, and a bottle pace tracke
   assert.match(pace.textContent, /usually .* oz by now/); assert.match(pace.textContent, /target .* oz/);
   assert.ok(pace.querySelector('.pace-bar .pace-mark'), 'a marker for where she usually is by now');
   assert.match(pace.textContent, /Next bottle/);
+  assert.deepEqual(errors, []);
+});
+test('logging windows: big Save that says what it will do, tucked-away times, sleep lengths, and a Pump window', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  const save = () => doc.getElementById('babyLogSave').textContent, box = id => doc.getElementById(id).closest('.log-custom-time');
+  // Bottle: Save names the amount; the exact time box is tucked away while a chip is chosen.
+  doc.querySelector('#view-today [data-baby-log="bottle"]').click();
+  assert.match(save(), /^Save \d+(\.\d+)? oz bottle$/); assert.equal(box('babyLogStart').hidden, true);
+  doc.querySelector('[data-time-chips="babyLogStart"] [data-other-time]').click(); assert.equal(box('babyLogStart').hidden, false);
+  doc.querySelector('#babyLogAmountChips [data-amount="3"]').click(); assert.equal(save(), 'Save 3 oz bottle');
+  assert.equal(doc.getElementById('babyLogZone').textContent, '', 'no time-zone note when the device matches the household');
+  doc.getElementById('babyLogClose').click();
+  // Diaper: Save names the kind.
+  doc.querySelector('#view-today [data-baby-log="diaper"]').click();
+  doc.querySelector('[data-pills="babyLogDiaper"] [data-value="poo"]').click(); assert.equal(save(), 'Save dirty diaper');
+  doc.getElementById('babyLogClose').click();
+  // Finished sleep: tap how long she slept.
+  doc.querySelector('#view-today [data-baby-log="sleep-log"]').click();
+  doc.querySelector('#babyLogLengths [data-length="90"]').click();
+  assert.equal(new Date(doc.getElementById('babyLogEnd').value) - new Date(doc.getElementById('babyLogStart').value), 90 * 60000);
+  assert.equal(doc.querySelector('#babyLogLengths [data-length="90"]').getAttribute('aria-pressed'), 'true'); assert.equal(save(), 'Save 1h 30m sleep');
+  doc.getElementById('babyLogClose').click();
+  // Pump: a button on Today, both sides with steppers, saved to the Frankie page.
+  doc.querySelector('[data-view="frankie"]').click(); await settle();
+  const before = parseFloat(doc.querySelector('#frankiePumps .frankie-tile strong').textContent);
+  doc.querySelector('[data-baby-log="pump"]').click();
+  assert.equal(doc.getElementById('babyLogTitle').textContent, 'Pump');
+  doc.getElementById('babyLogLeft').value = '2'; doc.getElementById('babyLogRight').value = '2';
+  doc.querySelector('[data-pump-step="babyLogRight:1"]').click();
+  assert.equal(doc.getElementById('babyLogRight').value, '2.25'); assert.equal(save(), 'Save 4.25 oz pump'); assert.match(doc.getElementById('babyLogPumpTotal').textContent, /4.25 oz in all/);
+  doc.getElementById('babyLogForm').dispatchEvent(new w.Event('submit', { cancelable:true })); await settle(); await settle();
+  assert.equal(doc.getElementById('babyLogDialog').open, false);
+  assert.ok(Math.abs(parseFloat(doc.querySelector('#frankiePumps .frankie-tile strong').textContent) - (before + 4.25)) < 0.15);
+  assert.deepEqual(errors, []);
+});
+test('new event: title first, who’s coming as chips, and "Dinner Fri 7pm" sets the date and time', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  doc.getElementById('quickEvent').click(); await settle();
+  const form = doc.getElementById('eventForm'), fields = [...form.querySelectorAll('#evtTitle, #evtCalendar')];
+  assert.equal(fields[0].id, 'evtTitle', 'the title comes before the calendar picker');
+  assert.equal(doc.getElementById('saveBtn').textContent, 'Add event'); assert.equal(doc.getElementById('saveBtnTop').textContent, 'Add');
+  assert.equal(doc.querySelector('[data-owner-chip="both"]').getAttribute('aria-pressed'), 'true');
+  doc.querySelector('[data-owner-chip="karena"]').click();
+  assert.equal(doc.getElementById('evtOwner').value, 'karena'); assert.equal(doc.querySelector('[data-owner-chip="karena"]').getAttribute('aria-pressed'), 'true');
+  const title = doc.getElementById('evtTitle'), hint = doc.getElementById('evtTitleHint');
+  title.value = 'Dinner with friends'; title.dispatchEvent(new w.Event('input')); assert.equal(hint.hidden, true, 'no date, no hint');
+  title.value = 'Dinner with friends Fri 7pm'; title.dispatchEvent(new w.Event('input'));
+  assert.equal(hint.hidden, false); assert.match(hint.textContent, /Fri.*7:00/);
+  hint.click();
+  assert.equal(title.value, 'Dinner with friends'); assert.equal(doc.getElementById('evtStartTime').value, '19:00');
+  assert.equal(new Date(`${doc.getElementById('evtStartDate').value}T12:00`).getDay(), 5, 'a Friday');
+  assert.equal(hint.hidden, true);
   assert.deepEqual(errors, []);
 });
