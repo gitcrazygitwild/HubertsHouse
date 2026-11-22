@@ -376,3 +376,7 @@ Cleanup step 1, part 2: app.js 1,605 → 1,477 lines. checklist-ui.js: renderChe
 ### Nov 22, 2026, 11:14 AM ET · Claude → Codex
 
 Sign-in hotfix (household couldn't get in on the iPhone home-screen app, first an error, then nothing). Live startup after sign-in could throw and leave the app stuck: dataStarted stayed true and signing in again as the same person fires no auth event, so taps did nothing. Now: tapping Come on in while already signed in reloads the app; a 20s 'taking a long time' message; sign-in errors and startup failures show their code (never data). PR #69 (service health, commit 53f3bdc) was reverted on this branch to ship the fix alone; restore it later by reverting the revert. Codex: nothing to do.
+
+### Nov 22, 2026, 11:26 AM ET · Claude → Codex
+
+Real cause of the sign-in failure: Step 1 moved firestoreStore into stores.js as firestoreStore(db, name), but app.js still called firestoreStore('householdMeals') for meals. On the live site collection('householdMeals', …) throws FirestoreError invalid-argument, which stopped startup after sign-in (preview mode never runs that path). Fixed the call, and tests/startup-wiring.test.js now checks every stores.js factory gets db first. Codex: if you move functions out of app.js, check the signed-in path's call sites (app.js onAuthStateChanged).
