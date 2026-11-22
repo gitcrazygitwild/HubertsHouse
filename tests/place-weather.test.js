@@ -71,3 +71,20 @@ test('local, too far ahead, unknown or offline: no weather line (or a gentle not
   const offline = createPlaceWeather({ fetch:openMeteo({ fail:true }).fetch, storage:memory(), now:() => NOW });
   offline.lookup('Nags Head, NC', today); await offline.whenSettled(); assert.equal(placeWeatherText(offline.lookup('Nags Head, NC', today)), '');
 });
+
+test('Where suggestions: places used before, then towns (U.S. first), never a street sent to the town search', async () => {
+  const { placeSuggestions } = await import('../place-weather.js');
+  const { pastMatches, townQuery } = await import('../place-suggest.js');
+  const towns = placeSuggestions([
+    { name:'Paris', latitude:48.85, longitude:2.35, country_code:'FR', admin1:'Île-de-France', country:'France' },
+    { name:'Paris', latitude:36.3, longitude:-88.33, country_code:'US', admin1:'Tennessee', country:'United States' },
+    { name:'Ashland', latitude:37.76, longitude:-77.48, country_code:'US', admin1:'Virginia', country:'United States' }]);
+  assert.deepEqual(towns.map(t => t.value), ['Paris, TN', 'Ashland, VA', 'Paris, Île-de-France, France']);
+  assert.match(towns[1].detail, /Richmond area/); assert.match(towns[0].detail, /Tennessee · \d+ mi away/);
+  const known = ['Lemaire\n101 W Franklin St, Richmond, VA', 'Nags Head, NC', 'Nags Head, NC', 'The Shelburne Inn, Seaview, WA'];
+  assert.deepEqual(pastMatches(known, 'nag').map(p => p.value), ['Nags Head, NC'], 'duplicates folded');
+  assert.deepEqual(pastMatches(known, 'lem')[0], { label:'Lemaire', detail:'101 W Franklin St, Richmond, VA', value:known[0], past:true });
+  assert.deepEqual(pastMatches(known, 'seav').map(p => p.label), ['The Shelburne Inn, Seaview, WA'], 'a later word can match');
+  assert.equal(pastMatches(known, '').length, 3, 'empty box: the most recent places');
+  assert.equal(townQuery('Charlottesville, VA'), 'Charlottesville'); assert.equal(townQuery('101 W Franklin St'), ''); assert.equal(townQuery('N'), '');
+});

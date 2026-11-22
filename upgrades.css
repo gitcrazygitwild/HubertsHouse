@@ -119,3 +119,15 @@
 .theme-toggle .theme-sun, .theme-toggle[aria-pressed="true"] .theme-moon { display:none; }
 .theme-toggle[aria-pressed="true"] .theme-sun { display:block; }
 .palette-trigger .hdr-icon { color:var(--muted); }
+
+/* Event editor: Where suggestions and the weather line under it. */
+.where-field > label { display:block; }
+.place-suggest-wrap { position:relative; }
+.place-suggest { position:absolute; z-index:40; top:calc(100% + 4px); left:0; right:0; display:grid; padding:5px; border:1px solid var(--border); border-radius:12px; background:var(--card); box-shadow:0 10px 28px #26341d24; max-height:280px; overflow:auto; }
+.place-option { display:flex; align-items:center; gap:10px; width:100%; padding:9px 10px; border:0; border-radius:9px; background:none; color:var(--text); text-align:left; cursor:pointer; font:inherit; }
+.place-option > span:first-child { width:20px; text-align:center; flex:none; }
+.place-suggest .place-option strong { display:block; font-size:14px; font-weight:600; color:var(--text); }
+.place-option small { display:block; font-size:11px; color:var(--muted); }
+.place-option:hover, .place-option.active { background:#e9ecdf; }
+[data-theme="dark"] .place-option:hover, [data-theme="dark"] .place-option.active { background:#ffffff14; }
+.where-weather.has-weather { color:var(--text); }

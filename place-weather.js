@@ -44,6 +44,18 @@ export function placeQueries(location = '') {
   const order = state ? [...parts].reverse() : parts.length >= 2 ? [parts.at(-2), parts.at(-1), ...parts.slice(0, -2).reverse()] : parts;
   return order.slice(0, 4).map(name => ({ name, state }));
 }
+// Geocoder results → Where-box suggestions, U.S. towns first: { label, detail, value }.
+const ABBR = Object.fromEntries(Object.entries(US_STATES).map(([abbr, name]) => [name, abbr]));
+export function placeSuggestions(results = []) {
+  const out = [], seen = new Set();
+  for (const r of (Array.isArray(results) ? results : []).filter(r => r?.name && Number.isFinite(r.latitude)).sort((a, b) => (b.country_code === 'US') - (a.country_code === 'US'))) {
+    const us = r.country_code === 'US', value = us && ABBR[r.admin1] ? `${r.name}, ${ABBR[r.admin1]}` : [r.name, r.admin1 && r.admin1 !== r.name ? r.admin1 : '', r.country].filter(Boolean).join(', ');
+    if (seen.has(value)) continue; seen.add(value);
+    const km = distanceKm({ lat:r.latitude, lon:r.longitude }, RICHMOND);
+    out.push({ label:r.name, detail:[us ? r.admin1 : [r.admin1, r.country].filter(Boolean).join(', '), km < LOCAL_KM ? 'Richmond area' : `${Math.round(km * 0.621)} mi away`].filter(Boolean).join(' · '), value });
+  }
+  return out.slice(0, 6);
+}
 // Weather codes → a word and an icon (WMO codes, as Open-Meteo reports them).
 export function describeCode(code) {
   if (code === 0) return ['Clear', '☀️']; if (code <= 2) return ['Partly cloudy', '⛅']; if (code === 3) return ['Cloudy', '☁️'];
@@ -99,7 +111,15 @@ export function createPlaceWeather({ fetch = globalThis.fetch?.bind(globalThis),
     })().then(result => { memory.set(key, result); pending.delete(key); onUpdate(); return result; }));
     return { status:'loading' };
   }
-  return { lookup, whenSettled:() => Promise.all(pending.values()) };
+  // Towns matching what's typed in the Where box (Open-Meteo knows places, not venues).
+  const searches = new Map();
+  async function search(query) {
+    const q = String(query || '').trim().toLowerCase();
+    if (q.length < 2) return [];
+    if (!searches.has(q)) searches.set(q, getJSON(`${GEO_URL}?name=${encodeURIComponent(q)}&count=8&language=en&format=json`).then(json => placeSuggestions(json?.results)).catch(() => { searches.delete(q); return []; }));
+    return searches.get(q);
+  }
+  return { lookup, search, whenSettled:() => Promise.all(pending.values()) };
 }
 // One short line for a card: "📍 Charlottesville, Virginia · ⛅ 58°/41° · 20% rain".
 export function placeWeatherText(result, location = '') {
@@ -113,6 +133,7 @@ export function placeWeatherText(result, location = '') {
 // One shared instance for the app (set in app.js), so any view can ask for an event's line.
 let shared = null;
 export const usePlaceWeather = instance => { shared = instance; };
+export const searchPlaces = query => shared?.search ? shared.search(query) : Promise.resolve([]);
 const pad = n => String(n).padStart(2, '0');
 const dayOf = value => { if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value) && !value.includes('T')) return value.slice(0, 10); const d = new Date(value); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 export function eventWeatherLine(event, day = null) {
@@ -120,11 +141,27 @@ export function eventWeatherLine(event, day = null) {
   if (!shared || !String(where).trim()) return '';
   return placeWeatherText(shared.lookup(where, dayOf(day ?? event.start)), where);
 }
+// The editor's line under Where, for a place and a start time as typed.
+export function whereBoxText(location, start) {
+  const where = String(location || '').trim();
+  if (!where || !shared) return '';
+  const day = start && Number.isFinite(Date.parse(start)) ? dayOf(start) : dayOf(new Date());
+  const result = shared.lookup(where, day);
+  if (result.status === 'local') return '🏡 Richmond area: Today’s weather card has it covered';
+  if (result.status === 'unknown') return 'No weather found for that place. Try a town, like “Nags Head, NC”.';
+  return placeWeatherText(result, where);
+}
 // Preview mode: believable weather for anywhere, without calling Open-Meteo.
 export function sampleWeatherFetch() {
   return async url => {
     const u = new URL(url);
-    if (u.hostname.startsWith('geocoding')) return { ok:true, json:async () => ({ results:[{ name:u.searchParams.get('name'), latitude:35.96, longitude:-75.62, country_code:'US', admin1:'North Carolina', country:'United States' }] }) };
+    if (u.hostname.startsWith('geocoding')) {
+      const typed = u.searchParams.get('name') || '', name = typed.charAt(0).toUpperCase() + typed.slice(1);
+      const results = u.searchParams.get('count') === '8' && !/[,\d]/.test(typed)
+        ? [['Nags Head', 'North Carolina', 35.96, -75.62], ['Naples', 'Florida', 26.14, -81.79], ['Nashville', 'Tennessee', 36.17, -86.78], ['Charlottesville', 'Virginia', 38.03, -78.48], ['Charleston', 'South Carolina', 32.78, -79.93]].filter(([n]) => n.toLowerCase().startsWith(typed.toLowerCase())).map(([n, admin1, latitude, longitude]) => ({ name:n, admin1, latitude, longitude, country_code:'US', country:'United States' }))
+        : [{ name, latitude:35.96, longitude:-75.62, country_code:'US', admin1:'North Carolina', country:'United States' }];
+      return { ok:true, json:async () => ({ results }) };
+    }
     const time = Array.from({ length:16 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() + i); return dayOf(d); });
     return { ok:true, json:async () => ({ daily:{ time, weather_code:time.map((_, i) => [1, 2, 61, 3, 0][i % 5]), temperature_2m_max:time.map((_, i) => 62 + (i % 4)), temperature_2m_min:time.map((_, i) => 48 + (i % 3)), precipitation_probability_max:time.map((_, i) => [10, 20, 70, 30, 0][i % 5]) } }) };
   };

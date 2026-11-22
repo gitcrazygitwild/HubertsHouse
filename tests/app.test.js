@@ -50,7 +50,8 @@ async function fixture(options = {}) {
   await module('calendar-view.js',['initCalendarExperience','calendarEventContent'],'const esc=escapeHTML;');
   await module('weather-shared.js',['richmondDay','forecastCondition','weatherIcon']);
   await module('birthdays-model.js',['birthdayList','setBirthdayList','birthdaysShown','birthdayTitle','birthdaysInRange','birthdayEvents','upcomingBirthdays']);
-  await module('place-weather.js',['looksLocal','distanceKm','placeQueries','describeCode','createPlaceWeather','placeWeatherText','usePlaceWeather','eventWeatherLine','sampleWeatherFetch']);
+  await module('place-weather.js',['looksLocal','distanceKm','placeQueries','describeCode','createPlaceWeather','placeWeatherText','usePlaceWeather','eventWeatherLine','sampleWeatherFetch','placeSuggestions','searchPlaces','whereBoxText']);
+  await module('place-suggest.js',['pastMatches','townQuery','initPlaceSuggest'],'const esc=escapeHTML;');
   await module('home-calendar.js',['initHomeCalendar','homeCalendarWeek','dayWeather','WEATHER_URL'],'const esc=escapeHTML;');
   await module('weather.js',['initWeather'],'const esc=escapeHTML;');
   await module('week-brief.js',['renderWeekBrief'],'const esc=escapeHTML;');
@@ -721,6 +722,24 @@ test('events away from Richmond show the weather where they are', async t => {
   const saved = w.__testApp.getDocs().find(d => d.title === 'Dinner at Lemaire');
   assert.equal(saved.location, '101 W Franklin St, Richmond, VA 23220');
   assert.ok(![...doc.querySelectorAll('.home-week-event')].some(card => card.textContent.includes('Lemaire') && card.querySelector('.home-event-weather')));
+  assert.deepEqual(errors, []);
+});
+test('Where box: suggestions as you type (places used before, then towns) and the weather there', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  doc.getElementById('quickEvent').click(); await settle();
+  const box = doc.getElementById('evtLocation'), list = doc.getElementById('evtLocationList'), line = doc.getElementById('evtLocationWeather');
+  box.focus(); box.value = 'Na'; box.dispatchEvent(new w.Event('input', { bubbles:true }));
+  await new Promise(r => setTimeout(r, 400)); await settle();
+  const options = [...list.querySelectorAll('.place-option')];
+  assert.equal(list.hidden, false); assert.equal(box.getAttribute('aria-expanded'), 'true');
+  assert.equal(options[0].textContent.includes('Used before'), true, 'the sample weekend away in Nags Head comes first');
+  assert.ok(options.some(o => /Naples/.test(o.textContent) && /mi away/.test(o.textContent)), 'then matching towns');
+  box.dispatchEvent(new w.KeyboardEvent('keydown', { key:'ArrowDown', bubbles:true })); box.dispatchEvent(new w.KeyboardEvent('keydown', { key:'Enter', bubbles:true, cancelable:true }));
+  assert.equal(box.value, 'Nags Head, NC'); assert.equal(list.hidden, true);
+  await new Promise(r => setTimeout(r, 120)); await settle();
+  assert.match(line.textContent, /° in Nags Head/);
+  box.value = 'Carytown'; box.dispatchEvent(new w.Event('input', { bubbles:true })); await new Promise(r => setTimeout(r, 700));
+  assert.match(line.textContent, /Richmond area/);
   assert.deepEqual(errors, []);
 });
 test('logging windows: drag bars set the time, the amount, how long she slept and each pump side', async t => {
