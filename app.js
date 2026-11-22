@@ -11,7 +11,10 @@ import { initPullRefresh } from './pull-refresh.js';
 import { parseQuickAdd, describeDraft } from './quick-add.js';
 import { createPlaceWeather, usePlaceWeather, eventWeatherLine, sampleWeatherFetch, searchPlaces, whereBoxText } from './place-weather.js';
 import { initPlaceSuggest } from './place-suggest.js';
+import { OWNER_STYLE, normalizeOwner, CHECKLIST_PRESETS, normalizeDocs, expandRepeats, advanceRepeat, makeInclusiveAllDayEnd, makeFcEvent, renderPanelCardHTML, renderPanelCardHTMLWithProgress, formatWhenForPanel, toInputValue, fromInputValue, roundToNextHour, escapeHtml } from './event-data.js';
 import { initHypotheses, memoryHypotheses } from './hypotheses-view.js';
+import { ensureCatLinkMarkup, setCatMode, LS_CATMODE } from './cat-mode.js';
+import { predictionStore, hypothesisStore, settingsStore, trashStore, firestoreStore } from './stores.js';
 import { initDevices } from './devices.js';
 import { initLitter } from './litter.js';
 import { initFeeders } from './feeders.js';
@@ -78,7 +81,6 @@ else gate?.classList.remove("hidden");
 
 // ---------- Topbar / controls ----------
 const logoutBtn = document.getElementById("logoutBtn");
-const catModeBtn = document.getElementById("catModeBtn");
 
 // Calendar nav buttons in the card row
 const prevBtn = document.getElementById("prevBtn");
@@ -321,31 +323,6 @@ function openUpdatesModal(html) {
   updatesBackdrop?.classList.remove("hidden");
 }
 
-// ---------- Colors / owners ----------
-const OWNER_STYLE = {
-  hanry:  { bg: "#f0ddca", border: "#bc8f62" },
-  karena: { bg: "#e5ddef", border: "#a18ab8" },
-  both:   { bg: "#dfe7d3", border: "#96aa7c" },
-  custom: { bg: "#dbe5eb", border: "#8ba4b2" }
-};
-
-function normalizeOwner(rawOwner) {
-  const o = String(rawOwner || "").toLowerCase();
-  if (o === "hanry") return "hanry";
-  if (o === "karena") return "karena";
-  if (o === "both") return "both";
-  return "custom";
-}
-
-// ---------- Checklist presets ----------
-const CHECKLIST_PRESETS = {
-  general: [],
-  wedding: ["RSVP", "Gift", "Travel", "Outfit", "Hotel"],
-  trip: ["Book travel", "Lodging", "Packing list", "Car / rides", "Itinerary"],
-  appointment: ["Add address", "Bring ID", "Arrive early", "Paperwork"],
-  party: ["Invite list", "Food/drinks", "Music", "Supplies", "Cleanup plan"]
-};
-
 // ---------- Firebase ----------
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
 import {
@@ -392,117 +369,6 @@ let searchText = "";
 // Filter state
 let ownerFilterValue = "all";
 
-// ---------- Cat link ----------
-function ensureCatLinkMarkup() {
-  const a = document.querySelector(".catlink");
-  if (!a) return;
-  if (!a.id) a.id = "catLink";
-
-  if (a.querySelector(".catlink-inner")) return;
-
-  a.innerHTML = `
-    <span class="catlink-inner" aria-hidden="true">
-      <span class="cat-face">🐈‍⬛</span>
-      <span class="cat-tail">〰️</span>
-    </span>
-  `;
-}
-
-function setCatFaceEmoji(emoji) {
-  const face = document.querySelector("#catLink .cat-face");
-  if (face) face.textContent = emoji;
-}
-
-// ---------- Cat mode ----------
-const LS_CATMODE = "huberts_house_catmode_v1";
-let pawsTimer = null;
-let blinkTimer = null;
-
-const catLayer = document.getElementById("catLayer");
-
-function setCatMode(on) {
-  document.documentElement.classList.toggle("cat-mode", !!on);
-  localStorage.setItem(LS_CATMODE, on ? "1" : "0");
-  if (catLayer) catLayer.classList.toggle("hidden", !on);
-
-  if (on) {
-    startCatAmbient();
-    startBlinking();
-    setCatFaceEmoji("😼");
-  } else {
-    stopCatAmbient();
-    stopBlinking();
-    setCatFaceEmoji("🐈‍⬛");
-  }
-}
-
-catModeBtn?.addEventListener("click", () => {
-  const on = !document.documentElement.classList.contains("cat-mode");
-  setCatMode(on);
-});
-
-function startCatAmbient() {
-  if (!catLayer) return;
-  catLayer.classList.remove("hidden");
-  catLayer.innerHTML = "";
-
-  const makePaw = () => {
-    const paw = document.createElement("div");
-    paw.textContent = "🐾";
-    paw.style.position = "absolute";
-    paw.style.left = Math.round(Math.random() * 92) + "%";
-    paw.style.top = "110%";
-    paw.style.fontSize = (12 + Math.random() * 18).toFixed(0) + "px";
-    paw.style.opacity = (0.10 + Math.random() * 0.20).toFixed(2);
-    paw.style.transform = `rotate(${Math.round(Math.random() * 40 - 20)}deg)`;
-    paw.style.transition = "top 6.5s linear, opacity 6.5s linear";
-    catLayer.appendChild(paw);
-
-    requestAnimationFrame(() => {
-      paw.style.top = "-10%";
-      paw.style.opacity = "0";
-    });
-
-    setTimeout(() => paw.remove(), 7000);
-  };
-
-  if (pawsTimer) clearInterval(pawsTimer);
-  pawsTimer = setInterval(() => {
-    if (!document.documentElement.classList.contains("cat-mode")) return;
-    makePaw();
-  }, 900);
-}
-
-function stopCatAmbient() {
-  if (pawsTimer) clearInterval(pawsTimer);
-  pawsTimer = null;
-  if (catLayer) catLayer.innerHTML = "";
-}
-
-function startBlinking() {
-  stopBlinking();
-  const schedule = () => {
-    const delay = 4500 + Math.random() * 6500;
-    blinkTimer = setTimeout(() => {
-      if (!document.documentElement.classList.contains("cat-mode")) return schedule();
-      const el = document.getElementById("catLink");
-      if (el) {
-        el.classList.add("blink");
-        setTimeout(() => el.classList.remove("blink"), 120);
-      }
-      schedule();
-    }, delay);
-  };
-  schedule();
-}
-
-function stopBlinking() {
-  if (blinkTimer) clearTimeout(blinkTimer);
-  blinkTimer = null;
-  const el = document.getElementById("catLink");
-  el?.classList.remove("blink");
-}
-
 // ---------- Init ----------
 initCatCrew();
 initDashboard({ onAppearanceChange: () => calendar?.updateSize() });
@@ -540,7 +406,7 @@ async function initApp() {
       memberVerified = true; gate.classList.add('hidden');
       document.getElementById('accountLabel').textContent = `Signed in as ${user.email || 'household member'}`;
       if (dataStarted) return; dataStarted = true;
-      startHousehold(firestoreStore());
+      startHousehold(firestoreStore(db));
       onSnapshot(query(eventsCol, orderBy('start','asc')), { includeMetadataChanges: true }, snap => {
         localDocs = snap.docs.map(d => ({id:d.id,...d.data()})); rebuildEvents();
         setCalendarStatus(snap.metadata.hasPendingWrites ? 'Saving changes…' : snap.metadata.fromCache ? 'Cached calendar' : 'Shared · up to date', snap.metadata.fromCache ? 'offline' : 'ready');
@@ -548,7 +414,7 @@ async function initApp() {
         setCalendarStatus('Sync unavailable', 'offline');
         showNotice('The calendar could not sync. Check your connection and household access.');
       });
-      startUpgrades(); initHypotheses({store:hypothesisStore()}); initHuckleberry(app,{predictions:predictionStore()}); initNewsletterSettings(app); initSiriSettings(app); initWorldBriefing(app); initInstall(); initPullRefresh(); initDevices(app); initLitter(app); initFeeders(app); initMeals(app,{store:firestoreStore('householdMeals')}); initBirthdays(app,{onChange:() => { renderCalendarFromCache(); homeCalendar?.render(); }}); initBathDays({store:settingsStore(),onChange:bathChanged}); initTrashDays({store:trashStore(),onChange:bathChanged});
+      startUpgrades(); initHypotheses({store:hypothesisStore(db)}); initHuckleberry(app,{predictions:predictionStore(db)}); initNewsletterSettings(app); initSiriSettings(app); initWorldBriefing(app); initInstall(); initPullRefresh(); initDevices(app); initLitter(app); initFeeders(app); initMeals(app,{store:firestoreStore('householdMeals')}); initBirthdays(app,{onChange:() => { renderCalendarFromCache(); homeCalendar?.render(); }}); initBathDays({store:settingsStore(db),onChange:bathChanged}); initTrashDays({store:trashStore(db),onChange:bathChanged});
       await initCloudCalendar(app,{
         onEvents:records => { cloudDocs = records.map(e => ({...e,end:e.editEnd,cloudEnd:e.end,owner:e.owner || 'both',type:'general',checklist:e.checklist || [],repeat:'none'})); rebuildEvents(); },
         onChecklists:records => {cloudChecklistDocs=records;},
@@ -620,77 +486,8 @@ function startUpgrades() {
     ]
   });
 }
-// Nap scoreboard: the latest SweetSpot per wake-up (Hubert and Mia are replayed).
-function predictionStore() {
-  const col = collection(db,'babyPredictions');
-  return {
-    subscribe(next) { return onSnapshot(query(col,orderBy('lastWake','desc'),limit(400)),snap => next(snap.docs.map(d => ({id:d.id,...d.data()}))),() => next(null)); },
-    async record(entry) {
-      const { id, ...data } = entry, ref = doc(col,id);
-      await runTransaction(db,async transaction => {
-        const current = await transaction.get(ref), patch = sweetspotPatch(current.exists() ? current.data() : null, data);
-        if (!patch) return;
-        if (current.exists()) transaction.update(ref,{...patch,updatedAt:serverTimestamp()}); else transaction.set(ref,{...patch,createdAt:serverTimestamp()});
-      });
-    }
-  };
-}
-// "Got a hunch?" on the Frankie page: the household's hypotheses, shared.
-function hypothesisStore() {
-  const col = collection(db,'babyHypotheses');
-  return {
-    subscribe(next) { return onSnapshot(query(col,orderBy('createdAt','desc'),limit(100)),snap => next(snap.docs.map(d => ({id:d.id,...d.data()}))),() => next(null)); },
-    async add(hunch) { await addDoc(col,{...hunch,createdAt:serverTimestamp()}); },
-    async remove(id) { await deleteDoc(doc(col,id)); }
-  };
-}
 // Bath days changed: redraw everything that shows them.
 function bathChanged() { renderCalendarFromCache(); homeCalendar?.render(); window.dispatchEvent(new Event('hh:events')); }
-// The one shared settings document (householdSettings/home): Frankie's bath days.
-function settingsStore() {
-  const ref = doc(db,'householdSettings','home');
-  return {
-    subscribe(next) { return onSnapshot(ref,snap => next(snap.exists() ? snap.data().bathDays ?? null : null),() => next(null)); },
-    async save(bathDays) { await setDoc(ref,{bathDays,updatedAt:serverTimestamp()},{merge:true}); }
-  };
-}
-// Trash and recycling days live in the same settings document.
-function trashStore() {
-  const ref = doc(db,'householdSettings','home');
-  return {
-    subscribe(next) { return onSnapshot(ref,snap => next(snap.exists() ? snap.data().trash ?? null : null),() => next(null)); },
-    async save(trash) { await setDoc(ref,{trash,updatedAt:serverTimestamp()},{merge:true}); }
-  };
-}
-function firestoreStore(name = 'householdItems') {
-  const col = collection(db,name);
-  const check = (snapshot,item) => { if (!snapshot.exists() || snapshot.data().version !== item.version) throw new Error('This item changed on another device. Try again.'); };
-  return {
-    subscribe(next,status) {
-      return onSnapshot(col,{includeMetadataChanges:true},snap => {
-        next(snap.docs.map(d => ({id:d.id,...d.data()})));
-        status(snap.metadata.hasPendingWrites ? 'Saving changes…' : snap.metadata.fromCache ? 'Offline · showing cached items' : 'Shared household · up to date');
-      },() => status('Could not sync household lists. Check your connection and household access.',true));
-    },
-    async add(data) { const ref = await addDoc(col,{...data,version:0,createdAt:serverTimestamp(),updatedAt:serverTimestamp()}); return { ...data,id:ref.id,version:0 }; },
-    async addMany(items) {
-      const batch=writeBatch(db);for(const item of items)batch.set(doc(col),{...item,version:0,createdAt:serverTimestamp(),updatedAt:serverTimestamp()});await batch.commit();
-    },
-    async update(item,patch) {
-      return runTransaction(db,async transaction => {
-        const ref = doc(col,item.id); const snapshot = await transaction.get(ref); check(snapshot,item);
-        const next = {...patch,version:item.version+1,updatedAt:serverTimestamp()}; transaction.update(ref,next);
-        return {...item,...next};
-      });
-    },
-    async remove(item) { await runTransaction(db,async t => { const ref=doc(col,item.id); check(await t.get(ref),item); t.delete(ref); }); },
-    async removeMany(items) { await runTransaction(db,async t => {
-      if (items.length > 400) throw new Error('Clear fewer than 400 bought items at a time.');
-      const snapshots = await Promise.all(items.map(item => t.get(doc(col,item.id))));
-      items.forEach((item,i) => check(snapshots[i],item)); items.forEach(item => t.delete(doc(col,item.id)));
-    }); }
-  };
-}
 function rebuildEvents() {
   rawDocs = [...localDocs,...cloudDocs];
   expandedEvents = [...expandRepeats(normalizeDocs(localDocs)),...cloudDocs.map(e => ({
@@ -1801,228 +1598,7 @@ function maybeAutofillChecklist(type) {
   renderChecklistUI(checklistEl, preset.map(t => ({ text: t, done: false })));
 }
 
-// ---------- Normalize docs + expand repeats ----------
-function normalizeDocs(docs) {
-  return docs.map((d) => {
-    const owner = normalizeOwner(d.owner);
-    const start = d.start ? new Date(d.start) : null;
-    const end = d.end ? new Date(d.end) : null;
-
-    return {
-      id: d.id,
-      title: d.title || "",
-      start,
-      end,
-      allDay: !!d.allDay,
-      owner,
-      ownerCustom: d.ownerCustom || "",
-      withFrankie: !!d.withFrankie && ["hanry","karena","both"].includes(owner),
-      type: d.type || "general",
-      notes: d.notes || "",
-      location: d.location || "",
-      checklist: Array.isArray(d.checklist) ? d.checklist : [],
-      repeat: d.repeat || "none",
-      repeatUntil: d.repeatUntil || ""
-    };
-  }).filter(d => d.start instanceof Date && !isNaN(d.start));
-}
-
-function expandRepeats(norm) {
-  const horizonDays = 240;
-  const now = new Date();
-  const horizon = new Date(now.getTime() + horizonDays * 24 * 60 * 60 * 1000);
-
-  const out = [];
-  for (const d of norm) {
-    const style = OWNER_STYLE[d.owner] || OWNER_STYLE.custom;
-
-    const base = {
-      sourceId: d.id,
-      owner: d.owner,
-      ownerCustom: d.ownerCustom,
-      withFrankie: d.withFrankie,
-      type: d.type,
-      notes: d.notes,
-      location: d.location,
-      checklist: d.checklist
-    };
-
-    const repeat = d.repeat || "none";
-    if (repeat === "none") {
-      out.push(makeFcEvent({
-        id: d.id,
-        title: d.title,
-        start: d.start,
-        end: d.end,
-        allDay: d.allDay,
-        style,
-        extra: { ...base, isRepeatOccurrence: false }
-      }));
-      continue;
-    }
-
-    const until = d.repeatUntil ? new Date(d.repeatUntil + "T23:59:59") : horizon;
-    const stop = until.getTime() < horizon.getTime() ? until : horizon;
-
-    let cur = new Date(d.start);
-    let count = 0;
-
-    while (cur.getTime() <= stop.getTime() && count < 400) {
-      const occStart = new Date(cur);
-      const durMs = d.end ? (new Date(d.end).getTime() - new Date(d.start).getTime()) : 0;
-      const occEndAdj = d.end ? new Date(occStart.getTime() + durMs) : null;
-
-      const occId = `${d.id}__${occStart.toISOString().slice(0,10)}`;
-
-      out.push(makeFcEvent({
-        id: occId,
-        title: d.title,
-        start: occStart,
-        end: occEndAdj,
-        allDay: d.allDay,
-        style,
-        extra: { ...base, isRepeatOccurrence: true }
-      }));
-
-      cur = advanceRepeat(cur, repeat);
-      count++;
-    }
-  }
-
-  return out;
-}
-
-function advanceRepeat(date, repeat) {
-  const d = new Date(date);
-  if (repeat === "daily") d.setDate(d.getDate() + 1);
-  else if (repeat === "weekly") d.setDate(d.getDate() + 7);
-  else if (repeat === "monthly") d.setMonth(d.getMonth() + 1);
-  else if (repeat === "yearly") d.setFullYear(d.getFullYear() + 1);
-  else d.setDate(d.getDate() + 1);
-  return d;
-}
-
-function makeInclusiveAllDayEnd(endDate) {
-  if (!(endDate instanceof Date) || isNaN(endDate)) return null;
-  const x = new Date(endDate);
-  x.setDate(x.getDate() + 1);
-  return x;
-}
-
-function makeFcEvent({ id, title, start, end, allDay, style, extra }) {
-  let endForFc = end ? new Date(end) : null;
-  if (allDay && endForFc) endForFc = makeInclusiveAllDayEnd(endForFc);
-
-  return {
-    id,
-    title,
-    start: start.toISOString(),
-    end: endForFc ? endForFc.toISOString() : undefined,
-    allDay: !!allDay,
-    backgroundColor: style.bg,
-    borderColor: style.border,
-    textColor: "#30372d",
-    extendedProps: extra
-  };
-}
-
-// ---------- Panel card rendering ----------
-function renderPanelCardHTML(e) {
-  const p = e.extendedProps || {};
-  const owner = normalizeOwner(p.owner);
-  const ownerLabel = owner === "custom" ? (p.ownerCustom || "Other") : owner;
-
-  const when = formatWhenForPanel({
-    start: new Date(e.start),
-    end: e.end ? new Date(e.end) : null,
-    allDay: !!e.allDay
-  });
-
-  const style = OWNER_STYLE[owner] || OWNER_STYLE.custom;
-  const pillColor = style.border;
-
-  return `
-    <div class="panel-card" data-open-id="${p.sourceId || e.id}" data-occ="${String(e.start)}" style="border-left: 5px solid ${pillColor}; cursor: pointer;">
-      <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
-        <span class="owner-pill">${escapeHtml(ownerLabel)}</span>
-        <strong style="font-size: 16px;">${escapeHtml(e.title || "")}</strong>
-      </div>
-      <div class="tiny muted">${escapeHtml(when)}</div>
-    </div>
-  `;
-}
-
-function renderPanelCardHTMLWithProgress(e) {
-  const p = e.extendedProps || {};
-  const items = Array.isArray(p.checklist) ? p.checklist : [];
-  const done = items.filter(i => i.done).length;
-  const total = items.length;
-  const pct = total ? Math.round((done / total) * 100) : 0;
-
-  return renderPanelCardHTML(e).replace(
-    "</div>\n    </div>",
-    ` <span class="progress-pill">${done}/${total} (${pct}%)</span></div>\n    </div>`
-  );
-}
-
-function formatWhenForPanel({ start, end, allDay }) {
-  if (!start) return "";
-  const optsDate = { weekday: "short", month: "short", day: "numeric" };
-  const optsTime = { hour: "numeric", minute: "2-digit" };
-
-  if (allDay) return `${start.toLocaleDateString(undefined, optsDate)} (all day)`;
-
-  const d = start.toLocaleDateString(undefined, optsDate);
-  const t1 = start.toLocaleTimeString(undefined, optsTime);
-  if (!end) return `${d} • ${t1}`;
-  const t2 = end.toLocaleTimeString(undefined, optsTime);
-  return `${d} • ${t1}–${t2}`;
-}
-
-// ---------- Date helpers ----------
-function toInputValue(dateObj, allDay) {
-  let d = dateObj;
-  if (!(d instanceof Date)) d = new Date(d);
-  if (isNaN(d)) d = new Date();
-
-  const pad = (n) => String(n).padStart(2, "0");
-  const y = d.getFullYear();
-  const m = pad(d.getMonth() + 1);
-  const day = pad(d.getDate());
-
-  if (allDay) return `${y}-${m}-${day}`;
-
-  const hh = pad(d.getHours());
-  const mm = pad(d.getMinutes());
-  return `${y}-${m}-${day}T${hh}:${mm}`;
-}
-
-function fromInputValue(value, allDay) {
-  if (!value) return new Date();
-  if (allDay) {
-    const [y, m, d] = value.split("-").map(Number);
-    return new Date(y, m - 1, d, 0, 0, 0, 0);
-  }
-  return new Date(value);
-}
-
-function roundToNextHour(d) {
-  const x = new Date(d);
-  x.setMinutes(0, 0, 0);
-  x.setHours(x.getHours() + 1);
-  return x;
-}
-
-// ---------- Escape ----------
-function escapeHtml(s) {
-  return String(s)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
+// Owners, presets, event data and date helpers live in event-data.js.
 // ---------- Start ----------
 initApp().catch(() => {
   document.getElementById('gateError').textContent = 'The app could not start. Check your connection and reload.';
