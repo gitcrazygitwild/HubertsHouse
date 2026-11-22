@@ -101,3 +101,12 @@ html, body { overflow-x: clip; max-width: 100%; }
 @media (max-width: 650px) {
   .house-main, .display-mode .house-main, :root[data-density="compact"] .house-main { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
 }
+
+/* iPhone: the page scrolls inside .house-main, not the document. A fixed tab bar on a long
+   page (Frankie) kept drifting with the document's bounce; with the document itself never
+   scrolling, the bar has nothing to move with. */
+@media (max-width: 650px) {
+  html, body { height:100%; overflow:hidden; }
+  body { padding-bottom:0 !important; }
+  .house-main, .display-mode .house-main, :root[data-density="compact"] .house-main { position:fixed; inset:0; z-index:1; overflow-x:hidden; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior-y:contain; }
+}

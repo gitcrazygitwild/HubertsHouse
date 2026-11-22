@@ -4,7 +4,7 @@
 import { escapeHTML as esc } from './household-model.js';
 import { renderHTML } from './dom.js';
 import { dailySleep, dailyBottles, dailyPumps, toOunces, timelineRows, babySummary, dayStart, dayStory, dayStoryText, localDay } from './baby-history.js';
-import { MODELS, scorePredictions, MIA_V2_SINCE } from './prediction-log.js';
+import { MODELS, scorePredictions, MIA_V2_SINCE, isDaytimeWake } from './prediction-log.js';
 import { bottleSleepLinks, ageInDays, ageLabel } from './baby-model.js';
 import { bottlePace } from './bottle-pace.js';
 import { CHALLENGES, MACK_EXCUSE, scoreMornings, scoreBottles, scorePumps, morningPicks, bottlePicks, pumpPicks, currentBedtime, nightsFrom, scoreNapNight, napNightPicks } from './cat-challenges.js';
@@ -212,6 +212,31 @@ export function napNightHTML(score, timezone, upcoming = null, plan = 4) {
   return `${calls}<div class="score-grid">${cards}</div>${rows ? `<div class="score-table-wrap"><table class="score-table fit-table"><thead><tr><th>Fell asleep</th>${models.map(m => `<th>${esc(m.owner)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>` : ''}
     <p class="tiny muted">Each cat calls it when she wakes up, from what was logged by then, so backfilled sleeps count too. Night means the sleep started after her usual evening line or lasted four hours or more. Mack follows the ${esc(String(plan))}-nap SweetSpot plan chosen in Settings: after that many naps, Huckleberry’s next SweetSpot is bedtime. A wake-up counts once all three have a call.</p>`;
 }
+// "The cats' calls" carousel: one slide per challenge with what each cat is calling now.
+const CAT_KEYS = ['hubert', 'mia', 'mack'];
+function callRows(kind, value, score, note = '') {
+  const models = CHALLENGES[kind];
+  return `<ul>${models.map(m => { const v = value(m.key);
+    return `<li class="guess-${m.key}${v == null ? ' is-quiet' : ''}"><span class="guess-dot" aria-hidden="true"></span><span><b>${esc(m.owner)} · ${esc(m.name)}</b><small>${score?.leader === m.key ? '🏆 leading · ' : ''}${esc(m.how)}</small></span><strong>${v == null ? '<span class="muted">no call yet</span>' : esc(v)}</strong></li>`; }).join('')}</ul>${note ? `<p class="tiny muted">${note}</p>` : ''}`;
+}
+const seeAll = id => `<button type="button" class="text-link calls-more" data-calls-jump="${id}">Full scoreboard ↓</button>`;
+export function callsSlides({ sleeps, bottles, pumps, timer, timezone, now, birthdate, plan, napNight, mornings, bottleScore, pumpScore, todayOz, todayPump }) {
+  const last = sleeps.at(-1), up = !timer?.active && last ? Date.parse(last.end) : null, awake = up && isDaytimeWake(up, timezone, sleeps) ? up : null;
+  // Nap or night: called at each wake-up.
+  const nn = awake ? napNightPicks(sleeps, timezone, awake, { bottles, birthdate, plan }) : null, lastNN = napNight.results[0];
+  const napNightHTML = callRows('napnight', key => nn?.[key] ? (nn[key] === 'night' ? '🌙 Night' : '😴 Nap') : null, napNight,
+    nn ? `Called when she woke at ${esc(clock(awake, timezone))}${nn.napsToday != null ? ` · ${nn.napsToday} nap${nn.napsToday === 1 ? '' : 's'} so far today` : ''}.` : `${up ? 'She’s up for a night feed; the calls come after her morning wake-up.' : 'She’s asleep; the calls come when she wakes up.'}${lastNN ? ` Last time it was ${lastNN.actual === 'night' ? 'the night' : 'a nap'}: ${CAT_KEYS.map(k => `${CHALLENGES.napnight.find(m => m.key === k).owner} ${lastNN.right[k] ? '✓' : '✗'}`).join(' · ')}.` : ''}`) + seeAll('frankieNapNight');
+  // Morning wake-up: called at bedtime.
+  const bedtime = currentBedtime(sleeps, timer, timezone, now), mp = bedtime ? morningPicks(sleeps, timezone, bedtime, { birthdate }) : null, lastMorning = mornings.results[0];
+  const morningHTML = callRows('morning', key => mp?.[key] ? clock(mp[key].target, timezone) : null, mornings,
+    mp ? `Called at bedtime (${esc(clock(bedtime, timezone))}).` : `The cats call the morning at bedtime.${lastMorning ? ` Last wake-up: ${esc(clock(lastMorning.actual, timezone))} (${CAT_KEYS.map(k => `${CHALLENGES.morning.find(m => m.key === k).owner} ${esc(clock(lastMorning.picks[k].target, timezone))}`).join(', ')}).` : ''}`) + seeAll('frankieMorning');
+  // Bottle bet and pump pool: called at midnight.
+  const bp = bottlePicks(bottles, timezone, localDay(now, timezone), { birthdate });
+  const bottleHTML = callRows('bottle', key => bp[key] != null ? `${bp[key]} oz` : null, bottleScore, `So far today: <strong>${esc(oz(todayOz))}</strong>.`) + seeAll('frankieBottleBet');
+  const pp = pumps.length ? pumpPicks(pumps, timezone, localDay(now, timezone), { bottles }) : {};
+  const pumpHTML = pumps.length ? callRows('pump', key => pp[key] != null ? `${pp[key]} oz` : null, pumpScore, `Pumped so far today: <strong>${esc(oz(todayPump))}</strong>.`) + seeAll('frankiePumpPool') : '<p class="tiny muted">Log Karena’s pumps (＋ Pump on Today, or tell Siri) and the cats start guessing her daily ounces.</p>';
+  return { napNightHTML, morningHTML, bottleHTML, pumpHTML };
+}
 export function renderFrankie({ snapshot, timezone, predictions = [], demo = false, connected = false }) {
   shared = snapshot ? { snapshot, timezone, demo } : null;
   const share = $('frankieShare'); if (share) share.disabled = !snapshot;
@@ -246,7 +271,7 @@ export function renderFrankie({ snapshot, timezone, predictions = [], demo = fal
   if ($('frankieHat')) { const hat = scoreHat(predictions, sleeps, timer, timezone, now, { bottles, birthdate:snapshot.birthdate }); $('mackHatCard').hidden = false; renderHTML($('frankieHat'), hatHTML(hat, timezone)); }
   if ($('frankieNapNight')) {
     const plan = Number(snapshot.sweetspot?.selectedNapDay) || Number(snapshot.napPlan) || 4, extra = { bottles, birthdate:snapshot.birthdate, plan };
-    const awake = !timer?.active && last ? Date.parse(last.end) : null;
+    const up = !timer?.active && last ? Date.parse(last.end) : null, awake = up && isDaytimeWake(up, timezone, sleeps) ? up : null; // no call after a night feed
     renderHTML($('frankieNapNight'), napNightHTML(scoreNapNight(sleeps, timezone, now, { ...extra, timer }), timezone, awake ? napNightPicks(sleeps, timezone, awake, extra) : null, plan));
   }
   if ($('frankieBottleBet')) renderHTML($('frankieBottleBet'), challengeHTML('bottle', scoreBottles(bottles, timezone, now, { birthdate:snapshot.birthdate }), timezone, bottlePicks(bottles, timezone, localDay(now, timezone), { birthdate:snapshot.birthdate })));
@@ -273,6 +298,18 @@ export function renderFrankie({ snapshot, timezone, predictions = [], demo = fal
       + table('Ounces pumped per day', ['Day', 'Total', 'Left', 'Right', 'Pumps'], [...pumpRows].reverse().map(r => [esc(dayLabel(r.key, timezone)), oz(r.ounces), oz(r.left), oz(r.right), r.count])));
   }
   document.querySelectorAll('[data-frankie-range]').forEach(button => button.setAttribute('aria-pressed', String(Number(button.dataset.frankieRange) === range)));
+  // The cats' calls carousel (the first slide, the next nap, is drawn by baby.js).
+  if ($('callsNapNight')) {
+    try {
+      const plan = Number(snapshot.sweetspot?.selectedNapDay) || Number(snapshot.napPlan) || 4;
+      const slides = callsSlides({ sleeps, bottles, pumps, timer, timezone, now, birthdate:snapshot.birthdate, plan,
+        napNight:scoreNapNight(sleeps, timezone, now, { bottles, birthdate:snapshot.birthdate, plan, timer }), mornings:scoreMornings(sleeps, timezone, now, { birthdate:snapshot.birthdate }),
+        bottleScore:scoreBottles(bottles, timezone, now, { birthdate:snapshot.birthdate }), pumpScore:pumps.length ? scorePumps(pumps, timezone, now, { bottles }) : null,
+        todayOz:summary.today.bottles?.ounces || 0, todayPump:pumps.length ? dailyPumps(pumps, timezone, 1, now).at(-1)?.ounces || 0 : 0 });
+      renderHTML($('callsNapNight'), slides.napNightHTML); renderHTML($('callsMorning'), slides.morningHTML); renderHTML($('callsBottle'), slides.bottleHTML); renderHTML($('callsPump'), slides.pumpHTML);
+      fitCalls();
+    } catch (e) { console.error('Cats’ calls slides failed', e); }
+  }
   // The hunch box (hypotheses-view.js) tests against the same logs.
   try { window.dispatchEvent(new CustomEvent('hh:frankie', { detail:{ snapshot, timezone } })); } catch {}
   $('frankieNote').textContent = `${demo ? 'Sample data · ' : ''}${snapshot.historyComplete === false || snapshot.feedsComplete === false ? 'Some older history was too long to load in full. ' : ''}Up to ${snapshot.historyDays || 14} days from Huckleberry · ${timezone.replaceAll('_', ' ')}.`;
@@ -298,7 +335,30 @@ async function shareDay(button) {
   }
   button.blur();
 }
+// The carousel's height follows the slide in view, and the tabs follow the swipe.
+function callsIndex() { const track = $('callsTrack'); return track && track.clientWidth ? Math.round(track.scrollLeft / track.clientWidth) : 0; }
+function fitCalls() {
+  const track = $('callsTrack'); if (!track) return;
+  const i = callsIndex(), slide = track.querySelector(`[data-calls-slide="${i}"]`);
+  document.querySelectorAll('[data-calls-tab]').forEach(tab => tab.setAttribute('aria-selected', String(Number(tab.dataset.callsTab) === i)));
+  if (slide && slide.offsetHeight) track.style.height = `${slide.offsetHeight}px`;
+}
+function initCalls() {
+  const track = $('callsTrack'); if (!track) return;
+  let settle;
+  track.addEventListener('scroll', () => { clearTimeout(settle); settle = setTimeout(fitCalls, 90); document.querySelectorAll('[data-calls-tab]').forEach(tab => tab.setAttribute('aria-selected', String(Number(tab.dataset.callsTab) === callsIndex()))); }, { passive:true });
+  document.querySelector('.calls-tabs')?.addEventListener('click', event => {
+    const tab = event.target.closest('[data-calls-tab]'); if (!tab) return;
+    const i = Number(tab.dataset.callsTab);
+    document.querySelectorAll('[data-calls-tab]').forEach(t => t.setAttribute('aria-selected', String(t === tab)));
+    if (track.scrollTo) track.scrollTo({ left:i * track.clientWidth, behavior:'smooth' }); else track.scrollLeft = i * track.clientWidth;
+    setTimeout(fitCalls, 400);
+  });
+  $('frankieGuessCard')?.addEventListener('click', event => { const jump = event.target.closest('[data-calls-jump]'); if (jump) $(jump.dataset.callsJump)?.closest('section')?.scrollIntoView({ behavior:'smooth', block:'start' }); });
+  if ('ResizeObserver' in window) new ResizeObserver(() => fitCalls()).observe(track.querySelector('[data-calls-slide="0"]'));
+}
 export function initFrankie(rerender) {
+  initCalls();
   $('frankieShare')?.addEventListener('click', event => shareDay(event.currentTarget));
   document.querySelectorAll('[data-frankie-range]').forEach(button => button.addEventListener('click', () => {
     range = Number(button.dataset.frankieRange); try { localStorage.setItem('hh_frankie_range', String(range)); } catch { /* optional */ }
@@ -319,7 +379,7 @@ export function initFrankie(rerender) {
   root?.addEventListener('pointermove', e => { const target = e.target.closest?.('[data-tip]'); if (target) show(target, e.clientX, e.clientY); else hide(); });
   root?.addEventListener('pointerleave', hide);
   root?.addEventListener('click', e => { const target = e.target.closest?.('[data-tip]'); if (target) show(target, e.clientX, e.clientY); });
-  window.addEventListener('scroll', hide, { passive:true });
+  document.addEventListener('scroll', hide, { passive:true, capture:true }); // the page or its scrolling area (phones)
   document.addEventListener('pointerdown', event => { if (!event.target.closest?.('[data-tip]')) hide(); });
   window.addEventListener('hashchange', hide);
   // Charts are drawn at their real pixel width so text stays the same size.

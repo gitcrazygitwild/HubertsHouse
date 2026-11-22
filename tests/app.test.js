@@ -45,7 +45,7 @@ async function fixture(options = {}) {
   await module('awards.js',['frankieAwards']);
   await module('bottle-pace.js',['bottlePace']);
   await module('mack-hat.js',['seeded','HAT_LINES','hatGuess','hatSeed','scoreHat']);
-  await module('frankie.js',['renderFrankie','initFrankie','frankieDayText','bottleLinksHTML', 'pumpsHTML', 'paceHTML','challengeHTML','napNightHTML','hatHTML'],'const esc=escapeHTML;');
+  await module('frankie.js',['renderFrankie','initFrankie','frankieDayText','bottleLinksHTML', 'pumpsHTML', 'paceHTML','challengeHTML','napNightHTML','hatHTML','callsSlides'],'const esc=escapeHTML;');
   await module('baby-logs.js',['LOG_FILTERS','describeLog','logKey','logsHTML'],'const esc=escapeHTML;');
   await module('baby.js',['initHuckleberry','logBabyFromText'],'const esc=escapeHTML;');
   await module('calendar-view.js',['initCalendarExperience','calendarEventContent'],'const esc=escapeHTML;');
@@ -81,6 +81,8 @@ async function fixture(options = {}) {
   await module('bath-days.js',['DEFAULT_BATH_DAYS','WEEKDAYS','BATH_TITLE','cleanBathDays','bathDays','setBathDays','isBathDay','describeBathDays','bathDaysInRange','bathEvents','nextBathDay']);
   await module('hypotheses.js',['FACTORS','OUTCOMES','fits','describeHypothesis','parseHypothesis','hypothesisData','formatOutcome','testHypothesis','claudeDigest']);
   await module('hypotheses-view.js',['memoryHypotheses','initHypotheses'],'const esc=escapeHTML;');
+  await module('trash-days.js',['DEFAULT_TRASH','PICKUP_LOOK','keyOf','bigHolidays','holidayOn','cleanTrash','trashSettings','setTrash','pickupsInRange','pickupTitle','trashEvents','pickupOn','nextPickup','describeTrash']);
+  await module('trash-settings.js',['trashPanelHTML','memoryTrashStore','initTrashDays'],'const esc=escapeHTML;');
   await module('bath-settings.js',['bathPanelHTML','memoryBathStore','initBathDays'],'const esc=escapeHTML;');
   await module('birthdays.js',['sampleBirthdays','birthdayPanelHTML','initBirthdays'],'const esc=escapeHTML;');
   w.eval(clean(await read('app.js')) + ';window.__testApp={getDocs:()=>rawDocs,setCloudDocs:(records)=>{cloudDocs=records;rebuildEvents();},persistMovedEvent,redraw:()=>updateHouseholdEvents(expandedEvents)};'); await settle();
@@ -654,6 +656,13 @@ test('Frankie page: the cats’ windows on a day strip, and a bottle pace tracke
   const earlierRows = doc.querySelectorAll('#frankieGuessList .guess-table tbody tr');
   assert.equal(svg.querySelectorAll('.strip-actual').length, earlierRows.length);
   if (earlierRows.length) assert.ok(svg.querySelector('.strip-dot.past'), 'earlier guesses are drawn');
+  // Every challenge has a slide in the cats' calls, Hubert, Mia, Mack on each.
+  assert.deepEqual([...doc.querySelectorAll('[data-calls-tab]')].map(b => b.textContent), ['Next nap', 'Nap or night', 'Morning', 'Bottles', 'Pumps']);
+  for (const id of ['callsNapNight', 'callsMorning', 'callsBottle']) assert.deepEqual([...doc.querySelectorAll(`#${id} li`)].map(li => li.className.split(' ')[0]), ['guess-hubert', 'guess-mia', 'guess-mack'], id);
+  assert.match(doc.getElementById('callsBottle').textContent, /So far today: .*oz/);
+  assert.match(doc.getElementById('callsPump').textContent, /Pumped so far today|Log Karena’s pumps/);
+  doc.querySelector('[data-calls-tab="3"]').click();
+  assert.equal(doc.querySelector('[data-calls-tab="3"]').getAttribute('aria-selected'), 'true'); assert.equal(doc.querySelector('[data-calls-tab="0"]').getAttribute('aria-selected'), 'false');
   // Nap or night: a card per cat and a recent-wake-ups table.
   const napNight = doc.getElementById('frankieNapNight');
   assert.deepEqual([...napNight.querySelectorAll('.score-card h3')].map(h => h.textContent), ['Evening Instinct', 'Nap Counter', 'The Nap Plan']);

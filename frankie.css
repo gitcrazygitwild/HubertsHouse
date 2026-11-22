@@ -230,3 +230,15 @@ rect.is-hovered.mark-night,rect.is-hovered.mark-nap { stroke:var(--card); stroke
 .hunch-actions { display:flex; gap:6px; flex-shrink:0; }
 .hunch-actions .btn { min-height:36px; padding:6px 10px; font-size:12px; }
 .hunch-copy { width:100%; font:12px/1.4 ui-monospace, monospace; }
+/* The cats' calls: one slide per challenge, swiped sideways (tabs follow). */
+.calls-tabs { display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; margin:-4px 0 12px; padding-bottom:2px; }
+.calls-tabs::-webkit-scrollbar { display:none; }
+.calls-tabs button { flex:none; border:1px solid var(--border); background:transparent; color:var(--muted); border-radius:999px; padding:6px 12px; font:inherit; font-size:12px; font-weight:600; cursor:pointer; }
+.calls-tabs button[aria-selected="true"] { background:var(--accent); border-color:var(--accent); color:#fff; }
+.calls-track { display:flex; align-items:flex-start; overflow-x:auto; overflow-y:hidden; scroll-snap-type:x mandatory; overscroll-behavior-x:contain; scrollbar-width:none; transition:height .2s ease; }
+.calls-track::-webkit-scrollbar { display:none; }
+.calls-slide { flex:0 0 100%; min-width:0; scroll-snap-align:start; scroll-snap-stop:always; }
+.calls-slide + .calls-slide { padding-left:2px; }
+.calls-more { margin-top:8px; }
+.calls-hint { margin:10px 0 0; text-align:right; }
+@media (prefers-reduced-motion: reduce) { .calls-track { transition:none; scroll-behavior:auto; } }
