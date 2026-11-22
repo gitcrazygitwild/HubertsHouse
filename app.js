@@ -63,16 +63,23 @@ async function lock() {
 }
 gateForm?.addEventListener('submit', async e => {
   e.preventDefault();
-  const button = document.getElementById('signInBtn'); button.disabled = true;
-  document.getElementById('gateError').textContent = '';
+  const button = document.getElementById('signInBtn'), errorBox = document.getElementById('gateError'); button.disabled = true;
+  errorBox.textContent = '';
+  // Already signed in but the app didn't finish starting: a fresh start is what's needed
+  // (signing in again as the same person wouldn't trigger anything).
+  if (auth?.currentUser) { errorBox.textContent = 'Starting Hubert’s House…'; location.reload(); return; }
+  // Never sit silently: say so if sign-in takes too long.
+  const slow = setTimeout(() => { errorBox.textContent = 'Sign-in is taking a long time. Check your connection, or close the app and open it again.'; }, 20000);
   try {
     await setPersistence(auth, rememberDevice.checked ? browserLocalPersistence : browserSessionPersistence);
     await signInWithEmailAndPassword(auth, document.getElementById('gateEmail').value.trim(), gateInput.value);
   } catch (error) {
-    document.getElementById('gateError').textContent = error.code === 'auth/operation-not-allowed' || error.code === 'auth/configuration-not-found'
+    errorBox.textContent = (error.code === 'auth/operation-not-allowed' || error.code === 'auth/configuration-not-found'
       ? 'Household sign-in needs to be activated. Use the sample preview while setup is completed.'
-      : error.code === 'auth/network-request-failed' ? 'Could not reach sign-in. Check your connection and try again.' : 'Could not sign in. Check your household email and password.';
-  } finally { gateInput.value = ''; button.disabled = false; }
+      : error.code === 'auth/network-request-failed' ? 'Could not reach sign-in. Check your connection and try again.'
+      : error.code === 'auth/too-many-requests' ? 'Too many tries for now. Wait a few minutes, then try again.'
+      : 'Could not sign in. Check your household email and password.') + (error.code ? ` (${error.code})` : '');
+  } finally { clearTimeout(slow); gateInput.value = ''; button.disabled = false; }
 });
 
 let updatesModalShownThisLoad = false;
@@ -430,7 +437,12 @@ async function initApp() {
           preference.value = defaultCalendar();
         }
       });
-    } catch { document.getElementById('gateError').textContent = 'Could not verify household access. Check your connection and setup.'; gate.classList.remove('hidden'); }
+    } catch (error) {
+      // Show what failed (a code, never data), and let the next tap start fresh.
+      console.error('Starting after sign-in failed', error);
+      const detail = error?.code || error?.name || 'startup';
+      document.getElementById('gateError').textContent = `Could not finish signing in (${detail}). Tap “Come on in” to try again.`; gate.classList.remove('hidden');
+    }
   });
 }
 function setCalendarStatus(message, state) {

@@ -372,3 +372,7 @@ Cleanup step 1 (in progress): app.js 2,022 → 1,605 lines by moving code out un
 ### Nov 22, 2026, 3:30 AM ET · Claude → Codex
 
 Cleanup step 1, part 2: app.js 1,605 → 1,477 lines. checklist-ui.js: renderChecklistUI / addChecklistItemUI / readChecklistUI (moved unchanged; maybeAutofillChecklist stays in app.js because it uses checklistEl). panels.js: renderUpcomingList(el, events, onOpen) and renderOutstandingList({…, page, pageSize, onOpen}) → returns the page shown; app.js keeps renderUpcoming/renderOutstanding as one-line wrappers that filter expandedEvents and open the window. The rest of app.js (event window logic, calendar rendering, init) shares a lot of module state; splitting it further needs a shared state object, which I'd only do with a clear benefit.
+
+### Nov 22, 2026, 11:14 AM ET · Claude → Codex
+
+Sign-in hotfix (household couldn't get in on the iPhone home-screen app, first an error, then nothing). Live startup after sign-in could throw and leave the app stuck: dataStarted stayed true and signing in again as the same person fires no auth event, so taps did nothing. Now: tapping Come on in while already signed in reloads the app; a 20s 'taking a long time' message; sign-in errors and startup failures show their code (never data). PR #69 (service health, commit 53f3bdc) was reverted on this branch to ship the fix alone; restore it later by reverting the revert. Codex: nothing to do.
