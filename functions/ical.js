@@ -23,7 +23,7 @@ export function readEvents(object, calendar, start, end) {
     const readOnlyReason = !calendar.writable ? 'This calendar is read-only.' : hasScheduling(event.component) ? 'Edit invitations in Apple Calendar.' : recurring || exceptions ? 'Edit recurring events in Apple Calendar; all occurrences stay visible here.' : !object.etag ? 'Refresh this event before editing.' : '';
     records.push({
       id:`icloud:${calendar.id}:${object.token}:${s.toString()}`, title:event.summary || '(Untitled)',
-      start:outputDate(s), end:outputDate(e), allDay:s.isDate, notes:event.description || '',
+      start:outputDate(s), end:outputDate(e), allDay:s.isDate, notes:event.description || '', location:String(event.location || '').slice(0, 300),
       calendarId:calendar.id, calendarName:calendar.name, token:object.token, etag:object.etag || null,
       owner:['hanry','karena','both','custom'].includes(event.component.getFirstPropertyValue('x-huberts-owner')) ? event.component.getFirstPropertyValue('x-huberts-owner') : 'both',
       ownerCustom:String(event.component.getFirstPropertyValue('x-huberts-owner-name') || ''),
@@ -57,6 +57,7 @@ export function writeEvent(payload, existing, uid, now = new Date()) {
   if (!payload || typeof payload.title !== 'string' || !payload.title.trim() || payload.title.length > 500) throw new CalendarError('invalid-argument','Give this event a title under 500 characters.');
   if (typeof payload.notes !== 'string' || payload.notes.length > 20000) throw new CalendarError('invalid-argument','The event notes are too long.');
   if (payload.repeat && payload.repeat !== 'none') throw new CalendarError('failed-precondition','Create repeating iCloud events in Apple Calendar.');
+  if (payload.location !== undefined && (typeof payload.location !== 'string' || payload.location.length > 300)) throw new CalendarError('invalid-argument','Keep the location under 300 characters.');
   let root = existing ? calendarDocument(existing) : new ICAL.Component(['vcalendar',[],[]]);
   const components = root.getAllSubcomponents('vevent');
   if (existing && (components.length !== 1 || components[0].hasProperty('rrule') || components[0].hasProperty('rdate') || hasScheduling(components[0]))) throw new CalendarError('failed-precondition','Edit recurring events and invitations in Apple Calendar.');
@@ -88,6 +89,8 @@ export function writeEvent(payload, existing, uid, now = new Date()) {
     }
   }
   event.uid = event.uid || uid; event.summary = payload.title.trim(); event.description = payload.notes;
+  // Only change the location when the editor sent one (a drag-to-move keeps it as is).
+  if (payload.location !== undefined) { if (payload.location.trim()) event.location = payload.location.trim(); else component.removeAllProperties('location'); }
   // Assignments now live in Hubert's backend. Keep any legacy extension fields
   // already present, but never add or change them in Apple Calendar.
   component.removeAllProperties('duration');

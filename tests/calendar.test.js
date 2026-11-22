@@ -91,3 +91,14 @@ test('moved recurrence exceptions replace the original occurrence without duplic
   assert.equal(records.length,3); assert.equal(records.filter(r => r.title === 'Moved').length,1);
   assert.ok(!records.some(r => r.start === '2026-11-16T14:00:00.000Z'));
 });
+test('Apple event locations are read, kept when not edited, and changed or cleared when edited', () => {
+  const [record] = readEvents({data:event,token,etag:'v1'},calendar,'2026-11-01','2026-12-01');
+  assert.equal(record.location, 'Favorite cafe');
+  const moved = new ICAL.Component(ICAL.parse(writeEvent(input,event,'unused'))).getFirstSubcomponent('vevent');
+  assert.equal(moved.getFirstPropertyValue('location'), 'Favorite cafe', 'no location sent (a drag) keeps it');
+  const changed = new ICAL.Component(ICAL.parse(writeEvent({...input,location:'Nags Head, NC'},event,'unused'))).getFirstSubcomponent('vevent');
+  assert.equal(changed.getFirstPropertyValue('location'), 'Nags Head, NC');
+  const cleared = new ICAL.Component(ICAL.parse(writeEvent({...input,location:''},event,'unused'))).getFirstSubcomponent('vevent');
+  assert.equal(cleared.hasProperty('location'), false);
+  assert.throws(() => writeEvent({...input,location:'x'.repeat(301)},event,'unused'), /under 300/);
+});

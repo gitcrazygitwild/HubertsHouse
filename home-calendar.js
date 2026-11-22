@@ -4,6 +4,7 @@ import { renderHTML } from './dom.js';
 import { holidaysInRange, holidaysEnabled } from './holidays.js';
 import { birthdaysInRange, birthdaysShown } from './birthdays-model.js';
 import { bathDaysInRange } from './bath-days.js';
+import { eventWeatherLine } from './place-weather.js';
 import { weatherIcon } from './weather-shared.js';
 
 // Each day's Richmond forecast (from weather.js), linked to Miateorology.
@@ -63,6 +64,7 @@ function eventCard(event, day, now) {
     <span class="home-event-time">${esc(eventTime(event, day))}${happening ? '<span class="home-event-now">Now</span>' : ''}</span>
     <strong>${esc(event.title)}</strong>
     <span class="home-event-meta"><span>${esc(label)}${props.withFrankie ? ' + Frankie' : ''}${props.isRepeatOccurrence ? ' · ↻' : ''}${props.icloud ? ' · iCloud' : ''}</span>${progressHTML}</span>
+    ${(() => { const line = eventWeatherLine(event, day); return line ? `<span class="home-event-weather">${esc(line)}</span>` : ''; })()}
   </button>`;
 }
 
