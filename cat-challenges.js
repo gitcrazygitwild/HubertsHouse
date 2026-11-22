@@ -1,13 +1,14 @@
 // The cats' other two Frankie challenges (the nap challenge lives in prediction-log.js).
 // - Morning wake-up: at bedtime, each cat calls when Frankie will wake up for the day.
 // - The Bottle Bet: at midnight, each cat guesses how many ounces she'll drink that day.
+// - Nap or night: each time she wakes, each cat calls whether her next sleep is a nap or the night.
 // - The Pump Pool: at midnight, each cat guesses how many ounces Karena will pump that day.
 // Every method is deterministic and uses only what was logged before the call, so past
 // nights and days are replayed honestly. If a method ever changes, freeze the old one
 // (as mia-v1.js does for naps) so past scores keep the guesses actually made.
 // No imports beyond the app's own pure modules, so the newsletter can share this file.
 import { nightLine, sleepKind, localDay, clockAt, dailyBottles, dailyPumps, dayStart } from './baby-history.js';
-import { ageInDays, halfLifeFor } from './baby-model.js';
+import { ageInDays, halfLifeFor, purrfectWindow, miaForecast } from './baby-model.js';
 
 const MINUTE = 60000, HOUR = 3600000, DAY = 86400000;
 const toStamp = value => typeof value === 'number' ? value : Date.parse(value);
@@ -28,6 +29,11 @@ export const CHALLENGES = {
     { key:'hubert', owner:'Hubert', name:'The Middle Day', how:'Takes the middle of her last seven days of ounces.' },
     { key:'mia', owner:'Mia', name:'Growth Spurt', how:'Weights the last few days most and adds the trend, because babies keep getting hungrier.' },
     { key:'mack', owner:'Mack', name:'Bottomless Bowl', how:'Picks her biggest day of the last three, because Mack assumes everyone is as hungry as he is.' }
+  ],
+  napnight:[
+    { key:'hubert', owner:'Hubert', name:'Evening Instinct', how:'Looks at wake-ups around this time of day: if most were followed by the night’s sleep, he calls night.' },
+    { key:'mia', owner:'Mia', name:'Nap Counter', how:'Calls night once Frankie has had her usual number of naps, or when another nap would run into her usual bedtime.' },
+    { key:'mack', owner:'Mack', name:'The Nap Plan', how:'Copies Huckleberry’s SweetSpot plan: once she’s had the plan’s naps for the day, the next sleep is the night, and he sticks with it.' }
   ],
   pump:[
     { key:'hubert', owner:'Hubert', name:'Same Time Last Week', how:'Takes the middle of Karena’s last seven pumping days, then leans toward the same weekday last week, because routines repeat.' },
@@ -185,4 +191,60 @@ export function scorePumps(pumps = [], timezone, now = Date.now(), { bottles = [
   }
   rows.reverse();
   const value = { results:rows, ...summarize(rows, CHALLENGES.pump, 2) }; pumpMemo = { key, value }; return value;
+}
+
+// ---------- Nap or night? ----------
+// Each cat's call at a wake-up ('nap' | 'night' | null), from what was logged by then.
+// Hubert and Mia use their nap models' own decision (a bedtime forecast means night).
+// Mack follows Huckleberry's SweetSpot nap plan (`plan` naps a day): once that many naps
+// are done, SweetSpot's next prediction is bedtime, and it stays that way.
+export function napNightPicks(sleeps, timezone, wake, { bottles = [], birthdate = null, plan = 4 } = {}) {
+  const known = sleeps.filter(s => toStamp(s.end) <= wake), at = new Date(wake + MINUTE);
+  const call = model => model?.available && (model.kind === 'bedtime' || model.kind === 'nap') ? (model.kind === 'bedtime' ? 'night' : 'nap') : null;
+  const line = nightLine(known, timezone, wake), day = localDay(wake, timezone);
+  const napsToday = known.filter(s => localDay(toStamp(s.start), timezone) === day && sleepKind(s, timezone, line) === 'nap').length;
+  const naps = Math.max(1, Math.round(Number(plan)) || 4);
+  return {
+    hubert:call(purrfectWindow({ sleeps:known, timezone }, at)),
+    mia:call(miaForecast({ sleeps:known, bottles:bottles.filter(b => toStamp(b.start) <= +at), birthdate, timezone }, at)),
+    mack:known.length ? (napsToday >= naps ? 'night' : 'nap') : null,
+    napsToday
+  };
+}
+// What her next sleep after `wake` turned out to be, or null if it isn't settled yet.
+// A running nap isn't settled until it reaches four hours or the evening line has passed.
+export function nextSleepKind(sleeps, timer, timezone, wake, now = Date.now(), line = nightLine(sleeps, timezone, now)) {
+  const next = sleeps.map(s => ({ start:toStamp(s.start), end:toStamp(s.end) })).filter(s => s.start > wake && s.start - wake <= 8 * HOUR).sort((a, b) => a.start - b.start)[0];
+  const running = timer?.active && toStamp(timer.start) > wake && toStamp(timer.start) - wake <= 8 * HOUR ? toStamp(timer.start) : null;
+  if (next && (!running || next.start <= running)) return { kind:sleepKind(next, timezone, line), start:next.start };
+  if (!running) return null;
+  const kind = sleepKind({ start:running, end:running + MINUTE }, timezone, line);
+  if (kind === 'night' || +now - running >= 4 * HOUR) return { kind:'night', start:running };
+  return null;
+}
+// Wake-ups worth a call: the end of a nap, or the end of the night (4 AM to noon).
+function callWakes(sleeps, timezone, from, now, line) {
+  return sleeps.map(s => ({ start:toStamp(s.start), end:toStamp(s.end) })).filter(s => s.end >= from && s.end <= +now)
+    .filter(s => sleepKind(s, timezone, line) === 'nap' || (clockAt(s.end, timezone) >= 4 * 60 && clockAt(s.end, timezone) < 12 * 60))
+    .map(s => s.end).filter((end, i, all) => all.indexOf(end) === i).sort((a, b) => a - b);
+}
+let napNightMemo = { key:null, value:null };
+export function scoreNapNight(sleeps, timezone, now = Date.now(), { bottles = [], birthdate = null, plan = 4, timer = null, days = 30 } = {}) {
+  const key = JSON.stringify([timezone, birthdate, plan, days, sleeps.length, sleeps.at(-1)?.end, sleeps[0]?.start, bottles.length, bottles.at(-1)?.start, timer?.active ? timer.start : null, Math.floor(+now / (15 * MINUTE))]);
+  if (napNightMemo.key === key) return napNightMemo.value;
+  const line = nightLine(sleeps, timezone, now), rows = [];
+  for (const wake of callWakes(sleeps, timezone, +now - days * DAY, now, line)) {
+    const actual = nextSleepKind(sleeps, timer, timezone, wake, now, line);
+    if (!actual) continue;
+    const picks = napNightPicks(sleeps, timezone, wake, { bottles, birthdate, plan });
+    if (!picks.hubert || !picks.mia || !picks.mack) continue;
+    const right = Object.fromEntries(['hubert', 'mia', 'mack'].map(cat => [cat, picks[cat] === actual.kind]));
+    rows.push({ wake:new Date(wake).toISOString(), actual:actual.kind, asleep:new Date(actual.start).toISOString(), picks:{ hubert:picks.hubert, mia:picks.mia, mack:picks.mack }, right });
+  }
+  rows.reverse();
+  const n = rows.length, nights = rows.filter(r => r.actual === 'night'), naps = rows.filter(r => r.actual === 'nap');
+  const summary = CHALLENGES.napnight.map(model => ({ ...model, n, hitRate:n ? Math.round(100 * rows.filter(r => r.right[model.key]).length / n) : null,
+    nightsRight:nights.filter(r => r.right[model.key]).length, nights:nights.length, napsRight:naps.filter(r => r.right[model.key]).length, naps:naps.length }));
+  const leader = n >= 3 ? [...summary].sort((a, b) => b.hitRate - a.hitRate || b.nightsRight - a.nightsRight)[0].key : null;
+  const value = { results:rows, summary, leader, scored:n }; napNightMemo = { key, value }; return value;
 }

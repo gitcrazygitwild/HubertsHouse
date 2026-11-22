@@ -35,3 +35,29 @@ test('10 hours after her last logged wake-up, Hubert and Mia still guess', async
   assert.equal(purrfectWindow({ sleeps:iso, timezone:zone }, now).available, true);
   assert.equal(miaForecast({ sleeps:iso, timezone:zone }, now).available, true);
 });
+
+test('the Frankie page strip scrolls sideways and keeps every earlier guess, noting a cat with no call', async () => {
+  const { guessRounds } = await import('../prediction-log.js');
+  const sleeps = [{ start:iso(now - 20 * H), end:iso(now - 8 * H) }, { start:iso(now - 5 * H), end:iso(now - 4 * H) }];
+  const rounds = [{ wake:iso(now - 8 * H), actual:iso(now - 5 * H), hubert:{ start:iso(now - 5.3 * H), end:iso(now - 5 * H), target:iso(now - 5.15 * H), label:'nap' }, mia:null, mack:{ target:iso(now - 4.9 * H), label:'SweetSpot' } }];
+  const picks = [{ key:'mia', cat:'Mia', start:iso(now + 0.9 * H), end:iso(now + 1.1 * H), target:iso(now + H), label:'nap' }];
+  const svg = dayStripSVG({ sleeps, picks, rounds, timezone:zone, now, width:320, scroll:true });
+  const width = Number(svg.match(/ width="(\d+)"/)[1]);
+  assert.ok(width >= 18 * 64, `about 64px an hour (${width}px), wider than a phone`);
+  assert.match(svg, /data-now-x="\d+"/);
+  assert.ok(!svg.includes('class="strip-cat"') && !svg.includes('class="strip-key"'), 'names and key live outside the scrolling part');
+  assert.equal((svg.match(/strip-dot hubert past/g) || []).length, 1); assert.equal((svg.match(/strip-dot mack past/g) || []).length, 1);
+  assert.match(svg, />no call</, 'Mia had no call for the earlier nap');
+  assert.match(svg, />no call yet</, 'Hubert and Mack have nothing for the next sleep yet');
+  assert.equal((svg.match(/class="strip-actual"/g) || []).length, 1);
+  assert.ok(svg.includes('>10am<') && svg.includes('>11am<'), 'every hour is marked');
+  // Rounds come from the logs: today's wake-ups, with Mack only where a SweetSpot was saved.
+  const day = Date.parse('2026-11-19T05:00:00Z'), log = [];
+  // Each day (Richmond time): night 7 PM → 6:30 AM, naps 9–10 and 12:30–1:30. It's 3 PM now.
+  for (let d = 6; d >= 0; d--) { const base = day - d * 86400000; log.push({ start:iso(base - 5 * H), end:iso(base + 6.5 * H) }, { start:iso(base + 9 * H), end:iso(base + 10 * H) }, { start:iso(base + 12.5 * H), end:iso(base + 13.5 * H) }); }
+  const at = day + 15 * H, wake = log.at(-2).end;
+  const list = guessRounds([{ id:`w${Date.parse(wake)}`, lastWake:wake, sweetspot:{ target:iso(Date.parse(wake) + 2 * H) } }], log, null, zone, at);
+  assert.deepEqual(list.map(r => r.actual), [log.at(-2).start, log.at(-1).start], 'the morning wake-up and the first nap, each followed by a sleep');
+  assert.equal(list[0].mack, null); assert.equal(list[1].mack.target, iso(Date.parse(wake) + 2 * H));
+  assert.ok(list[1].hubert && list[1].mia, 'a week of naps is enough for Hubert and Mia');
+});
