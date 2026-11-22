@@ -445,6 +445,21 @@ export function bottleForecast(bottles = [], { timezone = 'America/New_York', no
 // The cats' pick for Today's top line: the average of Hubert's, Mia's and Mack's next
 // sleep (nap or bedtime). A cat calling a different event (more than 90 minutes from the
 // middle pick) is left out, so a nap guess isn't averaged with a bedtime guess.
+// The middle-of-the-pack average of several calls for the same moment: any call more than
+// 90 minutes from the middle one is about a different event and is left out.
+export function averageCalls(calls = []) {
+  const picks = calls.filter(c => c && Number.isFinite(stamp(c.at))).map(c => ({ ...c, at:stamp(c.at) }));
+  if (!picks.length) return null;
+  const sorted = [...picks].sort((a, b) => a.at - b.at), middle = sorted[Math.floor((sorted.length - 1) / 2)].at;
+  const used = picks.filter(p => Math.abs(p.at - middle) <= 90 * MINUTE);
+  return { target:new Date(Math.round(used.reduce((s, p) => s + p.at, 0) / used.length)).toISOString(), used, left:picks.filter(p => !used.includes(p)) };
+}
+// Asleep: the next bottle can't come before she wakes. `wake` is the cats' averaged wake-up call.
+export function sleepAwareBottle(forecast, wake) {
+  const at = stamp(wake?.target ?? wake);
+  if (!forecast?.available || !Number.isFinite(at) || at <= stamp(forecast.target)) return forecast;
+  return { ...forecast, target:new Date(at).toISOString(), start:new Date(at).toISOString(), end:new Date(at + 30 * MINUTE).toISOString(), waitingForWake:true, wakeCats:(wake.used || []).map(p => p.cat).filter(Boolean), phase:'upcoming' };
+}
 export function catsConsensus({ purr, mia, huck } = {}) {
   const picks = [
     purr?.available && Number.isFinite(stamp(purr.target)) ? { cat:'Hubert', at:stamp(purr.target), kind:purr.kind } : null,

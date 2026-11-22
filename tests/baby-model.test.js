@@ -50,3 +50,16 @@ test('Today’s top line averages the three cats, leaving out a cat calling a di
   assert.deepEqual(catsConsensus({ mia:{ available:true, target:at('15:00'), kind:'nap' }, huck:{ available:true, expired:true, time:at('14:00') } }).picks.map(p => p.cat), ['Mia']);
   assert.equal(catsConsensus({}), null);
 });
+
+test('asleep: the next bottle waits for the cats’ averaged wake-up call', async () => {
+  const { averageCalls, sleepAwareBottle } = await import('../baby-model.js');
+  const at = hm => `2026-11-23T${hm}:00.000Z`;
+  // Hubert expects a 4:40 wake-up, Mia and Mack the morning around 7:30: Hubert is the odd one out.
+  const wake = averageCalls([{ cat:'Hubert', at:at('04:40') }, { cat:'Mia', at:at('07:50') }, { cat:'Mack', at:at('07:10') }]);
+  assert.equal(wake.target, at('07:30')); assert.deepEqual(wake.left.map(p => p.cat), ['Hubert']);
+  const forecast = { available:true, target:at('02:00'), start:at('01:30'), end:at('02:30'), typicalMinutes:180, phase:'upcoming' };
+  const next = sleepAwareBottle(forecast, wake);
+  assert.equal(next.target, at('07:30')); assert.equal(next.waitingForWake, true); assert.deepEqual(next.wakeCats, ['Mia', 'Mack']);
+  assert.equal(sleepAwareBottle(forecast, { target:at('01:00') }), forecast, 'waking before the usual gap changes nothing');
+  assert.equal(sleepAwareBottle(forecast, null), forecast);
+});

@@ -2,7 +2,7 @@ import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/
 import { config } from './config.js';
 import { escapeHTML as esc } from './household-model.js';
 import { showNotice, showView } from './household.js';
-import { purrfectWindow, huckleberryPrediction, miaForecast, bottleForecast, ageLabel } from './baby-model.js';
+import { purrfectWindow, huckleberryPrediction, miaForecast, bottleForecast, ageLabel, averageCalls, sleepAwareBottle } from './baby-model.js';
 import { currentBedtime, morningPicks, MACK_EXCUSE } from './cat-challenges.js';
 import { sweetspotEntry, sweetspotPatch, previousSweetspot, scorePredictions, recoveredEntry, guessRounds } from './prediction-log.js';
 import { sampleHistory, samplePredictions } from './baby-sample.js';
@@ -14,7 +14,7 @@ import { hatGuess, hatSeed } from './mack-hat.js';
 
 const $ = id => document.getElementById(id);
 let service, demo = false, connection = {connected:false}, snapshot = null, error = '', busy = false, inFlight, lastAttempt = 0, pendingTimer;
-let formChild, formVersion, formId, formEdit = null, predictionStore = null, predictions = [], lastLogged = '';
+let formChild, formVersion, formId, formEdit = null, predictionStore = null, predictions = [], lastLogged = '', wakeCall = null;
 // Frankie page → Recent logs. Loaded only while that card is open.
 const logs = {entries:null, filter:'all', showAll:false, loading:false, error:''};
 let sampleLogs = null;
@@ -92,8 +92,7 @@ function drawHome() {
   }
   const huck = huckleberryPrediction(snapshot), own = purrfectWindow({sleeps:snapshot.sleeps,timer:snapshot.timer,timezone:zone(),complete:snapshot.historyComplete});
   const mia = miaForecast({sleeps:snapshot.sleeps,bottles:snapshot.bottles || [],birthdate:snapshot.birthdate,timer:snapshot.timer,timezone:zone(),complete:snapshot.historyComplete});
-  const nextBottle = bottleForecast(snapshot.bottles || [], {timezone:zone()});
-  logPredictions(huck); glance(huck, own, mia, nextBottle);
+  logPredictions(huck);
   const score = scorePredictions(predictions, snapshot.sleeps, snapshot.timer, zone(), { bottles:snapshot.bottles || [], birthdate:snapshot.birthdate }), leader = score.summary.find(model => model.key === score.leader);
   const hmText = minutes => `${Math.floor(minutes / 60)}h ${minutes % 60}m`, signed = minutes => `${minutes > 0 ? '+' : '−'}${Math.abs(minutes)}m`;
   // Asleep for the night: the three cats' morning wake-up calls.
@@ -103,6 +102,14 @@ function drawHome() {
   // Asleep for the night: each cat's morning wake-up call (Challenge 3) goes in its own card.
   const morningCall = (p, extra = '') => p ? `<p class="morning-call">☀ Morning call: <strong>${esc(time(p.target))}</strong>${extra}</p>` : '';
   const miaShown = mia.available ? mia : morning?.mia ? { available:true, kind:'morning', ...morning.mia, confidence:'Sunrise Forecast' } : mia;
+  // Asleep: the next bottle waits for her to wake, at the cats' averaged wake-up call
+  // (Hubert's next wake-up, Mia's and Mack's morning calls overnight; Mia's nap wake-up).
+  wakeCall = snapshot.timer?.active ? safely('Wake-up call', () => averageCalls([
+    own.available && own.kind === 'wake' ? { cat:'Hubert', at:own.target } : morning?.hubert ? { cat:'Hubert', at:morning.hubert.target } : null,
+    miaShown.available && ['wake', 'morning'].includes(miaShown.kind) ? { cat:'Mia', at:miaShown.target } : null,
+    morning?.mack ? { cat:'Mack', at:morning.mack.target } : null])) : null;
+  const nextBottle = sleepAwareBottle(bottleForecast(snapshot.bottles || [], {timezone:zone()}), wakeCall);
+  glance(huck, own, mia, nextBottle);
   const miaWhy = !miaShown.available ? '' : miaShown.kind === 'morning' ? `blending how long her nights usually last with her usual wake-up time (${miaShown.clockShare}% on the clock)`
     : miaShown.kind === 'wake' ? `nap ${mia.napNumber} usually lasts ${hmText(mia.typicalMinutes)}; asleep since ${time(mia.sleepStart)}`
     : mia.kind === 'bedtime'
@@ -152,7 +159,7 @@ function drawHome() {
 }
 function frankie() {
   // A chart problem must never break Huckleberry refreshes or look like a login error.
-  try { renderFrankie({snapshot,timezone:zone(),predictions,demo,connected:connection.connected}); } catch (e) { console.error('Frankie page could not render', e); }
+  try { renderFrankie({snapshot,timezone:zone(),predictions,demo,connected:connection.connected,wakeAt:snapshot?.timer?.active ? wakeCall?.target : null}); } catch (e) { console.error('Frankie page could not render', e); }
 }
 // Shares a small live summary with the Now & Next strip.
 function glance(huck, own, mia, nextBottle = null) {
@@ -302,13 +309,13 @@ function nightPanel() {
 function renderNight() {
   const panel = $('nightMode'); if (!panel || panel.hidden || !snapshot) return;
   const timer = snapshot.timer, lastBottle = snapshot.bottles?.at(-1) || (snapshot.lastBottle?.time ? { start:snapshot.lastBottle.time, amount:snapshot.lastBottle.amount, units:snapshot.lastBottle.units, type:snapshot.lastBottle.type } : null);
-  const next = bottleForecast(snapshot.bottles || [], { timezone:zone() }), wake = snapshot.sleeps.at(-1)?.end;
+  const next = sleepAwareBottle(bottleForecast(snapshot.bottles || [], { timezone:zone() }), timer?.active ? wakeCall : null), wake = snapshot.sleeps.at(-1)?.end;
   const clock = new Date().toLocaleTimeString([], { hour:'numeric', minute:'2-digit', timeZone:zone() });
   renderHTML(panel, `<button type="button" class="night-close" data-night="close">Done</button>
     <div class="night-clock" aria-live="off">${esc(clock)}</div>
     <div class="night-stats">
       <div><span>Last bottle</span><strong>${lastBottle ? `${esc(ago(lastBottle.start))} ago` : '—'}</strong><small>${lastBottle ? `${esc(lastBottle.amount ?? '')} ${esc(lastBottle.units || '')} ${esc((lastBottle.type || '').toLowerCase())} · ${esc(time(lastBottle.start))}` : 'No bottle logged'}</small></div>
-      <div><span>Next bottle</span><strong>${next.available ? `~${esc(time(next.target))}` : '—'}</strong><small>${next.available ? `usually every ${Math.floor(next.typicalMinutes / 60)}h ${next.typicalMinutes % 60}m${next.phase === 'overdue' ? ' · any time now' : ''}` : esc(next.reason)}</small></div>
+      <div><span>Next bottle</span><strong>${next.available ? `~${esc(time(next.target))}` : '—'}</strong><small>${next.available ? next.waitingForWake ? 'when she wakes, by the cats’ average call' : `usually every ${Math.floor(next.typicalMinutes / 60)}h ${next.typicalMinutes % 60}m${next.phase === 'overdue' ? ' · any time now' : ''}` : esc(next.reason)}</small></div>
       <div><span>${timer?.active ? 'Asleep' : 'Awake'}</span><strong>${timer?.active ? esc(ago(timer.start)) : wake ? esc(ago(wake)) : '—'}</strong><small>${timer?.active ? `since ${esc(time(timer.start))}` : wake ? `since ${esc(time(wake))}` : ''}</small></div>
     </div>
     <div class="night-actions">

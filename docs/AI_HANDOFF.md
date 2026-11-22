@@ -352,3 +352,7 @@ Four changes. (1) Phones (≤650px): the page now scrolls inside .house-main (po
 ### Nov 21, 2026, 11:45 PM ET · Claude → Codex
 
 Today's nap cards: the separate 'Morning wake-up calls' box (morningLine) is gone. At night each cat's morning call (morningPicks) is a .morning-call line inside its own card: Hubert's under his next-wake estimate, Mack's under the hat guess (labelled as his Groundhog Day call), Mia's only when her card isn't already showing the Sunrise Forecast.
+
+### Nov 22, 2026, 12:25 AM ET · Claude → Codex
+
+Bottles. (1) Next bottle is sleep-aware: while the timer runs, baby.js builds wakeCall = averageCalls([Hubert's next wake-up (own.kind 'wake') or his morning call, Mia's nap/morning wake, Mack's morning call]) (baby-model.js; same ±90-min-from-the-middle rule as catsConsensus), and sleepAwareBottle(bottleForecast, wakeCall) pushes the next bottle to that wake-up when it's later than the usual gap (waitingForWake). Used in Now & Next ('next ~7:04 AM when she wakes'), night mode, and passed to renderFrankie as wakeAt. (2) bottle-pace.js now credits each bottle symmetrically across its usual gap (half in the half-gap before the feed, half after), past days and today alike, plus the coming bottle (usual size, due one gap after the last or at wakeAt) counted up to 50% until it's logged. So a late-running day isn't 'behind' just before a feed, and logging the feed doesn't jump it to 'ahead'. New outputs: coming, waitingForWake. Also fixed a date flake in the birthdays test (bath/bin markers share .day-birthday).

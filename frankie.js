@@ -99,12 +99,18 @@ export function paceHTML(pace, timezone) {
   const hm = m => m >= 60 ? `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ''}` : `${m}m`;
   const word = { 'on-track':'On track', ahead:'Ahead of pace', behind:'Behind pace' }[pace.status];
   const detail = pace.status === 'on-track' ? `about where she usually is by ${clock(Date.now(), timezone)}` : `${oz(Math.abs(pace.diff))} ${pace.status === 'ahead' ? 'more' : 'less'} than usual by ${clock(Date.now(), timezone)}`;
-  const settling = pace.lastBottle?.settling > 0.05 ? `Her ${oz(pace.lastBottle.oz)} bottle at ${clock(Date.parse(pace.lastBottle.at), timezone)} is still being counted in, a little at a time over her usual ${hm(pace.gapMinutes)} between bottles, so it doesn’t look like she’s ahead just because she ate.` : '';
+  // Each bottle counts gradually across the time around it, so feeding times don't swing the verdict.
+  const notes = [
+    pace.lastBottle?.settling > 0.05 ? `Her ${oz(pace.lastBottle.oz)} bottle at ${clock(Date.parse(pace.lastBottle.at), timezone)} is still being counted in, so she doesn’t look ahead just because she ate.` : '',
+    pace.coming ? `Her next bottle (about ${oz(pace.coming.oz)}${pace.nextDue ? ` around ${clock(Date.parse(pace.nextDue), timezone)}` : ''}) is close, so part of it already counts: she isn’t behind just because it hasn’t happened yet.` : '',
+    pace.waitingForWake ? 'She’s asleep, so the next bottle is expected when she wakes (the cats’ average wake-up call).' : ''
+  ].filter(Boolean);
+  const settling = notes.length ? `${notes.join(' ')} Each bottle counts a little at a time over the ${hm(pace.gapMinutes)} around it, and her usual days are scored the same way.` : '';
   const due = pace.nextDue ? Date.parse(pace.nextDue) : null;
   return `<div class="pace pace-${pace.status}"><div class="pace-head"><strong class="pace-word">${word}</strong><span>${esc(detail)}</span></div>
     <div class="pace-bar" role="img" aria-label="${esc(`${oz(pace.drank)} of a ${oz(pace.target)} day; usually ${oz(pace.expected)} by now`)}"><i class="pace-counted" style="width:${pct(pace.counted)}"></i><i class="pace-settling" style="width:${pct(Math.max(0, pace.drank - pace.counted))}"></i><b class="pace-mark" style="left:${pct(pace.expected)}" title="Where she usually is by now"></b></div>
     <div class="pace-legend"><span><b>${oz(pace.drank)}</b> so far · ${pace.count} bottle${pace.count === 1 ? '' : 's'}</span><span>usually <b>${oz(pace.expected)}</b> by now</span><span>target <b>${oz(pace.target)}</b></span></div>
-    <div class="frankie-status pace-tiles"><div class="frankie-tile"><span>Still to go</span><strong>${oz(pace.remaining)}</strong><small>to reach her ${pace.days}-day average</small></div><div class="frankie-tile"><span>On course for</span><strong>${oz(pace.projected)}</strong><small>if the day keeps this pace</small></div><div class="frankie-tile"><span>Next bottle</span><strong>${due ? esc(due < Date.now() ? 'Any time' : clock(due, timezone)) : '—'}</strong><small>every ~${esc(hm(pace.gapMinutes))} lately</small></div></div>
+    <div class="frankie-status pace-tiles"><div class="frankie-tile"><span>Still to go</span><strong>${oz(pace.remaining)}</strong><small>to reach her ${pace.days}-day average</small></div><div class="frankie-tile"><span>On course for</span><strong>${oz(pace.projected)}</strong><small>if the day keeps this pace</small></div><div class="frankie-tile"><span>Next bottle</span><strong>${due ? esc(due < Date.now() ? 'Any time' : clock(due, timezone)) : '—'}</strong><small>${pace.waitingForWake ? 'when she wakes' : `every ~${esc(hm(pace.gapMinutes))} lately`}</small></div></div>
     ${settling ? `<p class="tiny muted">${esc(settling)}</p>` : ''}</div>`;
 }
 // Today at a glance: total, the left/right split, and today's sessions.
@@ -237,7 +243,7 @@ export function callsSlides({ sleeps, bottles, pumps, timer, timezone, now, birt
   const pumpHTML = pumps.length ? callRows('pump', key => pp[key] != null ? `${pp[key]} oz` : null, pumpScore, `Pumped so far today: <strong>${esc(oz(todayPump))}</strong>.`) + seeAll('frankiePumpPool') : '<p class="tiny muted">Log Karena’s pumps (＋ Pump on Today, or tell Siri) and the cats start guessing her daily ounces.</p>';
   return { napNightHTML, morningHTML, bottleHTML, pumpHTML };
 }
-export function renderFrankie({ snapshot, timezone, predictions = [], demo = false, connected = false }) {
+export function renderFrankie({ snapshot, timezone, predictions = [], demo = false, connected = false, wakeAt = null }) {
   shared = snapshot ? { snapshot, timezone, demo } : null;
   const share = $('frankieShare'); if (share) share.disabled = !snapshot;
   const root = $('frankieContent'); if (!root) return;
@@ -277,7 +283,7 @@ export function renderFrankie({ snapshot, timezone, predictions = [], demo = fal
   if ($('frankieBottleBet')) renderHTML($('frankieBottleBet'), challengeHTML('bottle', scoreBottles(bottles, timezone, now, { birthdate:snapshot.birthdate }), timezone, bottlePicks(bottles, timezone, localDay(now, timezone), { birthdate:snapshot.birthdate })));
   const width = id => Math.max(280, Math.round($(id).clientWidth || 720));
   // Bottle pace for today.
-  if ($('frankiePace')) { $('frankiePaceCard').hidden = false; renderHTML($('frankiePace'), paceHTML(bottlePace(bottles, timezone, now), timezone)); }
+  if ($('frankiePace')) { $('frankiePaceCard').hidden = false; renderHTML($('frankiePace'), paceHTML(bottlePace(bottles, timezone, now, { wakeAt }), timezone)); }
   // Karena's pumps: the card always shows (with a how-to when empty); the challenge and chart once there's data.
   const pumps = snapshot.pumps || [];
   if ($('frankiePumps')) renderHTML($('frankiePumps'), pumpsHTML(pumps, timezone, now));
