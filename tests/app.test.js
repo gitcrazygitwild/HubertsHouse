@@ -51,7 +51,7 @@ async function fixture(options = {}) {
   await module('calendar-view.js',['initCalendarExperience','calendarEventContent'],'const esc=escapeHTML;');
   await module('weather-shared.js',['richmondDay','forecastCondition','weatherIcon']);
   await module('birthdays-model.js',['birthdayList','setBirthdayList','birthdaysShown','birthdayTitle','birthdaysInRange','birthdayEvents','upcomingBirthdays']);
-  await module('place-weather.js',['looksLocal','distanceKm','placeQueries','describeCode','createPlaceWeather','placeWeatherText','usePlaceWeather','eventWeatherLine','sampleWeatherFetch','placeSuggestions','searchPlaces','whereBoxText']);
+  await module('place-weather.js',['looksLocal','distanceKm','placeQueries','describeCode','createPlaceWeather','placeWeatherText','usePlaceWeather','eventWeatherLine','sampleWeatherFetch','placeSuggestions','searchPlaces','whereBoxText','shortPlace']);
   await module('place-suggest.js',['pastMatches','townQuery','initPlaceSuggest'],'const esc=escapeHTML;');
   await module('home-calendar.js',['initHomeCalendar','homeCalendarWeek','dayWeather','WEATHER_URL'],'const esc=escapeHTML;');
   await module('weather.js',['initWeather'],'const esc=escapeHTML;');

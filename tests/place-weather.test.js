@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { looksLocal, placeQueries, distanceKm, describeCode, createPlaceWeather, placeWeatherText } from '../place-weather.js';
+import { looksLocal, placeQueries, distanceKm, describeCode, createPlaceWeather, placeWeatherText, shortPlace } from '../place-weather.js';
 
 test('Richmond-area places need no lookup; other states and towns do', () => {
   for (const here of ['Carytown', 'Short Pump Town Center', '3535 Ellwood Ave, Richmond, VA 23221', 'Glen Allen', 'Maymont', '2401 W Main St 23220']) assert.equal(looksLocal(here), true, here);
@@ -44,7 +44,7 @@ test('a faraway event gets that town’s forecast for its day, cached on the dev
   await weather.whenSettled();
   const result = weather.lookup('123 Main St, Charlottesville, VA', '2026-11-23');
   assert.equal(result.status, 'ready'); assert.equal(result.place.name, 'Charlottesville, Virginia', 'the Virginia one, not Ohio');
-  assert.equal(placeWeatherText(result), '🌧️ 50°/44° in Charlottesville, Virginia · 80% rain · rain');
+  assert.equal(placeWeatherText(result), '🌧️ 50°/44° in Charlottesville, VA · 80% rain · rain', 'states shown short');
   assert.equal(updates, 1); assert.equal(api.calls.length, 2);
   // A fresh page reuses the saved place and forecast: no new calls.
   const again = createPlaceWeather({ fetch:api.fetch, storage, now:() => NOW + 3600000 });
@@ -87,4 +87,11 @@ test('Where suggestions: places used before, then towns (U.S. first), never a st
   assert.deepEqual(pastMatches(known, 'seav').map(p => p.label), ['The Shelburne Inn, Seaview, WA'], 'a later word can match');
   assert.equal(pastMatches(known, '').length, 3, 'empty box: the most recent places');
   assert.equal(townQuery('Charlottesville, VA'), 'Charlottesville'); assert.equal(townQuery('101 W Franklin St'), ''); assert.equal(townQuery('N'), '');
+});
+
+test('place names are shown short: two-letter states, and DC without the repeat', () => {
+  assert.equal(shortPlace('Washington D.C., District of Columbia'), 'Washington, DC');
+  assert.equal(shortPlace('Nags Head, North Carolina'), 'Nags Head, NC');
+  assert.equal(shortPlace('Paris, France'), 'Paris, France');
+  assert.equal(shortPlace('Nags Head'), 'Nags Head');
 });
