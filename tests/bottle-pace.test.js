@@ -22,9 +22,8 @@ test('right after a normal bottle she is on track, not ahead', () => {
   const pace = bottlePace(sameAsUsual, zone, today + 11 * H + 5 * M);
   assert.equal(pace.status, 'on-track', JSON.stringify(pace));
   assert.equal(pace.drank, 16); assert.ok(pace.counted < pace.drank, 'the newest bottle is still being counted in');
-  assert.ok(pace.lastBottle.settling > 3.5, 'almost all of that bottle is still settling');
-  // Counting that bottle all at once would have called this "ahead": 16 oz against the usual 12.1 by now.
-  assert.equal(pace.expected, 12.1); assert.ok(pace.drank - pace.expected > Math.max(1, 32 * 0.08));
+  assert.ok(pace.lastBottle.settling > 1.5 && pace.lastBottle.settling < 2.5, 'about half of that bottle is still to be counted');
+  assert.ok(Math.abs(pace.diff) < 0.3, `an ordinary day sits right on pace (${pace.diff})`);
 });
 
 test('skipped or extra bottles show as behind or ahead, with a projection', () => {
@@ -44,4 +43,22 @@ test('the next bottle is due one usual gap after the last one', () => {
   // ml bottles count in ounces.
   const ml = bottlePace([...history, { start:at(0, 2), amount:120, units:'ml' }], zone, today + 9 * H);
   assert.ok(Math.abs(ml.drank - 4.1) < 0.1);
+});
+
+test('five minutes before a bottle she isn’t “behind”, and the bottle doesn’t flip her to “ahead”', () => {
+  // A day running 40 minutes late: the 11 AM bottle hasn't happened yet at 11:35.
+  const late = [...history, ...usual(0).filter(b => Date.parse(b.start) <= today + 8 * H).map(b => ({ ...b, start:new Date(Date.parse(b.start) + 40 * M).toISOString() }))];
+  const before = bottlePace(late, zone, today + 11 * H + 35 * M);
+  assert.equal(before.status, 'on-track', JSON.stringify(before)); assert.ok(before.coming && before.coming.counted > 0, 'the coming bottle already counts a little');
+  const after = bottlePace([...late, { start:new Date(today + 11 * H + 40 * M).toISOString(), amount:4, units:'oz' }], zone, today + 11 * H + 45 * M);
+  assert.equal(after.status, 'on-track', JSON.stringify(after)); assert.ok(Math.abs(after.counted - before.counted) < 1.5, 'no jump when the bottle is logged');
+});
+
+test('asleep: the next bottle waits for her to wake up', () => {
+  const sofar = [...history, ...usual(0).filter(b => Date.parse(b.start) <= today + 20 * H)];
+  const wakeAt = new Date(today + 30.5 * H).toISOString(); // 6:30 AM tomorrow
+  const pace = bottlePace(sofar, zone, today + 21 * H, { wakeAt });
+  assert.equal(pace.nextDue, wakeAt); assert.equal(pace.waitingForWake, true);
+  const awake = bottlePace(sofar, zone, today + 21 * H, { wakeAt:new Date(today + 21.5 * H).toISOString() });
+  assert.equal(awake.nextDue, new Date(today + 23 * H).toISOString(), 'waking before the usual gap changes nothing'); assert.equal(awake.waitingForWake, false);
 });

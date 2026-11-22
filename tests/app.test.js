@@ -37,7 +37,7 @@ async function fixture(options = {}) {
   await module('cloud-calendar.js',['initCloudCalendar','setCloudRange','refreshCloud','saveCloudEvent','saveCloudAssignment','deleteCloudEvent'],'const esc=escapeHTML;');
   await module('baby-history.js',['toOunces','localDay','dayStart','dayKeys','sleepKind','dayStory','dayStoryText','nightLine','clockAt','DEFAULT_NIGHT_LINE','dailySleep','dailyBottles', 'dailyPumps','timelineRows','babySummary']);
   await module('day-strip.js',['stripRange','dayStripSVG','STRIP_LANES','CATS'],'const esc=escapeHTML;');
-  await module('baby-model.js',['purrfectWindow','huckleberryPrediction','miaForecast','indexedWakeWindows','bottleForecast','correlation','ageInDays','ageLabel','halfLifeFor','typicalWindow','bottleSleepLinks','catsConsensus']);
+  await module('baby-model.js',['purrfectWindow','huckleberryPrediction','miaForecast','indexedWakeWindows','bottleForecast','correlation','ageInDays','ageLabel','halfLifeFor','typicalWindow','bottleSleepLinks','catsConsensus','averageCalls','sleepAwareBottle']);
   await module('mia-v1.js',['miaForecastV1']);
   await module('cat-challenges.js',['CHALLENGES','MACK_EXCUSE','nightsFrom','currentBedtime','morningPicks','bottlePicks','scoreMornings','scoreBottles', 'scorePumps', 'pumpPicks','napNightPicks','nextSleepKind','scoreNapNight']);
   await module('prediction-log.js',['MODELS','predictionId','isDaytimeWake','sweetspotEntry','sweetspotPatch','previousSweetspot','actualSleepStart','replayGuesses','scorePredictions','MIA_V2_SINCE','miaVersionAt','recoveredEntry','guessRounds']);
@@ -477,7 +477,7 @@ test('birthdays from Contacts show on Today and in Settings, and the calendar sw
   assert.match(doc.getElementById('nowNext').textContent,/🎂Grandma June turns \d+today/);
   const brief=doc.querySelector('#briefInsights .has-birthday'); assert.match(brief.textContent,/2 birthdays this week/); assert.match(brief.textContent,/Grandma June turns \d+ today · Sam Rivera’s birthday \w+day/);
   doc.querySelector('[data-view="calendar"]').click(); await settle();
-  assert.match(doc.getElementById('selectedDayEvents').querySelector('.day-birthday').textContent,/Grandma June/);
+  assert.match(doc.getElementById('selectedDayEvents').querySelector('.day-birthday:not(.day-bath):not(.day-trash)').textContent,/Grandma June/); // bath and bin days share the style
   assert.equal(doc.getElementById('birthdayToggle').checked,true);
   const toggle=doc.getElementById('calendarBirthdays'); assert.equal(toggle.checked,true);
   toggle.checked=false; toggle.dispatchEvent(new w.Event('change'));
