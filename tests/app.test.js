@@ -27,6 +27,8 @@ async function fixture(options = {}) {
   await module('event-data.js',[]);
   await module('cat-mode.js',[]);
   await module('stores.js',[]);
+  await module('checklist-ui.js',[]);
+  await module('panels.js',[]);
   await module('time-dial.js',['initTimeDial','minutesAt','startFrom','endFrom']);
   await module('event-editor.js',['initEventDateEditor','eventRangeSummary']);
   await module('event-planning.js',['overlappingEvents','preferredCalendar']);
