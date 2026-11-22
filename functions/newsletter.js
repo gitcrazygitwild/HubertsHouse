@@ -12,6 +12,7 @@ import { weatherFlags } from './shared/smart-home.js';
 import { frankieAwards } from './shared/awards.js';
 import { isBathDay, cleanBathDays, DEFAULT_BATH_DAYS, BATH_TITLE } from './shared/bath-days.js';
 import { pickupOn } from './shared/trash-days.js';
+import { healthAlerts } from './shared/service-health-model.js';
 import { freeEvenings } from './shared/free-nights.js';
 import { upcomingBirthdays } from './shared/birthdays-model.js';
 import { scoreMornings, scoreBottles, bottlePicks, CHALLENGES } from './shared/cat-challenges.js';
@@ -76,7 +77,7 @@ function trashItem(day, saved, { eve = false } = {}) {
   const title = `${pickup.title}${eve ? ' (bins out tonight)' : ''}${pickup.moved ? ` · moved for ${pickup.moved.holiday}` : ''}`;
   return [{ title, start:new Date(day), end:new Date(+day + DAY), allDay:true, owner:'both', marker:true }]; // a reminder, not a plan
 }
-export function buildDigest({ name = '', now = new Date(), household = [], icloud = [], items = [], forecast = null, snapshot = null, predictions = [], recent = null, briefing = null, birthdays = [], prefs = {}, skipped = [], bathDays = null, trash = null }) {
+export function buildDigest({ name = '', now = new Date(), household = [], icloud = [], items = [], forecast = null, snapshot = null, predictions = [], recent = null, briefing = null, birthdays = [], prefs = {}, skipped = [], bathDays = null, trash = null, health = [] }) {
   const today = startOfDay(now), horizon = new Date(+today + 15 * DAY);
   const events = eventsInRange(household, icloud, today, horizon), tomorrow = new Date(+today + DAY);
   const week = Array.from({ length:7 }, (_, i) => { const day = new Date(+today + i * DAY); return { day, count:onDay(events, day).length }; });
@@ -93,6 +94,8 @@ export function buildDigest({ name = '', now = new Date(), household = [], iclou
     // Bath nights ride along as all-day items at the top of today's and tomorrow's plans.
     today:[...trashItem(today, trash), ...bathItem(today, bathDays), ...onDay(events, today)], tomorrow:[...trashItem(tomorrow, trash, { eve:true }), ...bathItem(tomorrow, bathDays), ...onDay(events, tomorrow)], week:{ plans:week.reduce((sum, d) => sum + d.count, 0), busiest:busiest?.count ? busiest : null },
     freeNights:freeEvenings(events, now, 14, 3).map(n => n.date), birthdays:upcomingBirthdays(now, 7, birthdays), chores, groceries, baby:null, skipped:[...new Set(skipped)].filter(key => SKIPPED_LABELS[key]),
+    // Something outside stopped working (Huckleberry, Publix): a quiet note near the top.
+    alerts:healthAlerts((health || []).filter(r => r?.service !== 'email'), now, { timezone:HOUSE_TZ }),
     world:briefing && (briefing.headlines?.length || briefing.markets?.length) ? { headlines:(briefing.headlines || []).slice(0, 6), goodNews:briefing.goodNews || null, markets:briefing.markets || [] } : null
   };
   if (snapshot?.sleeps) {
@@ -210,6 +213,7 @@ export function composeEmail(d) {
 <body style="margin:0;padding:0;background:${C.bg}"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:${C.bg}"><tr><td align="center" style="padding:24px 12px">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px">
 <tr><td style="padding:4px 4px 18px"><div style="font:700 10px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;letter-spacing:.09em;text-transform:uppercase;color:${C.pink}">Hubert’s House · ${esc(longDate(d.now))}</div><div style="font:400 30px/1.2 Georgia,'Times New Roman',serif;color:${C.ink};margin-top:6px">${greeting}.</div></td></tr>
+${d.alerts?.length ? `<tr><td style="padding:0 4px 14px"><div style="padding:10px 12px;border-radius:12px;background:#fbf1dc;font:13px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.ink}">⚠ ${d.alerts.map(a => esc(a.text)).join('<br>⚠ ')}</div></td></tr>` : ''}
 ${sections.join('\n')}
 ${d.skipped?.length ? `<tr><td style="padding:0 4px 10px;text-align:center;font:12px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.muted}">Left out or older this time because a service was slow to answer: ${esc(d.skipped.map(key => SKIPPED_LABELS[key]).join(', '))}.</td></tr>` : ''}
 <tr><td style="padding:8px 4px 0;text-align:center;font:12px/1.6 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.muted}"><a href="${APP_URL}" style="color:${C.accent};font-weight:600">Open Hubert’s House</a> · <a href="${APP_URL}/#settings" style="color:${C.muted}">Newsletter settings</a><br>Made for hanry, Karena, Frankie, Hubert, Mack & Mia.</td></tr>
@@ -222,6 +226,7 @@ ${d.skipped?.length ? `<tr><td style="padding:0 4px 10px;text-align:center;font:
     d.world?.goodNews ? `Good news: ${d.world.goodNews.title} ${d.world.goodNews.link}` : '',
     d.world?.markets.length ? `Markets: ${d.world.markets.map(marketLine).join(' · ')}` : '',
     d.birthdays?.soon.length ? `Birthdays this week: ${d.birthdays.soon.map(b => `${b.name}${b.age ? ` (${b.age})` : ''} ${shortDate(new Date(`${b.date}T12:00:00`))}`).join(' · ')}` : '',
+    d.alerts?.length ? d.alerts.map(a => `⚠ ${a.text}`).join('\n') : '',
     `Dad joke: ${c.joke.setup} — ${c.joke.punchline}`, d.skipped?.length ? `Left out or older this time (slow to answer): ${d.skipped.map(key => SKIPPED_LABELS[key]).join(', ')}.` : '', APP_URL].filter(Boolean).join('\n\n');
   return { subject, html, text };
 }

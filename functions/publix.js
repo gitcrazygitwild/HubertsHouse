@@ -65,13 +65,15 @@ export async function findStores(zip, { fetch = globalThis.fetch } = {}) {
 }
 
 // Cached per store in a server-only document; a failed refresh falls back to the last good copy.
-export function createPublix({ db, fetch = globalThis.fetch, now = () => new Date(), maxAge = MAX_AGE }) {
+export function createPublix({ db, fetch = globalThis.fetch, now = () => new Date(), maxAge = MAX_AGE, health = null }) {
+  // Only real trips to Publix report to service health; cached answers don't.
+  const tracked = run => health ? health.track('publix', run) : run();
   const pending = new Map();
   async function deals({ store, force = false } = {}) {
     const number = storeNumber(store), ref = db.doc(`privatePublixDeals/store-${number}`);
     const cached = (await ref.get()).data() || null;
     if (!force && cached && +now() - Date.parse(cached.fetchedAt) < maxAge) return cached;
-    if (!pending.has(number)) pending.set(number, fetchWeeklyBogos(number, { fetch, now:now() }).then(async fresh => { await ref.set(fresh); return fresh; }).finally(() => pending.delete(number)));
+    if (!pending.has(number)) pending.set(number, tracked(() => fetchWeeklyBogos(number, { fetch, now:now() })).then(async fresh => { await ref.set(fresh); return fresh; }).finally(() => pending.delete(number)));
     try { return await pending.get(number); }
     catch (error) { if (cached) return { ...cached, stale:true }; throw error instanceof PublixError ? error : new PublixError('unavailable', 'Publix’s weekly ad didn’t answer. Try again later.'); }
   }

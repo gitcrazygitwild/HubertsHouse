@@ -14,9 +14,11 @@ import { createSmartHome, SmartHomeError } from './smart-home.js';
 import { createLitterRobot, LitterRobotError } from './litter-robot.js';
 import { createPetLibro, PetLibroError } from './petlibro.js';
 import { createPublix, PublixError, DEFAULT_STORE } from './publix.js';
+import { createHealth } from './service-health.js';
 initializeApp();
 const db = getFirestore();
 const assignments = createAssignmentStore(db);
+const health = createHealth({ db }); // serviceHealth/{huckleberry|publix|email}
 const encryptionKey = defineSecret('CALENDAR_ENCRYPTION_KEY');
 const options = { region:'us-central1', secrets:[encryptionKey], timeoutSeconds:120, memory:'256MiB', cpu:'gcf_gen1', concurrency:1, minInstances:0, maxInstances:1, cors:true };
 const publicCalendars = calendars => calendars.map(({url,...calendar}) => calendar);
@@ -35,7 +37,7 @@ function endpoint(handler, extra = {}) {
     }
   });
 }
-export const huckleberry = endpoint(createHuckleberryHandler({db,key:() => encryptionKey.value()}));
+export const huckleberry = endpoint(createHuckleberryHandler({db,key:() => encryptionKey.value(),health}));
 const connectionRef = uid => db.doc(`privateCalendarConnections/${uid}`);
 // Your own Apple connection, or the one another member shares with the household.
 async function connection(uid) {
@@ -187,7 +189,7 @@ async function icloudEventsNow(uid, from, to) {
     return assignments.apply(grouped.flat());
   } catch { return []; } // Not connected or iCloud unavailable: household events still go out.
 }
-const huckleberryHandler = createHuckleberryHandler({ db, key:() => encryptionKey.value() });
+const huckleberryHandler = createHuckleberryHandler({ db, key:() => encryptionKey.value(), health });
 // ---------- "The world, briefly": headlines, markets and rates ----------
 import { createBriefingService } from './briefing.js';
 const briefingService = createBriefingService({ db });
@@ -217,7 +219,7 @@ async function newsletterFor(uid, shared, progress = () => {}) {
   const bdays = await withinTime(birthdaysFor(uid).catch(() => null), 15000);
   progress('writing the email');
   const skipped = [...shared.skipped, ...(icloud.late ? ['icloud'] : [])];
-  const digest = buildDigest({ name:prefs.name, now, household:shared.household, icloud:icloud.events, items:shared.items, forecast:shared.forecast, snapshot:shared.snapshot, predictions:shared.predictions, recent:shared.recent, briefing:shared.briefing, birthdays:bdays.value?.birthdays || [], prefs, skipped, bathDays:shared.bathDays, trash:shared.trash });
+  const digest = buildDigest({ name:prefs.name, now, household:shared.household, icloud:icloud.events, items:shared.items, forecast:shared.forecast, snapshot:shared.snapshot, predictions:shared.predictions, recent:shared.recent, briefing:shared.briefing, birthdays:bdays.value?.birthdays || [], prefs, skipped, bathDays:shared.bathDays, trash:shared.trash, health:shared.health });
   return { prefs, email:composeEmail(digest), skipped };
 }
 // Diapers aren't in the snapshot's history; the recent-logs list has them.
@@ -238,10 +240,10 @@ async function sharedNewsletterData(uids, progress = () => {}) {
     const recent = live.fresh ? await babyRecent(uids) : { entries:null }; // no fresh connection, no second wait
     return { ...live, recent };
   })();
-  const [events, items, forecast, babyData, predictions, world, settings] = await Promise.all([
+  const [events, items, forecast, babyData, predictions, world, settings, healthDocs] = await Promise.all([
     db.collection('events').get(), db.collection('householdItems').get(), timed('forecast', withinTime(forecastNow(), BUDGET.forecast)), timed('baby', baby),
     db.collection('babyPredictions').orderBy('lastWake', 'desc').limit(400).get(), timed('briefing', withinTime(briefingService(), BUDGET.briefing)),
-    db.doc('householdSettings/home').get().catch(() => null)
+    db.doc('householdSettings/home').get().catch(() => null), db.collection('serviceHealth').get().catch(() => null)
   ]);
   const skipped = [];
   if (forecast.late) skipped.push('forecast');
@@ -249,7 +251,7 @@ async function sharedNewsletterData(uids, progress = () => {}) {
   if (!babyData.fresh && (babyData.late || babyData.snapshot)) skipped.push('baby'); // slow, or answered with an error while a saved copy exists
   if (babyData.fresh && babyData.recent.late) skipped.push('diapers');
   info('Newsletter data gathered', { ms:took, skipped, babyFallback:!babyData.fresh && !!babyData.snapshot });
-  return { household:events.docs.map(d => d.data()), items:items.docs.map(d => d.data()), forecast:forecast.value, snapshot:babyData.snapshot, predictions:predictions.docs.map(d => ({ id:d.id, ...d.data() })), recent:babyData.recent.entries, briefing:world.value, bathDays:settings?.exists ? settings.data().bathDays ?? null : null, trash:settings?.exists ? settings.data().trash ?? null : null, skipped };
+  return { household:events.docs.map(d => d.data()), items:items.docs.map(d => d.data()), forecast:forecast.value, snapshot:babyData.snapshot, predictions:predictions.docs.map(d => ({ id:d.id, ...d.data() })), recent:babyData.recent.entries, briefing:world.value, bathDays:settings?.exists ? settings.data().bathDays ?? null : null, trash:settings?.exists ? settings.data().trash ?? null : null, health:healthDocs ? healthDocs.docs.map(d => d.data()) : [], skipped };
 }
 async function activeMembers() {
   return (await db.collection('households/home/members').where('active', '==', true).get()).docs.map(d => d.id);
@@ -308,7 +310,8 @@ export const morningNewsletter = onSchedule({ schedule:'30 6 * * *', timeZone:HO
       if (!prefs.enabled) { await log.set({ skipped:'disabled' }, { merge:true }); continue; }
       await sendMail(mailer, { from:`Hubert’s House <${sender.email}>`, to, subject:email.subject, html:email.html, text:email.text });
       await log.set({ sentAt:FieldValue.serverTimestamp() }, { merge:true });
-    } catch (error) { if (error?.code !== 6) warn('Newsletter not sent to one member', { reason:error?.code || 'send-failed' }); } // 6 = already sent today
+      await health.ok('email');
+    } catch (error) { if (error?.code !== 6) { warn('Newsletter not sent to one member', { reason:error?.code || 'send-failed' }); await health.fail('email', 'failed'); } } // 6 = already sent today
   }
 });
 
@@ -429,7 +432,7 @@ export const petLibro = endpoint(async (uid, input = {}) => {
 
 // Publix weekly BOGOs for the Meals tab (unofficial; functions/publix.js). Public ad
 // data only: no Publix account is involved. Cached six hours per store.
-const publixService = createPublix({ db });
+const publixService = createPublix({ db, health });
 export const publix = endpoint(async (_uid, input = {}) => {
   if (input.action === 'deals') return { ...(await publixService.deals({ store:input.store || DEFAULT_STORE.number, force:input.force === true })), defaultStore:DEFAULT_STORE };
   if (input.action === 'stores') return { stores:await publixService.stores(input.zip) };

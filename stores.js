@@ -72,3 +72,8 @@ export function firestoreStore(db, name = 'householdItems') {
     }); }
   };
 }
+// Whether Huckleberry, Publix and the morning email are working (written by the server only).
+export function healthStore(db) {
+  const col = collection(db,'serviceHealth');
+  return { subscribe(next) { return onSnapshot(col,snap => next(snap.docs.map(d => d.data())),() => next(null)); } };
+}

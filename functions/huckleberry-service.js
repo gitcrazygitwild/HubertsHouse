@@ -27,7 +27,9 @@ const changed = () => new provider.HuckleberryError('aborted','The household Huc
 const checkVersion = (current, expected) => {
   if ((current?.version || null) !== (expected?.version || null)) throw changed();
 };
-export function createHuckleberryHandler({ db, key, api = provider, now = Date.now }) {
+export function createHuckleberryHandler({ db, key, api = provider, now = Date.now, health = null }) {
+  // Every call that reaches Huckleberry reports to service health (functions/service-health.js).
+  const call = (operation, run) => health ? health.track('huckleberry', () => providerCall(operation, run)) : providerCall(operation, run);
   const publicState = data => data?.credential
     ? {connected:true,scope:'household',connectionVersion:data.version,children:data.children,selected:data.selected,timezone:data.timezone,sweetspotNaps:provider.validNapPlan(data.sweetspotNaps)}
     : {connected:false,scope:'household',connectionVersion:data?.version || null};
@@ -89,7 +91,7 @@ export function createHuckleberryHandler({ db, key, api = provider, now = Date.n
     const client = api.huckleberryClient(session);
     try {
       if (action === 'connect') {
-        const children = await providerCall('children',() => api.huckleberryChildren(client,session.userId));
+        const children = await call('children',() => api.huckleberryChildren(client,session.userId));
         if (!children.length) throw new provider.HuckleberryError('failed-precondition','Add a child in Huckleberry, then reconnect.');
         const selected = children.length === 1 ? children[0].id : null;
         const data = {credential:encryptCredential(session,key(),SHARED_OWNER),children,selected,timezone:connectTimezone,sweetspotNaps:'4',receipts:[],version:randomUUID(),updatedBy:uid};
@@ -99,7 +101,7 @@ export function createHuckleberryHandler({ db, key, api = provider, now = Date.n
       // Refreshes cannot resurrect a disconnected or replaced connection.
       await change(connection,(tx,ref) => tx.update(ref,{credential:encryptCredential(session,key(),SHARED_OWNER)}));
       if (action === 'select') {
-        const children = await providerCall('children',() => api.huckleberryChildren(client,session.userId));
+        const children = await call('children',() => api.huckleberryChildren(client,session.userId));
         if (!children.some(child => child.id === input.childId)) throw new provider.HuckleberryError('permission-denied','Choose a child in the household Huckleberry account.');
         const timezone = api.validTimezone(input.timezone), sweetspotNaps = provider.validNapPlan(input.sweetspotNaps ?? connection.sweetspotNaps);
         const patch = {children,selected:input.childId,timezone,sweetspotNaps,version:randomUUID(),updatedBy:uid};
@@ -109,19 +111,19 @@ export function createHuckleberryHandler({ db, key, api = provider, now = Date.n
       const child = connection.selected;
       if (!child || !connection.children.some(item => item.id === child)) throw new provider.HuckleberryError('failed-precondition','Choose a child profile in Settings.');
       // Recheck provider account membership before accessing or mutating a child.
-      const children = await providerCall('children',() => api.huckleberryChildren(client,session.userId));
+      const children = await call('children',() => api.huckleberryChildren(client,session.userId));
       if (!children.some(item => item.id === child)) throw new provider.HuckleberryError('permission-denied','This child is no longer shared with the household Huckleberry account. Choose a profile in Settings.');
       // `return await`: a bare `return` would let the finally below close the client while
       // the queries are still running ("The client has already been terminated").
-      if (action === 'recent') return await providerCall('recent',() => api.huckleberryRecent(client,child,now()));
+      if (action === 'recent') return await call('recent',() => api.huckleberryRecent(client,child,now()));
       if (action === 'rewind') {
         // Copy first, then remove: if removing fails, the copies are still here to restore.
         if ((await rewindRef.get()).exists) throw new provider.HuckleberryError('failed-precondition','A missed-nap recovery is already in progress. Finish it or put the sleeps back first.');
         const wake = Date.parse(input.wake);
-        const sleeps = await providerCall('recent',() => api.sleepsAfter(client,child,wake,now()));
+        const sleeps = await call('recent',() => api.sleepsAfter(client,child,wake,now()));
         if (!sleeps.length) throw new provider.HuckleberryError('failed-precondition','No sleeps were logged after that nap, so Huckleberry already shows it as the latest.');
         await rewindRef.create({ childId:child, wake:new Date(wake).toISOString(), sleeps, createdAt:new Date(now()).toISOString(), createdBy:uid });
-        await providerCall('write',() => api.removeSleeps(client,child,sleeps,now()));
+        await call('write',() => api.removeSleeps(client,child,sleeps,now()));
         await change(connection,tx => tx.delete(cacheRef)).catch(() => {});
         return { active:true, wake:new Date(wake).toISOString(), count:sleeps.length };
       }
@@ -129,7 +131,7 @@ export function createHuckleberryHandler({ db, key, api = provider, now = Date.n
         const saved = (await rewindRef.get()).data();
         if (!saved) return { active:false, restored:0 };
         if (saved.childId !== child) throw new provider.HuckleberryError('failed-precondition','The selected child changed. Choose the original child in Settings, then put the sleeps back.');
-        const result = await providerCall('write',() => api.restoreSleeps(client,child,saved.sleeps,now()));
+        const result = await call('write',() => api.restoreSleeps(client,child,saved.sleeps,now()));
         await rewindRef.delete();
         await change(connection,tx => tx.delete(cacheRef)).catch(() => {});
         return { active:false, ...result };
@@ -139,7 +141,7 @@ export function createHuckleberryHandler({ db, key, api = provider, now = Date.n
         // overwriting a change made meanwhile in the Huckleberry app.
         if (input.childId !== child) throw new provider.HuckleberryError('aborted','The selected child changed. Refresh the list.');
         checkVersion((await sharedRef().get()).data(),connection);
-        const result = await providerCall('write',() => api.changeHuckleberry(client,child,input.entry,connection.timezone,now()));
+        const result = await call('write',() => api.changeHuckleberry(client,child,input.entry,connection.timezone,now()));
         await change(connection,tx => tx.delete(cacheRef)).catch(() => {}); // the next refresh reloads history
         return result;
       }
@@ -149,7 +151,7 @@ export function createHuckleberryHandler({ db, key, api = provider, now = Date.n
         checkVersion(current,connection);
         const receipt = `${child}/${input.entry.requestId}/${input.entry.kind}`;
         if (current.receipts?.includes(receipt)) return {saved:true,duplicate:true};
-        const result = await providerCall('write',() => api.writeHuckleberry(client,child,input.entry,connection.timezone,now()));
+        const result = await call('write',() => api.writeHuckleberry(client,child,input.entry,connection.timezone,now()));
         // A failed local update must not misreport a successful provider write.
         // Merge receipts from both adults; provider IDs also protect retries.
         try {
@@ -163,7 +165,7 @@ export function createHuckleberryHandler({ db, key, api = provider, now = Date.n
       const cachedDoc = await cacheRef.get(), cachedData = cachedDoc.exists ? cachedDoc.data() : null;
       const cached = cachedData?.childId === child && cachedData.connectionVersion === connection.version ? cachedData : null;
       if (!input.force && cached && now() - Date.parse(cached.checkedAt) < 120000) return {...cached,connection:publicState(connection)};
-      const snapshot = await providerCall('snapshot',() => api.huckleberrySnapshot(client,child,connection.timezone,cached,input.force === true,now(),connection.sweetspotNaps,input.light === true));
+      const snapshot = await call('snapshot',() => api.huckleberrySnapshot(client,child,connection.timezone,cached,input.force === true,now(),connection.sweetspotNaps,input.light === true));
       await change(connection,tx => tx.set(cacheRef,{...snapshot,connectionVersion:connection.version}));
       return {...snapshot,connectionVersion:connection.version,connection:publicState(connection)};
     } finally { await client.terminate().catch(() => {}); }
