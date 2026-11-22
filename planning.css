@@ -93,3 +93,11 @@
 [data-theme="dark"] .day-birthday { background:#45303a; color:#f0bfcf; }
 .brief-insight.has-birthday .brief-insight-icon { background:#f8e6ec; }
 [data-theme="dark"] .brief-insight.has-birthday .brief-insight-icon { background:#45303a; }
+/* Event window: who's coming as one-tap chips, and the "use this date" hint under the title. */
+.owner-chips { display:flex; flex-wrap:wrap; gap:8px; }
+.owner-chips button { min-height:42px; padding:8px 16px; border-radius:999px; border:1px solid var(--border); background:var(--card); color:var(--text); font:inherit; font-size:14px; font-weight:550; cursor:pointer; }
+.owner-chips button[aria-pressed="true"] { background:var(--accent); border-color:var(--accent); color:#fff; }
+.owner-chips button:disabled { opacity:.55; cursor:default; }
+.owner-select-field[hidden] { display:none !important; }
+.title-hint { display:block; width:100%; text-align:left; margin:-6px 0 14px; padding:10px 14px; border-radius:12px; border:1px dashed var(--accent); background:color-mix(in srgb, var(--accent) 8%, transparent); color:var(--accent); font:inherit; font-size:13px; font-weight:600; cursor:pointer; }
+.title-hint:hover { background:color-mix(in srgb, var(--accent) 14%, transparent); }

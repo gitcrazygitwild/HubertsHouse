@@ -126,12 +126,12 @@ rect.is-hovered.mark-night,rect.is-hovered.mark-nap { stroke:var(--card); stroke
 .log-text { display:flex; flex-direction:column; min-width:0; flex:1; }
 .log-text strong { font-weight:600; }
 .log-text span { font-size:12px; color:var(--muted); }
-.log-actions { display:flex; gap:6px; flex:none; }
-.log-actions .btn { padding:5px 10px; font-size:12px; }
+.log-row .log-actions { display:flex; gap:6px; flex:none; }
+.log-row .log-actions .btn { padding:5px 10px; font-size:12px; }
 .log-delete { color:var(--danger,#b4232a); }
 .log-more { margin-top:12px; }
 .log-empty { margin:10px 0; }
-@media (max-width:520px) { .log-summary-hint { display:none; } .log-row { padding:8px 10px; gap:8px; } .log-actions { gap:4px; } .log-actions .btn { padding:4px 8px; } .log-text strong { font-size:13.5px; } }
+@media (max-width:520px) { .log-summary-hint { display:none; } .log-row { padding:8px 10px; gap:8px; } .log-row .log-actions { gap:4px; } .log-row .log-actions .btn { padding:4px 8px; } .log-text strong { font-size:13.5px; } }
 .frankie-share-note { font-size: 12px; color: var(--muted); margin: -12px 0 14px; white-space: pre-line; }
 .frankie-share-note:empty { display: none; }
 .frankie-share-note.is-fallback { padding: 12px 14px; border: 1px dashed var(--border); border-radius: 12px; color: var(--text); user-select: all; }
