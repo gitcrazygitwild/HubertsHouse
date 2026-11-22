@@ -723,3 +723,39 @@ test('events away from Richmond show the weather where they are', async t => {
   assert.ok(![...doc.querySelectorAll('.home-week-event')].some(card => card.textContent.includes('Lemaire') && card.querySelector('.home-event-weather')));
   assert.deepEqual(errors, []);
 });
+test('logging windows: drag bars set the time, the amount, how long she slept and each pump side', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  const drag = (id, value) => { const s = doc.getElementById(id); s.value = String(value); s.dispatchEvent(new w.Event('input', { bubbles:true })); };
+  const minutesAgo = id => Math.round((Date.now() - new Date(doc.getElementById(id).value)) / 60000);
+  // Bottle: drag the time back 45 minutes and the amount to 3.5 oz.
+  doc.querySelector('#view-today [data-baby-log="bottle"]').click();
+  drag('babyLogStartAgo', -45);
+  const near = (got, want) => assert.ok(Math.abs(got - want) <= 1, `${got} vs ${want}`); // times are kept to the minute
+  near(minutesAgo('babyLogStart'), 45); assert.equal(doc.getElementById('babyLogStart').closest('.log-custom-time').hidden, true, 'no exact-time box needed');
+  assert.match(doc.getElementById('babyLogStartText').textContent, /45m ago|45 min/);
+  drag('babyLogAmountSlider', 3.5);
+  assert.equal(doc.getElementById('babyLogAmount').value, '3.5'); assert.equal(doc.getElementById('babyLogSave').textContent, 'Save 3.5 oz bottle');
+  // Chips and steppers move the bars too; ml changes the bar's range.
+  doc.querySelector('[data-step="1"]').click(); assert.equal(doc.getElementById('babyLogAmountSlider').value, '4');
+  doc.getElementById('babyLogUnits').value = 'ml'; doc.getElementById('babyLogUnits').dispatchEvent(new w.Event('input', { bubbles:true }));
+  assert.equal(doc.getElementById('babyLogAmountSlider').max, '300'); assert.equal(doc.getElementById('babyLogAmountSlider').step, '5');
+  doc.getElementById('babyLogClose').click();
+  // Finished sleep: woke 10 minutes ago, slept 1h 15m.
+  doc.querySelector('#view-today [data-baby-log="sleep-log"]').click();
+  drag('babyLogEndAgo', -10); drag('babyLogLength', 75);
+  near(minutesAgo('babyLogEnd'), 10); near(minutesAgo('babyLogStart'), 85);
+  assert.equal(doc.getElementById('babyLogSave').textContent, 'Save 1h 15m sleep');
+  doc.querySelector('#babyLogLengths [data-length="120"]').click(); assert.equal(doc.getElementById('babyLogLength').value, '120', 'chips move the bar');
+  doc.getElementById('babyLogClose').click();
+  // Pump: one bar per side.
+  doc.querySelector('[data-baby-log="pump"]').click();
+  drag('babyLogLeftSlider', 1.75); drag('babyLogRightSlider', 3);
+  assert.deepEqual([doc.getElementById('babyLogLeft').value, doc.getElementById('babyLogRight').value], ['1.75', '3']);
+  assert.equal(doc.getElementById('babyLogSave').textContent, 'Save 4.75 oz pump');
+  // Editing an old log at an exact time still shows the exact box.
+  doc.getElementById('babyLogStart').value = (() => { const d = new Date(Date.now() - 6 * 3600000 - 7 * 60000); return new Date(+d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); })();
+  doc.getElementById('babyLogStart').dispatchEvent(new w.Event('input', { bubbles:true }));
+  assert.equal(doc.getElementById('babyLogStart').closest('.log-custom-time').hidden, false);
+  assert.equal(doc.getElementById('babyLogStartAgo').value, '-240', 'the bar stops at its end');
+  assert.deepEqual(errors, []);
+});
