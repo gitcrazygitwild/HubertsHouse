@@ -9,6 +9,7 @@ import { bottleSleepLinks, ageInDays, ageLabel } from './baby-model.js';
 import { bottlePace } from './bottle-pace.js';
 import { CHALLENGES, MACK_EXCUSE, scoreMornings, scoreBottles, scorePumps, morningPicks, bottlePicks, pumpPicks, currentBedtime, nightsFrom, scoreNapNight, napNightPicks } from './cat-challenges.js';
 import { frankieAwards } from './awards.js';
+import { scoreHat } from './mack-hat.js';
 
 const $ = id => document.getElementById(id);
 let range = 30, shared = null; // the latest snapshot, for "Share her day"
@@ -181,6 +182,24 @@ export function challengeHTML(kind, score, timezone, upcoming = null) {
   return `${calls}<div class="score-grid">${cards}</div>${rows ? `<div class="score-table-wrap"><table class="score-table"><thead><tr><th>${morning ? 'Woke up' : pump ? 'Pumped' : 'Drank'}</th>${models.map(m => `<th>${esc(m.owner)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>` : ''}
     <p class="tiny muted">${morning ? 'Each cat makes its call at bedtime, from nights logged before it. The morning wake-up is when the night’s last stretch ended (4 AM to noon).' : pump ? 'Each cat guesses at midnight from earlier days. Days with no pumps logged aren’t scored.' : 'Each cat guesses at midnight from earlier days. Days with fewer than three bottles logged aren’t scored.'} Recalculated from ${pump ? 'Huckleberry’s' : 'Frankie’s'} logs, so backfilled ${morning ? 'nights' : 'days'} count too.</p>`;
 }
+// Mack's hat: how his pulled-from-a-hat guesses would have done (never in the competition).
+const HAT_KIND = { sleep:'next sleep', wake:'nap wake-up', morning:'morning' };
+export function hatHTML(score, timezone) {
+  if (!score.n) return '<p class="tiny muted">No hat pulls to score yet. Mack pulls one whenever SweetSpot goes quiet: while she sleeps, overnight, or when its last call has passed.</p>';
+  const miss = m => m === 0 ? 'spot on' : `${Math.abs(m)}m ${m > 0 ? 'early' : 'late'}`;
+  const day = stamp => `${new Date(stamp).toLocaleDateString([], { weekday:'short', timeZone:timezone })} ${clock(stamp, timezone)}`;
+  const versus = score.catsOnSame == null ? '' : score.hatOnSame <= score.catsOnSame ? 'Somehow, the hat is keeping up with Hubert and Mia.' : score.hatOnSame - score.catsOnSame <= 10 ? 'Not far behind Hubert and Mia, which worries them.' : 'Hubert and Mia are relieved.';
+  const rows = score.results.slice(0, 6).map(r => `<tr><td>${esc(day(r.actual))}<small>${esc(HAT_KIND[r.kind])}</small></td><td>🎩 ${esc(clock(r.target, timezone))}</td><td class="${Math.abs(r.error) <= 15 ? 'is-hit' : 'is-miss'}">${esc(miss(r.error))}</td></tr>`).join('');
+  return `<div class="hat-stats">
+      <div><strong>±${score.mae}m</strong><small>hat’s avg miss</small></div>
+      <div><strong>${score.catsOnSame == null ? '—' : `±${score.catsOnSame}m`}</strong><small>Hubert &amp; Mia on the same calls</small></div>
+      <div><strong>${score.hitRate}%</strong><small>within 15 min</small></div>
+      <div><strong>${score.n}</strong><small>pulls · ${score.kinds.sleep} sleeps, ${score.kinds.wake} nap wake-ups, ${score.kinds.morning} mornings</small></div>
+    </div>
+    <p class="hat-verdict">${esc(versus)}${score.best ? ` Best pull: ${esc(HAT_KIND[score.best.kind])} on ${esc(day(score.best.actual))} (${esc(miss(score.best.error))}).` : ''}${score.worst && score.worst !== score.best ? ` Worst: ${esc(miss(score.worst.error))} on ${esc(day(score.worst.actual))}.` : ''}</p>
+    <div class="score-table-wrap"><table class="score-table fit-table"><thead><tr><th>What happened</th><th>Hat said</th><th>Miss</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="tiny muted">Whenever SweetSpot goes quiet (she’s asleep, it’s the night, or its last call passed while she was still up), Mack pulls a guess: the middle of Hubert’s and Mia’s calls, give or take up to 25 minutes, in steps of five. The same moment always pulls the same slip, so these are replayed from the last three weeks of logs. None of it counts in the challenges.</p>`;
+}
 // Nap or night? One card per cat, the calls for the sleep coming up, then recent wake-ups.
 const NN = { night:'🌙 Night', nap:'😴 Nap' };
 export function napNightHTML(score, timezone, upcoming = null, plan = 4) {
@@ -224,6 +243,7 @@ export function renderFrankie({ snapshot, timezone, predictions = [], demo = fal
     const bedtime = currentBedtime(sleeps, timer, timezone, now);
     renderHTML($('frankieMorning'), challengeHTML('morning', scoreMornings(sleeps, timezone, now, { birthdate:snapshot.birthdate }), timezone, bedtime ? morningPicks(sleeps, timezone, bedtime, { birthdate:snapshot.birthdate }) : null));
   }
+  if ($('frankieHat')) { const hat = scoreHat(predictions, sleeps, timer, timezone, now, { bottles, birthdate:snapshot.birthdate }); $('mackHatCard').hidden = false; renderHTML($('frankieHat'), hatHTML(hat, timezone)); }
   if ($('frankieNapNight')) {
     const plan = Number(snapshot.sweetspot?.selectedNapDay) || Number(snapshot.napPlan) || 4, extra = { bottles, birthdate:snapshot.birthdate, plan };
     const awake = !timer?.active && last ? Date.parse(last.end) : null;
@@ -253,6 +273,8 @@ export function renderFrankie({ snapshot, timezone, predictions = [], demo = fal
       + table('Ounces pumped per day', ['Day', 'Total', 'Left', 'Right', 'Pumps'], [...pumpRows].reverse().map(r => [esc(dayLabel(r.key, timezone)), oz(r.ounces), oz(r.left), oz(r.right), r.count])));
   }
   document.querySelectorAll('[data-frankie-range]').forEach(button => button.setAttribute('aria-pressed', String(Number(button.dataset.frankieRange) === range)));
+  // The hunch box (hypotheses-view.js) tests against the same logs.
+  try { window.dispatchEvent(new CustomEvent('hh:frankie', { detail:{ snapshot, timezone } })); } catch {}
   $('frankieNote').textContent = `${demo ? 'Sample data · ' : ''}${snapshot.historyComplete === false || snapshot.feedsComplete === false ? 'Some older history was too long to load in full. ' : ''}Up to ${snapshot.historyDays || 14} days from Huckleberry · ${timezone.replaceAll('_', ' ')}.`;
 }
 

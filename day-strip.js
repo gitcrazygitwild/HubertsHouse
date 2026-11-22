@@ -43,7 +43,7 @@ export function dayStripSVG({ sleeps = [], timer = null, picks = [], rounds = []
   const guess = (p, key, cat, y, extra = '') => {
     const s = toStamp(p.start), e = toStamp(p.end), t = toStamp(p.target ?? p.start);
     const band = Number.isFinite(s) && Number.isFinite(e) && e > s ? `<rect class="strip-band ${esc(key)}${extra}" x="${x(s).toFixed(1)}" y="${y}" width="${Math.max(3, x(e) - x(s)).toFixed(1)}" height="${laneH}" rx="${laneH / 2}"/>` : '';
-    return `${band}<circle class="strip-dot ${esc(key)}${extra}" cx="${x(t).toFixed(1)}" cy="${y + laneH / 2}" r="4.5"><title>${esc(`${cat}: ${p.label || ''} ${clock(t)}${band ? ` (${clock(s)}–${clock(e)})` : ''}`)}</title></circle>`;
+    return `${band}<circle class="strip-dot ${esc(key)}${extra}${p.hat ? ' hat' : ''}" cx="${x(t).toFixed(1)}" cy="${y + laneH / 2}" r="4.5"><title>${esc(`${cat}: ${p.label || ''} ${clock(t)}${band ? ` (${clock(s)}–${clock(e)})` : ''}`)}</title></circle>`;
   };
   // A cat with no call for a stretch gets a quiet note instead of a dot.
   const note = (left, right, y, text) => { const mid = (x(left) + x(right)) / 2, room = x(right) - x(left); return `<text class="strip-none" x="${mid.toFixed(1)}" y="${y + laneH - 2}" text-anchor="middle">${esc(room >= 54 ? text : '–')}</text>`; };

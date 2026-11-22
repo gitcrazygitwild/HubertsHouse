@@ -122,9 +122,19 @@ export function createPlaceWeather({ fetch = globalThis.fetch?.bind(globalThis),
   return { lookup, search, whenSettled:() => Promise.all(pending.values()) };
 }
 // One short line for a card: "📍 Charlottesville, Virginia · ⛅ 58°/41° · 20% rain".
+// "Washington D.C., District of Columbia" → "Washington, DC"; "Nags Head, North Carolina" → "Nags Head, NC".
+// Applied when shown, so places already saved on the device get the short name too.
+export function shortPlace(name = '') {
+  const parts = String(name).split(',').map(p => p.trim()).filter(Boolean);
+  if (parts.length < 2) return String(name);
+  const state = parts.at(-1), abbr = ABBR[state] || (US_STATES[state] ? state : null);
+  if (!abbr) return parts.join(', ');
+  const city = parts.slice(0, -1).join(', ').replace(abbr === 'DC' ? /\s*,?\s*D\.?\s?C\.?$/i : /$^/, '');
+  return `${city}, ${abbr}`;
+}
 export function placeWeatherText(result, location = '') {
   if (!result || ['local', 'past'].includes(result.status)) return '';
-  const where = result.place?.name || String(location).split('\n')[0].trim(); // Apple puts the venue on the first line
+  const where = result.place?.name ? shortPlace(result.place.name) : String(location).split('\n')[0].trim(); // Apple puts the venue on the first line
   if (result.status === 'ready') { const [word, icon] = describeCode(result.day.code); return `${icon} ${Math.round(result.day.high)}°/${Math.round(result.day.low)}° in ${where}${Number.isFinite(result.day.rain) && result.day.rain >= 20 ? ` · ${Math.round(result.day.rain)}% rain` : ''} · ${word.toLowerCase()}`; }
   if (result.status === 'far-off') return `Weather in ${where} shows up about two weeks before`;
   if (result.status === 'loading') return `Checking the weather in ${where}…`;

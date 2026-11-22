@@ -44,13 +44,14 @@ async function fixture(options = {}) {
   await module('baby-sample.js',['sampleHistory','samplePredictions']);
   await module('awards.js',['frankieAwards']);
   await module('bottle-pace.js',['bottlePace']);
-  await module('frankie.js',['renderFrankie','initFrankie','frankieDayText','bottleLinksHTML', 'pumpsHTML', 'paceHTML','challengeHTML','napNightHTML'],'const esc=escapeHTML;');
+  await module('mack-hat.js',['seeded','HAT_LINES','hatGuess','hatSeed','scoreHat']);
+  await module('frankie.js',['renderFrankie','initFrankie','frankieDayText','bottleLinksHTML', 'pumpsHTML', 'paceHTML','challengeHTML','napNightHTML','hatHTML'],'const esc=escapeHTML;');
   await module('baby-logs.js',['LOG_FILTERS','describeLog','logKey','logsHTML'],'const esc=escapeHTML;');
   await module('baby.js',['initHuckleberry','logBabyFromText'],'const esc=escapeHTML;');
   await module('calendar-view.js',['initCalendarExperience','calendarEventContent'],'const esc=escapeHTML;');
   await module('weather-shared.js',['richmondDay','forecastCondition','weatherIcon']);
   await module('birthdays-model.js',['birthdayList','setBirthdayList','birthdaysShown','birthdayTitle','birthdaysInRange','birthdayEvents','upcomingBirthdays']);
-  await module('place-weather.js',['looksLocal','distanceKm','placeQueries','describeCode','createPlaceWeather','placeWeatherText','usePlaceWeather','eventWeatherLine','sampleWeatherFetch','placeSuggestions','searchPlaces','whereBoxText']);
+  await module('place-weather.js',['looksLocal','distanceKm','placeQueries','describeCode','createPlaceWeather','placeWeatherText','usePlaceWeather','eventWeatherLine','sampleWeatherFetch','placeSuggestions','searchPlaces','whereBoxText','shortPlace']);
   await module('place-suggest.js',['pastMatches','townQuery','initPlaceSuggest'],'const esc=escapeHTML;');
   await module('home-calendar.js',['initHomeCalendar','homeCalendarWeek','dayWeather','WEATHER_URL'],'const esc=escapeHTML;');
   await module('weather.js',['initWeather'],'const esc=escapeHTML;');
@@ -78,6 +79,8 @@ async function fixture(options = {}) {
   await module('meals.js',['initMeals']);
   await module('pull-refresh.js',['PULL_READY','PULL_MAX','pullDistance','isStandalone','initPullRefresh']);
   await module('bath-days.js',['DEFAULT_BATH_DAYS','WEEKDAYS','BATH_TITLE','cleanBathDays','bathDays','setBathDays','isBathDay','describeBathDays','bathDaysInRange','bathEvents','nextBathDay']);
+  await module('hypotheses.js',['FACTORS','OUTCOMES','fits','describeHypothesis','parseHypothesis','hypothesisData','formatOutcome','testHypothesis','claudeDigest']);
+  await module('hypotheses-view.js',['memoryHypotheses','initHypotheses'],'const esc=escapeHTML;');
   await module('bath-settings.js',['bathPanelHTML','memoryBathStore','initBathDays'],'const esc=escapeHTML;');
   await module('birthdays.js',['sampleBirthdays','birthdayPanelHTML','initBirthdays'],'const esc=escapeHTML;');
   w.eval(clean(await read('app.js')) + ';window.__testApp={getDocs:()=>rawDocs,setCloudDocs:(records)=>{cloudDocs=records;rebuildEvents();},persistMovedEvent,redraw:()=>updateHouseholdEvents(expandedEvents)};'); await settle();
@@ -118,7 +121,7 @@ test('sample baby logs support bottles, diapers and sleep without calling a conn
   assert.equal(doc.getElementById('babyLogDialog').open,false); assert.match(doc.getElementById('babyStats').textContent,/5 oz/);
   doc.querySelector('[data-baby-log="diaper"]').click(); doc.getElementById('babyLogDiaper').value='poo'; doc.getElementById('babyLogForm').dispatchEvent(new w.Event('submit',{cancelable:true})); await settle();
   assert.match(doc.getElementById('babyStats').textContent,/Dirty/);
-  doc.getElementById('babySleep').click(); await settle(); assert.match(doc.getElementById('babySleep').textContent,/Finish sleep/); assert.match(doc.getElementById('babyPredictions').textContent,/Sleep in progress/);
+  doc.getElementById('babySleep').click(); await settle(); assert.match(doc.getElementById('babySleep').textContent,/Finish sleep/); assert.match(doc.getElementById('babyPredictions').textContent,/🎩 \d{1,2}:\d\d [AP]M.*Out of the hat.*not in the competition/s, 'SweetSpot is quiet while she sleeps, so Mack pulls one from the hat');
   doc.getElementById('babySleep').click(); await settle(); assert.match(doc.getElementById('babySleep').textContent,/Start sleep/);
   assert.deepEqual(errors,[]);
 });
@@ -732,6 +735,31 @@ test('events away from Richmond show the weather where they are', async t => {
   const saved = w.__testApp.getDocs().find(d => d.title === 'Dinner at Lemaire');
   assert.equal(saved.location, '101 W Franklin St, Richmond, VA 23220');
   assert.ok(![...doc.querySelectorAll('.home-week-event')].some(card => card.textContent.includes('Lemaire') && card.querySelector('.home-event-weather')));
+  assert.deepEqual(errors, []);
+});
+test('Got a hunch? Typed words are tested on the spot, and ones it can’t test are saved for Claude', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  doc.querySelector('[data-view="frankie"]').click(); await settle();
+  const text = doc.getElementById('hunchText'), list = doc.getElementById('hunchList');
+  assert.match(list.textContent, /sleeps longer on bath nights/); assert.match(list.textContent, /Saved for Claude/, 'the preview has one of each');
+  text.value = 'Afternoon naps are shorter'; text.dispatchEvent(new w.Event('input', { bubbles:true }));
+  assert.equal(doc.getElementById('hunchFactor').value, 'afternoon'); assert.equal(doc.getElementById('hunchOutcome').value, 'napLength'); assert.equal(doc.getElementById('hunchDirection').value, 'less');
+  assert.match(doc.getElementById('hunchRead').textContent, /Testing: When it’s an afternoon nap, the nap is shorter/);
+  doc.getElementById('hunchForm').requestSubmit(); await settle();
+  assert.match(doc.getElementById('hunchResult').textContent, /Looks true|Maybe|No real difference|opposite|Not enough/);
+  assert.match(list.textContent, /Afternoon naps are shorter/); assert.equal(text.value, '');
+  // Can't place it: saved for Claude, with the words and her logs ready to copy.
+  text.value = 'She’s happier when the cats are napping too'; text.dispatchEvent(new w.Event('input', { bubbles:true }));
+  assert.equal(doc.getElementById('hunchSubmit').textContent, 'Save it for Claude');
+  doc.getElementById('hunchForm').requestSubmit(); await settle();
+  assert.match(doc.getElementById('hunchResult').textContent, /Saved for Claude/);
+  const copy = [...list.querySelectorAll('[data-hunch-copy]')].find(b => b.closest('li').textContent.includes('cats are napping'));
+  copy.click(); await settle();
+  const pasted = doc.querySelector('#hunchResult textarea')?.value || '';
+  assert.match(pasted, /Hunch: "She’s happier when the cats are napping too"/); assert.match(pasted, /Nights \(/);
+  // Delete.
+  list.querySelector('li [data-hunch-delete]').click(); await settle();
+  assert.doesNotMatch(list.textContent, /cats are napping/);
   assert.deepEqual(errors, []);
 });
 test('Where box: suggestions as you type (places used before, then towns) and the weather there', async t => {
