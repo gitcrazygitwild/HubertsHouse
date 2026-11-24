@@ -198,7 +198,7 @@ function initPalette() {
 // Small tiles under the page title: what needs attention, the next plan, Frankie, and rain.
 // Each tile is an icon, a title you can tap, and a quiet detail; Frankie's spans the row.
 const tile = ({ tone = 'plain', icon, link, detail = '', sub = '', wide = false, meter = null }) =>
-  `<div class="nn-item nn-${tone}${wide ? ' nn-wide' : ''}"><span class="nn-icon" aria-hidden="true">${icon}</span><span class="nn-body">${link}${detail ? `<span class="nn-muted">${detail}</span>` : ''}${sub ? `<span class="nn-sub">${sub}</span>` : ''}${meter == null ? '' : `<span class="nn-meter" role="presentation"><i style="width:${Math.round(Math.min(1, Math.max(0, meter)) * 100)}%"></i></span>`}</span></div>`;
+  `<div class="nn-item nn-${tone}${wide ? ' nn-wide' : ''}"><span class="nn-icon" aria-hidden="true">${icon}</span><span class="nn-body">${link}${detail ? `<span class="nn-muted">${detail}</span>` : ''}${sub ? `<span class="nn-sub">${sub}</span>` : ''}${meter == null ? '' : `<span class="nn-meter${meter > 1 ? ' is-over' : ''}" role="presentation"><i style="width:${Math.round(Math.min(1, Math.max(0, meter)) * 100)}%"></i></span>`}</span></div>`;
 const viewLink = (view, html) => `<button type="button" class="nn-link" data-nn-view="${view}">${html}</button>`;
 function renderNowNext() {
   const root = $('nowNext'); if (!root) return;

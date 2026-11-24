@@ -28,6 +28,7 @@ Two AI assistants work on this repository: **Codex** and **Claude**. They never 
 - **`functions/shared/` is generated** by `scripts/share.mjs` (copies app modules the newsletter reuses). Don't edit or commit it; edit the root module instead.
 - **The live calendar stays the first thing on Today** (a test enforces it; the household asked for it).
 - **Never let a placeholder replace containers that later code fills.** The Frankie page once crashed that way. Toggle `hidden` instead. A global `[hidden] { display:none !important }` rule exists because components set `display:flex`.
+- **The signed-in startup path is tested** with a Firebase stand-in as strict as the real SDK (`tests/strict-firebase.js`, used by `fixture({live:true, member:true})` in `tests/app.test.js`). Preview mode never runs that path, so check it when you move code around startup.
 - **Preview mode:** `?demo=1` runs the whole app on sample data with no Firebase, iCloud or Huckleberry calls. Use it for screenshots and UI checks.
 - **Firestore rules are tested in CI** (`npm run rules`: `scripts/rules-check.mjs` against the Firestore emulator; needs Java). Add cases there with every change to `firestore.rules`.
 - **Refactors must not change the screen:** `npm run build && node scripts/visual.mjs capture <dir>` on main and on your branch, then `node scripts/visual.mjs compare <before> <after>` (preview mode, frozen clock, three widths, light and dark, every page). Same machine for both captures.
@@ -37,9 +38,9 @@ Two AI assistants work on this repository: **Codex** and **Claude**. They never 
 
 | Area | Files |
 |---|---|
-| App shell, events, Firebase wiring | `app.js`, `index.html`, `household.js` |
-| Baby tracking, Huckleberry UI | `baby.js`, `baby-model.js` (Purrfect Window, Mia’s Catnap Forecast), `frankie.js` (Frankie page), `baby-history.js`, `awards.js`, `prediction-log.js` (scoreboard) |
-| Smart features | `upgrades.js` (quick add, ⌘K, Now & Next, sky, free nights), `quick-add.js`, `smart-home.js`, `free-nights.js`, `sky.js` |
+| App shell, events, Firebase wiring | `app.js`, `index.html`, `household.js`, `features.js` (starts every part after sign-in on its own; one that fails shows a banner and the rest keep going), `stores.js` |
+| Baby tracking, Huckleberry UI | `baby.js`, `baby-model.js` (Purrfect Window, Mia’s Catnap Forecast), `frankie.js` (Frankie page), `day-ring.js` (her last 24 hours as a clock), `week-story.js` + `story-view.js` (Frankie’s week as story cards), `baby-history.js`, `awards.js`, `prediction-log.js` (scoreboard) |
+| Smart features | `upgrades.js` (quick add, ⌘K, Now & Next tiles, sky, free nights), `ask.js` (Ask the house: questions answered from local data), `quick-add.js`, `smart-home.js`, `free-nights.js`, `sky.js` |
 | Life page (to-dos, groceries, meals) | `household.js` (tabs; `#tasks`/`#groceries`/`#meals` open the right tab), `meals.js`, `meals-view.js`, `meal-ideas.js` (ideas library, BOGO matching), `functions/publix.js` (unofficial Publix weekly ad, store 1588 Carytown by default) |
 | Daily content | `daily-content.js`, `jokes.js` |
 | Server (Firebase Functions) | `functions/index.js`, `functions/huckleberry-*.js`, `functions/caldav.js`, `functions/newsletter.js` |
