@@ -12,6 +12,8 @@ import { frankieAwards } from './awards.js';
 import { scoreHat } from './mack-hat.js';
 import { dayRing, dayRingHTML } from './day-ring.js';
 import { catsConsensus } from './baby-model.js';
+import { weekStory } from './week-story.js';
+import { openStory } from './story-view.js';
 
 const $ = id => document.getElementById(id);
 let range = 30, shared = null, ringArgs = null, nextCall = null; // ringArgs: what the 24-hour clock last drew from // the latest snapshot, for "Share her day"
@@ -258,6 +260,7 @@ function drawRing() {
 export function renderFrankie({ snapshot, timezone, predictions = [], demo = false, connected = false, wakeAt = null }) {
   shared = snapshot ? { snapshot, timezone, demo } : null;
   const share = $('frankieShare'); if (share) share.disabled = !snapshot;
+  document.querySelectorAll('[data-week-story]').forEach(button => { button.disabled = !snapshot; });
   const root = $('frankieContent'); if (!root) return;
   // The placeholder lives beside the page content and is only shown/hidden, so
   // the chart containers always exist when data arrives.
@@ -380,6 +383,12 @@ export function initFrankie(rerender) {
   initCalls();
   window.addEventListener('hh:baby', event => { const call = event.detail ? catsConsensus(event.detail) : null; if ((call?.target || null) !== (nextCall?.target || null)) { nextCall = call; drawRing(); } });
   $('frankieShare')?.addEventListener('click', event => shareDay(event.currentTarget));
+  // Frankie's week as story cards (week-story.js, story-view.js).
+  document.addEventListener('click', event => {
+    if (!event.target.closest('[data-week-story]') || !shared) return;
+    const story = weekStory(shared.snapshot, shared.timezone);
+    if (story.available) openStory(story); else { const note = $('frankieShareNote'); if (note) note.textContent = story.reason; }
+  });
   document.querySelectorAll('[data-frankie-range]').forEach(button => button.addEventListener('click', () => {
     range = Number(button.dataset.frankieRange); try { localStorage.setItem('hh_frankie_range', String(range)); } catch { /* optional */ }
     rerender();
