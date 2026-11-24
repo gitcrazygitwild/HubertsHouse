@@ -53,6 +53,7 @@ async function fixture(options = {}) {
   await module('awards.js',['frankieAwards']);
   await module('bottle-pace.js',['bottlePace']);
   await module('mack-hat.js',['seeded','HAT_LINES','hatGuess','hatSeed','scoreHat']);
+  await module('day-ring.js',['dayRing','dayRingHTML']);
   await module('frankie.js',['renderFrankie','initFrankie','frankieDayText','bottleLinksHTML', 'pumpsHTML', 'paceHTML','challengeHTML','napNightHTML','hatHTML','callsSlides'],'const esc=escapeHTML;');
   await module('baby-logs.js',['LOG_FILTERS','describeLog','logKey','logsHTML'],'const esc=escapeHTML;');
   await module('baby.js',['initHuckleberry','logBabyFromText'],'const esc=escapeHTML;');

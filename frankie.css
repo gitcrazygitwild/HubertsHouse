@@ -245,3 +245,36 @@ rect.is-hovered.mark-night,rect.is-hovered.mark-nap { stroke:var(--card); stroke
 /* Each cat's morning call, inside its own card on Today. */
 .nap-card .morning-call { margin:10px 0 0; padding-top:8px; border-top:1px dashed var(--border); font-size:13px; }
 .nap-card .morning-call small { display:block; color:var(--muted); font-size:11px; margin-top:2px; }
+
+/* Her last 24 hours, around the clock (day-ring.js). */
+.day-ring { display:grid; grid-template-columns:minmax(220px, 300px) 1fr; gap:8px 28px; align-items:center; }
+.ring-face { position:relative; width:100%; aspect-ratio:1; }
+.ring-face svg { width:100%; height:100%; display:block; overflow:visible; }
+.ring-plate { fill:color-mix(in srgb, var(--soft, #f1f2ea) 70%, var(--card)); }
+.ring-track { fill:none; stroke:var(--border); stroke-width:16; opacity:.55; }
+.ring-tick { stroke:var(--muted); stroke-width:1; opacity:.35; } .ring-tick.big { stroke-width:2; opacity:.6; }
+.ring-hour { font:600 10px var(--font-ui, system-ui); fill:var(--muted); }
+.ring-sleep { fill:none; stroke-width:16; stroke-linecap:butt; }
+.ring-sleep.is-night { stroke:var(--chart-night); } .ring-sleep.is-nap { stroke:var(--chart-nap); }
+.ring-sleep.is-live { stroke-dasharray:6 3; animation:ring-breathe 3s ease-in-out infinite; }
+@keyframes ring-breathe { 50% { stroke-dashoffset:9; } }
+.ring-bottle { fill:var(--chart-bottle); stroke:var(--card); stroke-width:1.5; }
+.ring-now { stroke:var(--text); stroke-width:2; stroke-linecap:round; }
+.ring-now-dot { fill:var(--text); }
+.ring-next-path { fill:none; stroke:var(--accent); stroke-width:2; stroke-dasharray:2 4; stroke-linecap:round; opacity:.7; }
+.ring-next { fill:var(--card); stroke:var(--accent); stroke-width:2.5; }
+.ring-center { position:absolute; inset:28%; display:grid; place-content:center; justify-items:center; text-align:center; pointer-events:none; }
+.ring-center small { font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--frankie-ink); }
+.ring-center strong { font-family:var(--serif, Georgia, serif); font-weight:400; font-size:30px; line-height:1.1; }
+.ring-center span { font-size:11px; color:var(--muted); }
+.ring-facts { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:0; }
+.ring-facts > div { padding:10px 12px; border-radius:14px; background:color-mix(in srgb, var(--soft, #f1f2ea) 60%, var(--card)); }
+.ring-facts dt { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+.ring-facts dd { margin:2px 0 0; font-family:var(--serif, Georgia, serif); font-size:22px; line-height:1.2; }
+.ring-facts span { font-size:11px; color:var(--muted); }
+.ring-key { grid-column:1/-1; display:flex; flex-wrap:wrap; gap:6px 14px; margin:4px 0 0; font-size:11px; color:var(--muted); }
+.ring-key i { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
+.ring-key .is-night { background:var(--chart-night); } .ring-key .is-nap { background:var(--chart-nap); }
+.ring-key .is-bottle { background:var(--chart-bottle); border-radius:50%; } .ring-key .is-next { border:2px solid var(--accent); border-radius:50%; width:8px; height:8px; }
+@media (prefers-reduced-motion:reduce) { .ring-sleep.is-live { animation:none; } }
+@media (max-width:650px) { .day-ring { grid-template-columns:1fr; } .ring-face { max-width:290px; justify-self:center; } .ring-center strong { font-size:26px; } }

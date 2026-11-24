@@ -164,45 +164,55 @@ function initPalette() {
 }
 
 // ---------- Now & Next ----------
-// One quiet line under the page title: the next plan, Frankie, and rain.
+// Small tiles under the page title: what needs attention, the next plan, Frankie, and rain.
+// Each tile is an icon, a title you can tap, and a quiet detail; Frankie's spans the row.
+const tile = ({ tone = 'plain', icon, link, detail = '', sub = '', wide = false, meter = null }) =>
+  `<div class="nn-item nn-${tone}${wide ? ' nn-wide' : ''}"><span class="nn-icon" aria-hidden="true">${icon}</span><span class="nn-body">${link}${detail ? `<span class="nn-muted">${detail}</span>` : ''}${sub ? `<span class="nn-sub">${sub}</span>` : ''}${meter == null ? '' : `<span class="nn-meter" role="presentation"><i style="width:${Math.round(Math.min(1, Math.max(0, meter)) * 100)}%"></i></span>`}</span></div>`;
+const viewLink = (view, html) => `<button type="button" class="nn-link" data-nn-view="${view}">${html}</button>`;
 function renderNowNext() {
   const root = $('nowNext'); if (!root) return;
   const now = new Date(), events = ctx.getEvents(), parts = [];
   const eventLink = (event, from, label) => `<button type="button" class="nn-link" data-nn-event="${esc(event.extendedProps?.sourceId || event.id)}" data-nn-occ="${esc(from.toISOString())}">${label}</button>`;
   const { current, next } = nextUp(events, now);
+  // Something outside stopped working (Settings → Connections has the details).
+  if (health.length) { const a = health[0], short = { 'signed-out':'needs reconnecting', denied:'is refusing access', changed:'may have changed', failed:'didn’t send' }[a.problem] || `not answering since ${clock(a.since)}`;
+    parts.push(tile({ tone:'health', icon:'⚠', link:viewLink('settings', `<strong>${esc(a.name)}</strong>`), detail:`${esc(short)}${health.length > 1 ? ` · +${health.length - 1} more` : ''}` })); }
   // Today's birthdays first; otherwise tomorrow's, so there's time to call or send a card.
   if (birthdaysShown()) {
     const start = new Date(now); start.setHours(0, 0, 0, 0); const dayAfter = new Date(start); dayAfter.setDate(dayAfter.getDate() + 2);
     const soon = birthdaysInRange(start, dayAfter), todayKey = dateKey(start), today = soon.filter(b => b.date === todayKey), tomorrow = soon.filter(b => b.date !== todayKey);
     const label = b => b.age ? `${b.name} turns ${b.age}` : `${b.name}’s birthday`;
-    if (today.length) parts.push(`<span class="nn-item nn-birthday"><span aria-hidden="true">🎂</span><button type="button" class="nn-link" data-nn-view="calendar"><strong>${esc(today.map(label).join(' · '))}</strong></button><span class="nn-muted">today</span></span>`);
-    else if (tomorrow.length) parts.push(`<span class="nn-item nn-birthday"><span aria-hidden="true">🎂</span><button type="button" class="nn-link" data-nn-view="calendar">Tomorrow: <strong>${esc(tomorrow.map(label).join(' · '))}</strong></button></span>`);
+    if (today.length) parts.push(tile({ tone:'birthday', icon:'🎂', link:viewLink('calendar', `<strong>${esc(today.map(label).join(' · '))}</strong>`), detail:'today' }));
+    else if (tomorrow.length) parts.push(tile({ tone:'birthday', icon:'🎂', link:viewLink('calendar', `<strong>${esc(tomorrow.map(label).join(' · '))}</strong>`), detail:'tomorrow' }));
   }
   // Bath night, from the afternoon on (mornings are for the day's plans).
-  if (isBathDay(now) && now.getHours() >= 12 && now.getHours() < 22) parts.push('<span class="nn-item nn-bath"><span aria-hidden="true">🛁</span><button type="button" class="nn-link" data-nn-view="settings"><strong>Bath night</strong></button><span class="nn-muted">tonight</span></span>');
+  if (isBathDay(now) && now.getHours() >= 12 && now.getHours() < 22) parts.push(tile({ tone:'bath', icon:'🛁', link:viewLink('settings', '<strong>Bath night</strong>'), detail:'tonight' }));
   // Bin day: the evening before (bins out tonight) and that morning.
   { const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1);
     const today = now.getHours() < 12 ? pickupOn(now) : null, next = now.getHours() >= 15 ? pickupOn(tomorrow) : null;
-    if (today) parts.push(`<span class="nn-item nn-trash"><span aria-hidden="true">🗑️</span><button type="button" class="nn-link" data-nn-view="settings"><strong>${esc(today.title.replace(/^🗑️ |^♻️ /, ''))}</strong></button><span class="nn-muted">today${today.moved ? ` (moved for ${esc(today.moved.holiday)})` : ''}</span></span>`);
-    else if (next) parts.push(`<span class="nn-item nn-trash"><span aria-hidden="true">🗑️</span><button type="button" class="nn-link" data-nn-view="settings"><strong>Bins out tonight</strong></button><span class="nn-muted">${esc(next.title.replace(/^🗑️ |^♻️ /, '').toLowerCase())} tomorrow${next.moved ? ` (moved for ${esc(next.moved.holiday)})` : ''}</span></span>`); }
-  // Something outside stopped working (Settings → Connections has the details).
-  if (health.length) { const a = health[0], short = { 'signed-out':'needs reconnecting', denied:'is refusing access', changed:'may have changed', failed:'didn’t send' }[a.problem] || `not answering since ${clock(a.since)}`;
-    parts.unshift(`<span class="nn-item nn-health"><span aria-hidden="true">⚠</span><button type="button" class="nn-link" data-nn-view="settings"><strong>${esc(a.name)}</strong></button><span class="nn-muted">${esc(short)}${health.length > 1 ? ` · +${health.length - 1} more` : ''}</span></span>`); }
-  if (current) parts.push(`<span class="nn-item"><span class="nn-live" aria-hidden="true"></span>${eventLink(current.event, current.from, `Now: <strong>${esc(current.event.title)}</strong>`)} <span class="nn-muted">${current.minutesLeft}m left</span></span>`);
-  if (next) parts.push(`<span class="nn-item"><span aria-hidden="true">◷</span>${eventLink(next.event, next.from, `Next: <strong>${esc(next.event.title)}</strong>`)} <span class="nn-muted">${esc(next.minutesUntil < 1440 ? clock(next.from) : `${dayName(next.from)} ${clock(next.from)}`)} · ${esc(untilText(next.minutesUntil))}</span></span>`);
+    const name = pickup => esc(pickup.title.replace(/^🗑️ |^♻️ /, ''));
+    if (today) parts.push(tile({ tone:'trash', icon:'🗑️', link:viewLink('settings', `<strong>${name(today)}</strong>`), detail:`today${today.moved ? ` (moved for ${esc(today.moved.holiday)})` : ''}` }));
+    else if (next) parts.push(tile({ tone:'trash', icon:'🗑️', link:viewLink('settings', '<strong>Bins out tonight</strong>'), detail:`${name(next).toLowerCase()} tomorrow${next.moved ? ` (moved for ${esc(next.moved.holiday)})` : ''}` })); }
+  if (current) parts.push(tile({ tone:'now', icon:'<span class="nn-live"></span>', link:eventLink(current.event, current.from, `<span class="nn-kicker">Now:</span> <strong>${esc(current.event.title)}</strong>`), detail:`${current.minutesLeft}m left` }));
+  if (next) parts.push(tile({ tone:'next', icon:'◷', link:eventLink(next.event, next.from, `<span class="nn-kicker">Next:</span> <strong>${esc(next.event.title)}</strong>`), detail:`${esc(next.minutesUntil < 1440 ? clock(next.from) : `${dayName(next.from)} ${clock(next.from)}`)} · ${esc(untilText(next.minutesUntil))}` }));
   if (baby) {
     const minutes = stamp => Math.max(0, Math.round((+now - Date.parse(stamp)) / 60000)), hm = m => m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`;
-    const status = baby.timer?.active ? `asleep ${hm(minutes(baby.timer.start))}` : baby.lastWake ? `awake ${hm(minutes(baby.lastWake))}` : 'no sleep logged';
+    const asleep = !!baby.timer?.active, status = asleep ? `asleep ${hm(minutes(baby.timer.start))}` : baby.lastWake ? `awake ${hm(minutes(baby.lastWake))}` : 'no sleep logged';
     // Average of the three cats' calls (Hubert, Mia, Mack); hover to see each one.
-    const cats = !baby.timer?.active ? catsConsensus(baby) : null;
-    const nap = cats ? ` · ${cats.kind} ~${clock(cats.target)}${cats.picks.length > 1 ? ` (avg of ${cats.picks.length} cats)` : ` (${cats.picks[0].cat})`}` : '';
+    const cats = !asleep ? catsConsensus(baby) : null;
+    const nap = cats ? `${cats.kind} ~${clock(cats.target)}${cats.picks.length > 1 ? ` (avg of ${cats.picks.length} cats)` : ` (${cats.picks[0].cat})`}` : '';
     const napTitle = cats ? cats.picks.map(p => `${p.cat} ${clock(p.at)}`).join(' · ') + (cats.left.length ? ` · left out: ${cats.left.join(', ')} (a different sleep)` : '') : '';
-    parts.push(`<span class="nn-item"><span aria-hidden="true">${baby.timer?.active ? '☾' : '☀'}</span><button type="button" class="nn-link" data-nn-view="frankie">${esc(baby.name)} <strong>${esc(status)}</strong></button><span class="nn-muted"${napTitle ? ` title="${esc(napTitle)}"` : ''}>${esc(nap)}${baby.lastBottle ? ` · bottle ${esc(hm(minutes(baby.lastBottle)))} ago` : ''}${baby.nextBottle?.available ? ` · next ~${esc(clock(baby.nextBottle.target))}${baby.nextBottle.waitingForWake ? ' when she wakes' : ''}` : ''}</span></span>`);
+    const bottle = [baby.lastBottle ? `bottle ${hm(minutes(baby.lastBottle))} ago` : '', baby.nextBottle?.available ? `next ~${clock(baby.nextBottle.target)}${baby.nextBottle.waitingForWake ? ' when she wakes' : ''}` : ''].filter(Boolean).join(' · ');
+    // How far through her awake window she is (from waking to the cats' call).
+    const wake = Date.parse(baby.lastWake), due = cats ? +new Date(cats.target) : NaN, meter = Number.isFinite(wake) && due > wake ? (+now - wake) / (due - wake) : null;
+    parts.push(tile({ tone:asleep ? 'asleep' : 'frankie', icon:asleep ? '☾' : '☀', wide:true, meter,
+      link:viewLink('frankie', `${esc(baby.name)} <strong>${esc(status)}</strong>`),
+      detail:nap ? `<span${napTitle ? ` title="${esc(napTitle)}"` : ''}>${esc(nap)}</span>` : '', sub:esc(bottle) }));
   }
-  if (litter) parts.push(`<span class="nn-item"><span aria-hidden="true">🐈</span><button type="button" class="nn-link" data-nn-view="devices"><strong>${esc(litter.name)}</strong></button><span class="nn-muted">${litter.full ? 'drawer full' : `drawer ${litter.drawer}% full`}</span></span>`);
-  if (feeders) parts.push(`<span class="nn-item"><span aria-hidden="true">🥣</span><button type="button" class="nn-link" data-nn-view="devices"><strong>${esc(feeders.name)}</strong></button><span class="nn-muted">${feeders.blocked ? 'outlet may be blocked' : 'food low'}${feeders.more ? ` · +${feeders.more} more` : ''}</span></span>`);
+  if (litter) parts.push(tile({ tone:'device', icon:'🐈', link:viewLink('devices', `<strong>${esc(litter.name)}</strong>`), detail:litter.full ? 'drawer full' : `drawer ${litter.drawer}% full` }));
+  if (feeders) parts.push(tile({ tone:'device', icon:'🥣', link:viewLink('devices', `<strong>${esc(feeders.name)}</strong>`), detail:`${feeders.blocked ? 'outlet may be blocked' : 'food low'}${feeders.more ? ` · +${feeders.more} more` : ''}` }));
   const flags = forecast ? weatherFlags(events, forecast.days, now) : [];
-  if (flags.length) parts.push(`<span class="nn-item"><span aria-hidden="true">☔</span>${eventLink({ id:flags[0].id }, new Date(flags[0].start), `<strong>${esc(flags[0].title)}</strong>`)} <span class="nn-muted">${esc(dayName(flags[0].start))} · ${flags[0].rain == null ? esc(flags[0].label) : `${flags[0].rain}% rain`}</span></span>`);
+  if (flags.length) parts.push(tile({ tone:'rain', icon:'☔', link:eventLink({ id:flags[0].id }, new Date(flags[0].start), `<strong>${esc(flags[0].title)}</strong>`), detail:`${esc(dayName(flags[0].start))} · ${flags[0].rain == null ? esc(flags[0].label) : `${flags[0].rain}% rain`}` }));
   renderHTML(root, parts.join(''));
   root.hidden = !parts.length;
   lastFlags = flags; markWeather(flags);

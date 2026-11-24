@@ -10,9 +10,11 @@ import { bottlePace } from './bottle-pace.js';
 import { CHALLENGES, MACK_EXCUSE, scoreMornings, scoreBottles, scorePumps, morningPicks, bottlePicks, pumpPicks, currentBedtime, nightsFrom, scoreNapNight, napNightPicks } from './cat-challenges.js';
 import { frankieAwards } from './awards.js';
 import { scoreHat } from './mack-hat.js';
+import { dayRing, dayRingHTML } from './day-ring.js';
+import { catsConsensus } from './baby-model.js';
 
 const $ = id => document.getElementById(id);
-let range = 30, shared = null; // the latest snapshot, for "Share her day"
+let range = 30, shared = null, ringArgs = null, nextCall = null; // ringArgs: what the 24-hour clock last drew from // the latest snapshot, for "Share her day"
 try { range = Number(localStorage.getItem('hh_frankie_range')) || 30; } catch { /* storage may be blocked */ }
 const hm = hours => { if (hours == null) return '—'; const total = Math.round(hours * 60); return `${Math.floor(total / 60)}h ${String(total % 60).padStart(2, '0')}m`; };
 const ago = (stamp, now) => { const minutes = Math.max(0, Math.round((now - Date.parse(stamp)) / 60000)); return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`; };
@@ -243,6 +245,16 @@ export function callsSlides({ sleeps, bottles, pumps, timer, timezone, now, birt
   const pumpHTML = pumps.length ? callRows('pump', key => pp[key] != null ? `${pp[key]} oz` : null, pumpScore, `Pumped so far today: <strong>${esc(oz(todayPump))}</strong>.`) + seeAll('frankiePumpPool') : '<p class="tiny muted">Log Karena’s pumps (＋ Pump on Today, or tell Siri) and the cats start guessing her daily ounces.</p>';
   return { napNightHTML, morningHTML, bottleHTML, pumpHTML };
 }
+// The 24-hour clock (day-ring.js), redrawn when the cats' next call changes.
+function drawRing() {
+  const el = $('frankieRing'); if (!el || !ringArgs) return;
+  const now = Date.now(), { sleeps, timer, timezone } = ringArgs, last = sleeps.at(-1);
+  const ring = dayRing({ ...ringArgs, now, next:nextCall && !timer?.active ? { at:nextCall.target, label:nextCall.kind === 'bedtime' ? 'bedtime' : 'next nap' } : null });
+  const status = timer?.active ? ago(timer.start, now) : last ? ago(last.end, now) : '—';
+  const since = timer?.active ? `since ${clock(timer.start, timezone)}` : last ? `since ${clock(last.end, timezone)}` : '';
+  renderHTML(el, dayRingHTML(ring, { timezone, now, status, since }));
+  if ($('frankieRingCard')) $('frankieRingCard').hidden = false;
+}
 export function renderFrankie({ snapshot, timezone, predictions = [], demo = false, connected = false, wakeAt = null }) {
   shared = snapshot ? { snapshot, timezone, demo } : null;
   const share = $('frankieShare'); if (share) share.disabled = !snapshot;
@@ -262,6 +274,7 @@ export function renderFrankie({ snapshot, timezone, predictions = [], demo = fal
     <div class="frankie-tile"><span>Sleep today</span><strong>${hm(summary.today.sleep?.total)}</strong><small>${summary.avgSleep ? `7-day avg ${hm(summary.avgSleep)} per day` : 'Building a weekly average'}</small></div>
     <div class="frankie-tile"><span>Bottles today</span><strong>${oz(summary.today.bottles?.ounces)}</strong><small>${summary.today.bottles?.count || 0} bottle${summary.today.bottles?.count === 1 ? '' : 's'}${lastBottle ? ` · last ${esc(ago(lastBottle.start, now))} ago` : ''}</small></div>
     <div class="frankie-tile"><span>Daily average</span><strong>${oz(summary.avgOunces)}</strong><small>${change == null ? 'last 7 full days' : change === 0 ? 'same as the week before' : `${change > 0 ? '▲' : '▼'} ${Math.abs(change)} oz vs the week before`}</small></div>`);
+  ringArgs = { sleeps, bottles, timer, timezone }; drawRing();
   const week = frankieAwards({ sleeps, bottles }, timezone, now);
   if ($('frankieAwards')) {
     renderHTML($('frankieAwards'), week.awards.length ? week.awards.map(award => `<article class="award"><span class="award-icon" aria-hidden="true">${award.icon}</span><div><small>${esc(award.title)}</small><strong>${esc(award.value)}</strong><span>${esc(award.detail)}</span></div></article>`).join('') : '<p class="tiny muted">Awards appear after a few days of logs.</p>');
@@ -365,6 +378,7 @@ function initCalls() {
 }
 export function initFrankie(rerender) {
   initCalls();
+  window.addEventListener('hh:baby', event => { const call = event.detail ? catsConsensus(event.detail) : null; if ((call?.target || null) !== (nextCall?.target || null)) { nextCall = call; drawRing(); } });
   $('frankieShare')?.addEventListener('click', event => shareDay(event.currentTarget));
   document.querySelectorAll('[data-frankie-range]').forEach(button => button.addEventListener('click', () => {
     range = Number(button.dataset.frankieRange); try { localStorage.setItem('hh_frankie_range', String(range)); } catch { /* optional */ }
