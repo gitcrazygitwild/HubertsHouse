@@ -16,7 +16,7 @@ const read = key => { try { return localStorage.getItem(key); } catch { return n
 const write = (key, value) => { try { localStorage.setItem(key, value); } catch { /* optional */ } };
 const clock = date => new Date(date).toLocaleTimeString([], { hour:'numeric', minute:'2-digit' });
 const dayName = date => new Date(date).toLocaleDateString([], { weekday:'short' });
-let ctx, baby = null, forecast = null, litter = null, feeders = null, lastFlags = [];
+let ctx, baby = null, forecast = null, litter = null, feeders = null, health = [], lastFlags = [];
 
 // ---------- Quick add ----------
 function draftPayload(draft) {
@@ -185,6 +185,9 @@ function renderNowNext() {
     const today = now.getHours() < 12 ? pickupOn(now) : null, next = now.getHours() >= 15 ? pickupOn(tomorrow) : null;
     if (today) parts.push(`<span class="nn-item nn-trash"><span aria-hidden="true">🗑️</span><button type="button" class="nn-link" data-nn-view="settings"><strong>${esc(today.title.replace(/^🗑️ |^♻️ /, ''))}</strong></button><span class="nn-muted">today${today.moved ? ` (moved for ${esc(today.moved.holiday)})` : ''}</span></span>`);
     else if (next) parts.push(`<span class="nn-item nn-trash"><span aria-hidden="true">🗑️</span><button type="button" class="nn-link" data-nn-view="settings"><strong>Bins out tonight</strong></button><span class="nn-muted">${esc(next.title.replace(/^🗑️ |^♻️ /, '').toLowerCase())} tomorrow${next.moved ? ` (moved for ${esc(next.moved.holiday)})` : ''}</span></span>`); }
+  // Something outside stopped working (Settings → Connections has the details).
+  if (health.length) { const a = health[0], short = { 'signed-out':'needs reconnecting', denied:'is refusing access', changed:'may have changed', failed:'didn’t send' }[a.problem] || `not answering since ${clock(a.since)}`;
+    parts.unshift(`<span class="nn-item nn-health"><span aria-hidden="true">⚠</span><button type="button" class="nn-link" data-nn-view="settings"><strong>${esc(a.name)}</strong></button><span class="nn-muted">${esc(short)}${health.length > 1 ? ` · +${health.length - 1} more` : ''}</span></span>`); }
   if (current) parts.push(`<span class="nn-item"><span class="nn-live" aria-hidden="true"></span>${eventLink(current.event, current.from, `Now: <strong>${esc(current.event.title)}</strong>`)} <span class="nn-muted">${current.minutesLeft}m left</span></span>`);
   if (next) parts.push(`<span class="nn-item"><span aria-hidden="true">◷</span>${eventLink(next.event, next.from, `Next: <strong>${esc(next.event.title)}</strong>`)} <span class="nn-muted">${esc(next.minutesUntil < 1440 ? clock(next.from) : `${dayName(next.from)} ${clock(next.from)}`)} · ${esc(untilText(next.minutesUntil))}</span></span>`);
   if (baby) {
@@ -241,6 +244,7 @@ export function initUpgrades(options) {
   window.addEventListener('hh:birthdays', () => renderNowNext());
   window.addEventListener('hh:litter', event => { litter = event.detail; renderNowNext(); });
   window.addEventListener('hh:feeders', event => { feeders = event.detail; renderNowNext(); });
+  window.addEventListener('hh:health', event => { health = event.detail || []; renderNowNext(); });
   window.addEventListener('hh:forecast', event => { forecast = event.detail; renderNowNext(); renderSky(); });
   window.addEventListener('hh:events', () => requestAnimationFrame(() => { renderNowNext(); renderFreeNights(); }));
   $('freeNights')?.addEventListener('click', event => { const button = event.target.closest('[data-free-night]'); if (button) ctx.openDraft(dateNightDraft(new Date(button.dataset.freeNight))); });

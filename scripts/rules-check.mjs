@@ -79,5 +79,10 @@ await expect('every 3 weeks rejected', 403, await req('PATCH', 'householdSetting
 await expect('extra pickup field rejected', 403, await req('PATCH', 'householdSettings/home', fields({ trash:{ ...bins, compost:{ day:2, every:1, anchor:'2026-11-24' } } }), token('m1')));
 await expect('bump must be true/false', 403, await req('PATCH', 'householdSettings/home', fields({ trash:{ ...bins, bump:'yes' } }), token('m1')));
 await expect('bad anchor rejected', 403, await req('PATCH', 'householdSettings/home', fields({ trash:{ ...bins, trash:{ ...bins.trash, anchor:'soon' } } }), token('m1')));
+console.log('setup health', await req('PATCH', 'serviceHealth/huckleberry', fields({ service:'huckleberry', lastOk:'2026-11-22T12:00:00Z' }), 'owner'));
+await expect('member reads service health', 200, await req('GET', 'serviceHealth/huckleberry', null, token('m1')));
+await expect('stranger cannot read service health', 403, await req('GET', 'serviceHealth/huckleberry', null, token('x9')));
+await expect('members cannot write service health', 403, await req('PATCH', 'serviceHealth/huckleberry', fields({ service:'huckleberry', problem:'unreachable' }), token('m1')));
+await expect('members cannot delete service health', 403, await req('DELETE', 'serviceHealth/huckleberry', null, token('m1')));
 console.log(results.join('\n'));
 process.exit(results.some(r => r.startsWith('FAIL')) ? 1 : 0);

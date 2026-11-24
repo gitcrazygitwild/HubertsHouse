@@ -89,6 +89,8 @@ async function fixture(options = {}) {
   await module('bath-days.js',['DEFAULT_BATH_DAYS','WEEKDAYS','BATH_TITLE','cleanBathDays','bathDays','setBathDays','isBathDay','describeBathDays','bathDaysInRange','bathEvents','nextBathDay']);
   await module('hypotheses.js',['FACTORS','OUTCOMES','fits','describeHypothesis','parseHypothesis','hypothesisData','formatOutcome','testHypothesis','claudeDigest']);
   await module('hypotheses-view.js',['memoryHypotheses','initHypotheses'],'const esc=escapeHTML;');
+  await module('service-health-model.js',[]);
+  await module('health-view.js',[],'const esc=escapeHTML;');
   await module('trash-days.js',['DEFAULT_TRASH','PICKUP_LOOK','keyOf','bigHolidays','holidayOn','cleanTrash','trashSettings','setTrash','pickupsInRange','pickupTitle','trashEvents','pickupOn','nextPickup','describeTrash']);
   await module('trash-settings.js',['trashPanelHTML','memoryTrashStore','initTrashDays'],'const esc=escapeHTML;');
   await module('bath-settings.js',['bathPanelHTML','memoryBathStore','initBathDays'],'const esc=escapeHTML;');
@@ -778,6 +780,16 @@ test('event window: day chips, a clock to drag, the extras folded away', async t
   assert.equal(doc.getElementById('eventMore').open, false);
   assert.ok(doc.querySelector('.owner-chips #evtWithFrankie'), '+ Frankie sits with the who chips');
   assert.ok(doc.getElementById('saveBtnTop').classList.contains('event-save-top'), 'one Save, at the bottom (the top one is styled away)');
+  assert.deepEqual(errors, []);
+});
+test('Settings shows whether Huckleberry, Publix and the email are working, and Today warns when one stops', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  const rows=[...doc.querySelectorAll('#healthPanel .health-list li')];
+  assert.deepEqual(rows.map(li => li.className), ['health-ok', 'health-ok', 'health-ok']);
+  assert.match(doc.getElementById('healthPanel').textContent, /Huckleberry.*Working · last checked/s);
+  assert.doesNotMatch(doc.getElementById('nowNext').textContent, /⚠/, 'nothing to warn about');
+  w.dispatchEvent(new w.CustomEvent('hh:health', { detail:[{ service:'huckleberry', name:'Huckleberry', problem:'unreachable', since:new Date(Date.now() - 3600000).toISOString(), text:'Huckleberry hasn’t answered since 1:00 PM.' }] }));
+  assert.match(doc.getElementById('nowNext').textContent, /⚠Huckleberrynot answering since/);
   assert.deepEqual(errors, []);
 });
 test('Got a hunch? Typed words are tested on the spot, and ones it can’t test are saved for Claude', async t => {
