@@ -14,6 +14,8 @@ import { dayRing, dayRingHTML } from './day-ring.js';
 import { hm, oz, clock, dayLabel, sleepChart, bottleChart, pumpChart, timeline, legend, table } from './frankie-charts.js';
 import { catsConsensus } from './baby-model.js';
 import { weekStory } from './week-story.js';
+import { lastNight, weekdayLinks } from './night-insights.js';
+import { lastNightTile, weekdayHTML } from './night-insights-view.js';
 import { openStory } from './story-view.js';
 
 const $ = id => document.getElementById(id);
@@ -178,6 +180,7 @@ export function renderFrankie({ snapshot, timezone, predictions = [], demo = fal
   const change = summary.avgOunces && summary.priorOunces ? Math.round((summary.avgOunces - summary.priorOunces) * 2) / 2 : null;
   const lastBottle = bottles.at(-1);
   renderHTML($('frankieStatus'), `<div class="frankie-tile is-live"><span>${timer?.active ? '☾ Sleeping' : '☀ Awake'}</span><strong>${esc(status)}</strong><small>${timer?.active ? `since ${esc(clock(timer.start, timezone))}` : last ? `since ${esc(clock(last.end, timezone))}` : ''}</small></div>
+    ${lastNightTile(lastNight({ sleeps, bottles, timer, timezone, now }), timezone)}
     <div class="frankie-tile"><span>Sleep today</span><strong>${hm(summary.today.sleep?.total)}</strong><small>${summary.avgSleep ? `7-day avg ${hm(summary.avgSleep)} per day` : 'Building a weekly average'}</small></div>
     <div class="frankie-tile"><span>Bottles today</span><strong>${oz(summary.today.bottles?.ounces)}</strong><small>${summary.today.bottles?.count || 0} bottle${summary.today.bottles?.count === 1 ? '' : 's'}${lastBottle ? ` · last ${esc(ago(lastBottle.start, now))} ago` : ''}</small></div>
     <div class="frankie-tile"><span>Daily average</span><strong>${oz(summary.avgOunces)}</strong><small>${change == null ? 'last 7 full days' : change === 0 ? 'same as the week before' : `${change > 0 ? '▲' : '▼'} ${Math.abs(change)} oz vs the week before`}</small></div>`);
@@ -188,7 +191,7 @@ export function renderFrankie({ snapshot, timezone, predictions = [], demo = fal
     $('frankieAwardsRange').textContent = week.awards.length ? `${dayLabel(week.from, timezone)} – ${dayLabel(week.to, timezone)}` : '';
   }
   const score = scorePredictions(predictions, sleeps, timer, timezone, { bottles, birthdate:snapshot.birthdate });
-  if ($('frankieLinks')) renderHTML($('frankieLinks'), bottleLinksHTML(bottleSleepLinks({ sleeps, bottles, timezone }, now), ageInDays(snapshot.birthdate, now)));
+  if ($('frankieLinks')) renderHTML($('frankieLinks'), bottleLinksHTML(bottleSleepLinks({ sleeps, bottles, timezone }, now), ageInDays(snapshot.birthdate, now)) + weekdayHTML(weekdayLinks({ sleeps, bottles, timezone, now })));
   renderHTML($('frankieScore'), scoreboard(score, timezone));
   if ($('frankieMorning')) {
     const bedtime = currentBedtime(sleeps, timer, timezone, now);
