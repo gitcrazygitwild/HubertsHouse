@@ -181,3 +181,10 @@
 .health-warning { background:#fbf1dc !important; } .health-warning .health-icon { color:#a0701c; }
 [data-theme="dark"] .health-warning { background:#3d3322 !important; } [data-theme="dark"] .health-warning .health-icon { color:#e3b765; }
 /* Phones: long Now & Next details (Frankie's line) wrap instead of running off the card. */
+
+/* Startup problems (features.js): one part didn't start; the rest works. */
+.startup-problems { display:flex; align-items:center; gap:12px; margin:0 0 14px; padding:10px 14px; border-radius:14px; background:#fbf1dc; border:1px solid #ecd6a6; color:#6b4d12; font-size:12.5px; line-height:1.4; }
+.startup-problems[hidden] { display:none; }
+.startup-problems span { flex:1; }
+.startup-problems .btn { flex:none; min-height:34px; padding:6px 14px; }
+[data-theme="dark"] .startup-problems { background:#3d321c; border-color:#5c4a26; color:#ecd3a0; }

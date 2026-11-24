@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { JSDOM, VirtualConsole } from 'jsdom';
 import { exportedNames } from './exported-names.js';
+import { strictFirebase } from './strict-firebase.js';
 process.env.TZ = 'America/New_York';
 const read = path => readFile(new URL(`../${path}`,import.meta.url),'utf8');
 const clean = source => source.replace(/^export \{[^}]*\} from [^;]+;$/gm,'').replace(/^import\b[\s\S]*?;\s*$/gm,'').replace(/\bexport\s+(?=(?:async\s+)?(?:function|const|class|let))/g,'');
@@ -14,6 +15,8 @@ async function fixture(options = {}) {
   w.structuredClone=structuredClone; w.confirm=() => true; w.alert=message => {throw new Error(message);};
   w.HTMLDialogElement.prototype.showModal=function(){this.open=true;}; w.HTMLDialogElement.prototype.close=function(){this.open=false;};
   Object.assign(w,{config:{firebase:{},calendarServiceEnabled:false},initializeApp:() => ({}),getFirestore:() => ({}),collection:() => ({}),getAuth:() => ({}),onAuthStateChanged:(_auth,callback) => callback({uid:'nonmember',email:'outsider@example.com'}),getDoc:async () => ({exists:() => false}),setDoc:async () => {},doc:(...args) => args,signOut:async () => {},serverTimestamp:() => new Date(),getFunctions:() => ({}),httpsCallable:() => {throw new Error('Demo must not call the calendar service');}});
+  // Signed in as a household member, against a Firebase stand-in as strict as the real SDK.
+  const strict = options.member ? strictFirebase() : null; if (strict) Object.assign(w, strict.api);
   // Real FullCalendar is exercised in a DOM. This is not a visual browser test.
   w.eval(await read('node_modules/fullcalendar/index.global.js'));
   // Every export becomes a global for the modules loaded after it (the list in each call is just documentation).
@@ -96,8 +99,10 @@ async function fixture(options = {}) {
   await module('trash-settings.js',['trashPanelHTML','memoryTrashStore','initTrashDays'],'const esc=escapeHTML;');
   await module('bath-settings.js',['bathPanelHTML','memoryBathStore','initBathDays'],'const esc=escapeHTML;');
   await module('birthdays.js',['sampleBirthdays','birthdayPanelHTML','initBirthdays'],'const esc=escapeHTML;');
+  await module('features.js',['startParts','featureParts','startFeatures','showStartupProblems','startupProblemText']);
+  if (options.breakPart) { const real = w[options.breakPart]; w[options.breakPart] = () => { const e = new Error('broken on purpose'); e.code = 'invalid-argument'; throw e; }; w.__realPart = real; }
   w.eval(clean(await read('app.js')) + ';window.__testApp={getDocs:()=>rawDocs,setCloudDocs:(records)=>{cloudDocs=records;rebuildEvents();},persistMovedEvent,redraw:()=>updateHouseholdEvents(expandedEvents)};'); await settle();
-  return {dom,w,doc:w.document,errors};
+  return {dom,w,doc:w.document,errors,strict};
 }
 test('home views, theme and monitor navigation work together without hiding the daily extras', async t => {
   const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
@@ -192,6 +197,24 @@ test('the top event save creates only one event, and household all-day drag boun
   const id=w.__testApp.getDocs().find(d => d.title === 'One event, one click').id;
   await w.__testApp.persistMovedEvent({id,extendedProps:{},allDay:true,start:new w.Date('2026-11-15T00:00:00'),end:new w.Date('2026-11-18T00:00:00')});
   assert.equal(new Date(w.__testApp.getDocs().find(d => d.id === id).end).getDate(),17);
+  assert.deepEqual(errors,[]);
+});
+test('a household member signs in and the real startup path finishes (strict Firebase stand-in)', async t => {
+  const {dom,doc,errors,w,strict}=await fixture({live:true,member:true}); t.after(() => dom.window.close());
+  await settle(); await settle();
+  assert.ok(doc.getElementById('gate').classList.contains('hidden'), doc.getElementById('gateError').textContent || 'the sign-in screen should be gone');
+  assert.match(doc.getElementById('accountLabel').textContent,/Signed in as member@example.com/);
+  assert.equal(doc.getElementById('startupProblems'),null, doc.getElementById('startupProblems')?.textContent);
+  const watched = strict.listeners.map(ref => (ref.ref || ref).path.join('/'));
+  for (const path of ['events','householdItems','householdMeals']) assert.ok(watched.includes(path), `listens to ${path}`);
+  assert.deepEqual(errors,[]);
+});
+test('one part failing at startup leaves the rest working and says which part', async t => {
+  const {dom,doc,errors}=await fixture({live:true,member:true,breakPart:'initMeals'}); t.after(() => dom.window.close());
+  await settle(); await settle();
+  assert.ok(doc.getElementById('gate').classList.contains('hidden'));
+  assert.match(doc.getElementById('startupProblems').textContent,/One part of Hubert’s House didn’t start: Meals \(invalid-argument\)\. Everything else is working\./);
+  assert.ok(doc.getElementById('trashPanel').children.length, 'the parts after Meals (trash days) still started');
   assert.deepEqual(errors,[]);
 });
 test('a signed-in Firebase account without household membership cannot open the dashboard', async t => {
