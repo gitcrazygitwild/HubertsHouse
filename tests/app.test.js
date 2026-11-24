@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { JSDOM, VirtualConsole } from 'jsdom';
 import { exportedNames } from './exported-names.js';
+import { strictFirebase } from './strict-firebase.js';
 process.env.TZ = 'America/New_York';
 const read = path => readFile(new URL(`../${path}`,import.meta.url),'utf8');
 const clean = source => source.replace(/^export \{[^}]*\} from [^;]+;$/gm,'').replace(/^import\b[\s\S]*?;\s*$/gm,'').replace(/\bexport\s+(?=(?:async\s+)?(?:function|const|class|let))/g,'');
@@ -14,6 +15,8 @@ async function fixture(options = {}) {
   w.structuredClone=structuredClone; w.confirm=() => true; w.alert=message => {throw new Error(message);};
   w.HTMLDialogElement.prototype.showModal=function(){this.open=true;}; w.HTMLDialogElement.prototype.close=function(){this.open=false;};
   Object.assign(w,{config:{firebase:{},calendarServiceEnabled:false},initializeApp:() => ({}),getFirestore:() => ({}),collection:() => ({}),getAuth:() => ({}),onAuthStateChanged:(_auth,callback) => callback({uid:'nonmember',email:'outsider@example.com'}),getDoc:async () => ({exists:() => false}),setDoc:async () => {},doc:(...args) => args,signOut:async () => {},serverTimestamp:() => new Date(),getFunctions:() => ({}),httpsCallable:() => {throw new Error('Demo must not call the calendar service');}});
+  // Signed in as a household member, against a Firebase stand-in as strict as the real SDK.
+  const strict = options.member ? strictFirebase() : null; if (strict) Object.assign(w, strict.api);
   // Real FullCalendar is exercised in a DOM. This is not a visual browser test.
   w.eval(await read('node_modules/fullcalendar/index.global.js'));
   // Every export becomes a global for the modules loaded after it (the list in each call is just documentation).
@@ -53,6 +56,9 @@ async function fixture(options = {}) {
   await module('awards.js',['frankieAwards']);
   await module('bottle-pace.js',['bottlePace']);
   await module('mack-hat.js',['seeded','HAT_LINES','hatGuess','hatSeed','scoreHat']);
+  await module('day-ring.js',['dayRing','dayRingHTML']);
+  await module('week-story.js',['weekStory','weekStoryText']);
+  await module('story-view.js',['slideHTML','openStory'],'const esc=escapeHTML;');
   await module('frankie.js',['renderFrankie','initFrankie','frankieDayText','bottleLinksHTML', 'pumpsHTML', 'paceHTML','challengeHTML','napNightHTML','hatHTML','callsSlides'],'const esc=escapeHTML;');
   await module('baby-logs.js',['LOG_FILTERS','describeLog','logKey','logsHTML'],'const esc=escapeHTML;');
   await module('baby.js',['initHuckleberry','logBabyFromText'],'const esc=escapeHTML;');
@@ -68,6 +74,7 @@ async function fixture(options = {}) {
   await module('smart-home.js',['isOutdoor','weatherFlags','nextUp','untilText']);
   await module('free-nights.js',['freeEvenings','dateNightDraft']);
   await module('sky.js',['skyState','skyArt']);
+  await module('ask.js',['answerQuestion','isQuestion','daysAsked','SAMPLE_QUESTIONS']);
   await module('upgrades.js',['initUpgrades'],'const esc=escapeHTML;');
   await module('newsletter-settings.js',['initNewsletterSettings','lastTestNote'],'const esc=escapeHTML;');
   await module('siri-settings.js',['initSiriSettings','shortcutSteps'],'const esc=escapeHTML;');
@@ -89,12 +96,16 @@ async function fixture(options = {}) {
   await module('bath-days.js',['DEFAULT_BATH_DAYS','WEEKDAYS','BATH_TITLE','cleanBathDays','bathDays','setBathDays','isBathDay','describeBathDays','bathDaysInRange','bathEvents','nextBathDay']);
   await module('hypotheses.js',['FACTORS','OUTCOMES','fits','describeHypothesis','parseHypothesis','hypothesisData','formatOutcome','testHypothesis','claudeDigest']);
   await module('hypotheses-view.js',['memoryHypotheses','initHypotheses'],'const esc=escapeHTML;');
+  await module('service-health-model.js',[]);
+  await module('health-view.js',[],'const esc=escapeHTML;');
   await module('trash-days.js',['DEFAULT_TRASH','PICKUP_LOOK','keyOf','bigHolidays','holidayOn','cleanTrash','trashSettings','setTrash','pickupsInRange','pickupTitle','trashEvents','pickupOn','nextPickup','describeTrash']);
   await module('trash-settings.js',['trashPanelHTML','memoryTrashStore','initTrashDays'],'const esc=escapeHTML;');
   await module('bath-settings.js',['bathPanelHTML','memoryBathStore','initBathDays'],'const esc=escapeHTML;');
   await module('birthdays.js',['sampleBirthdays','birthdayPanelHTML','initBirthdays'],'const esc=escapeHTML;');
+  await module('features.js',['startParts','featureParts','startFeatures','showStartupProblems','startupProblemText']);
+  if (options.breakPart) { const real = w[options.breakPart]; w[options.breakPart] = () => { const e = new Error('broken on purpose'); e.code = 'invalid-argument'; throw e; }; w.__realPart = real; }
   w.eval(clean(await read('app.js')) + ';window.__testApp={getDocs:()=>rawDocs,setCloudDocs:(records)=>{cloudDocs=records;rebuildEvents();},persistMovedEvent,redraw:()=>updateHouseholdEvents(expandedEvents)};'); await settle();
-  return {dom,w,doc:w.document,errors};
+  return {dom,w,doc:w.document,errors,strict};
 }
 test('home views, theme and monitor navigation work together without hiding the daily extras', async t => {
   const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
@@ -189,6 +200,24 @@ test('the top event save creates only one event, and household all-day drag boun
   const id=w.__testApp.getDocs().find(d => d.title === 'One event, one click').id;
   await w.__testApp.persistMovedEvent({id,extendedProps:{},allDay:true,start:new w.Date('2026-11-15T00:00:00'),end:new w.Date('2026-11-18T00:00:00')});
   assert.equal(new Date(w.__testApp.getDocs().find(d => d.id === id).end).getDate(),17);
+  assert.deepEqual(errors,[]);
+});
+test('a household member signs in and the real startup path finishes (strict Firebase stand-in)', async t => {
+  const {dom,doc,errors,w,strict}=await fixture({live:true,member:true}); t.after(() => dom.window.close());
+  await settle(); await settle();
+  assert.ok(doc.getElementById('gate').classList.contains('hidden'), doc.getElementById('gateError').textContent || 'the sign-in screen should be gone');
+  assert.match(doc.getElementById('accountLabel').textContent,/Signed in as member@example.com/);
+  assert.equal(doc.getElementById('startupProblems'),null, doc.getElementById('startupProblems')?.textContent);
+  const watched = strict.listeners.map(ref => (ref.ref || ref).path.join('/'));
+  for (const path of ['events','householdItems','householdMeals']) assert.ok(watched.includes(path), `listens to ${path}`);
+  assert.deepEqual(errors,[]);
+});
+test('one part failing at startup leaves the rest working and says which part', async t => {
+  const {dom,doc,errors}=await fixture({live:true,member:true,breakPart:'initMeals'}); t.after(() => dom.window.close());
+  await settle(); await settle();
+  assert.ok(doc.getElementById('gate').classList.contains('hidden'));
+  assert.match(doc.getElementById('startupProblems').textContent,/One part of Hubert’s House didn’t start: Meals \(invalid-argument\)\. Everything else is working\./);
+  assert.ok(doc.getElementById('trashPanel').children.length, 'the parts after Meals (trash days) still started');
   assert.deepEqual(errors,[]);
 });
 test('a signed-in Firebase account without household membership cannot open the dashboard', async t => {
@@ -780,6 +809,16 @@ test('event window: day chips, a clock to drag, the extras folded away', async t
   assert.ok(doc.getElementById('saveBtnTop').classList.contains('event-save-top'), 'one Save, at the bottom (the top one is styled away)');
   assert.deepEqual(errors, []);
 });
+test('Settings shows whether Huckleberry, Publix and the email are working, and Today warns when one stops', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  const rows=[...doc.querySelectorAll('#healthPanel .health-list li')];
+  assert.deepEqual(rows.map(li => li.className), ['health-ok', 'health-ok', 'health-ok']);
+  assert.match(doc.getElementById('healthPanel').textContent, /Huckleberry.*Working · last checked/s);
+  assert.doesNotMatch(doc.getElementById('nowNext').textContent, /⚠/, 'nothing to warn about');
+  w.dispatchEvent(new w.CustomEvent('hh:health', { detail:[{ service:'huckleberry', name:'Huckleberry', problem:'unreachable', since:new Date(Date.now() - 3600000).toISOString(), text:'Huckleberry hasn’t answered since 1:00 PM.' }] }));
+  assert.match(doc.getElementById('nowNext').textContent, /⚠Huckleberrynot answering since/);
+  assert.deepEqual(errors, []);
+});
 test('Got a hunch? Typed words are tested on the spot, and ones it can’t test are saved for Claude', async t => {
   const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
   doc.querySelector('[data-view="frankie"]').click(); await settle();
@@ -858,4 +897,45 @@ test('logging windows: drag bars set the time, the amount, how long she slept an
   assert.equal(doc.getElementById('babyLogStart').closest('.log-custom-time').hidden, false);
   assert.equal(doc.getElementById('babyLogStartAgo').value, '-240', 'the bar stops at its end');
   assert.deepEqual(errors, []);
+});
+
+test('deleting a to-do or a household event happens at once, with Undo instead of a confirm box', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  w.confirm=() => { throw new Error('should not ask'); };
+  doc.querySelector('[data-life-tab="groceries"]').click();
+  const before=doc.querySelectorAll('#groceryGroups .item-row').length, row=doc.querySelector('#groceryGroups .item-row'), name=row.querySelector('strong, .item-title')?.textContent || '';
+  row.querySelector('[data-edit-item]').click(); doc.getElementById('deleteItem').click(); await settle();
+  assert.equal(doc.querySelectorAll('#groceryGroups .item-row').length,before-1);
+  assert.match(doc.getElementById('notice').textContent,/^Deleted “.+”\.Undo$/);
+  doc.querySelector('#notice button').click(); await settle();
+  assert.equal(doc.querySelectorAll('#groceryGroups .item-row').length,before);
+  if (name) assert.ok(doc.getElementById('groceryGroups').textContent.includes(name));
+  assert.match(doc.getElementById('notice').textContent,/is back/);
+  // A household event, from the home calendar.
+  const count=() => w.__testApp.getDocs().length, total=count(), ids=new Set(w.__testApp.getDocs().filter(d => !d.icloud).map(d => d.id));
+  const event=[...doc.querySelectorAll('[data-home-event]')].find(el => ids.has(el.dataset.homeEvent)); event.click(); await settle();
+  doc.getElementById('deleteBtn').click(); await settle();
+  assert.equal(count(),total-1); assert.match(doc.getElementById('notice').textContent,/^Deleted “.+”\.Undo$/);
+  doc.querySelector('#notice button').click(); await settle();
+  assert.equal(count(),total); assert.match(doc.getElementById('notice').textContent,/is back\./);
+  assert.deepEqual(errors,[]);
+});
+
+test('asking the house a question in the quick-add box answers it instead of adding a plan', async t => {
+  const {dom,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  const input=doc.getElementById('quickAddInput'), form=doc.getElementById('quickAddForm');
+  input.value='What’s on tomorrow?'; input.dispatchEvent(new dom.window.Event('input'));
+  assert.equal(form.querySelector('[type="submit"]').textContent,'Ask');
+  form.dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true})); await settle();
+  const box=doc.getElementById('askAnswer');
+  assert.equal(box.hidden,false); assert.match(box.textContent,/What’s on tomorrow\?/); assert.match(box.querySelector('.ask-a').textContent,/^Tomorrow: /);
+  assert.equal(doc.getElementById('modalBackdrop').classList.contains('hidden') || !doc.getElementById('modalBackdrop').classList.contains('open'),true,'no event window opened');
+  assert.equal(input.value,''); assert.equal(form.querySelector('[type="submit"]').textContent,'Add');
+  box.querySelector('[data-ask-close]').click(); assert.equal(box.hidden,true);
+  // A question about Frankie is never mistaken for a log.
+  input.value='How long has Frankie been awake?'; input.dispatchEvent(new dom.window.Event('input'));
+  assert.equal(doc.getElementById('quickAddPreview').textContent,'↵ Ask Hubert’s House');
+  form.dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true})); await settle();
+  assert.match(box.querySelector('.ask-a').textContent,/^Frankie has been awake for /);
+  assert.deepEqual(errors,[]);
 });

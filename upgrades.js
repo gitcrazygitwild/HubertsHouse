@@ -10,35 +10,65 @@ import { pickupOn } from './trash-days.js';
 import { catsConsensus } from './baby-model.js';
 import { freeEvenings, dateNightDraft } from './free-nights.js';
 import { skyState, skyArt } from './sky.js';
+import { answerQuestion, isQuestion } from './ask.js';
 
 const $ = id => document.getElementById(id);
 const read = key => { try { return localStorage.getItem(key); } catch { return null; } };
 const write = (key, value) => { try { localStorage.setItem(key, value); } catch { /* optional */ } };
 const clock = date => new Date(date).toLocaleTimeString([], { hour:'numeric', minute:'2-digit' });
 const dayName = date => new Date(date).toLocaleDateString([], { weekday:'short' });
-let ctx, baby = null, forecast = null, litter = null, feeders = null, lastFlags = [];
+let ctx, baby = null, forecast = null, litter = null, feeders = null, health = [], lastFlags = [], frankie = null;
 
 // ---------- Quick add ----------
 function draftPayload(draft) {
   return { mode:'create', title:draft.title, start:draft.start, end:draft.end, allDay:draft.allDay, owner:draft.owner, withFrankie:draft.withFrankie, type:draft.type, repeat:'none', notes:'', checklist:[] };
 }
+// ---------- Ask the house ----------
+// Questions typed (or said) into the quick-add box or ⌘K get an answer from ask.js.
+const askData = () => ({ now:new Date(), events:ctx.getEvents(), baby, frankie, forecast });
+export function askHouse(text) { return isQuestion(text) ? answerQuestion(text, askData()) : null; }
+const VIEW_NAMES = { frankie:'Frankie', calendar:'Calendar', settings:'Settings', today:'Today' };
+export function speak(text, synth = globalThis.speechSynthesis, Utterance = globalThis.SpeechSynthesisUtterance) {
+  if (!synth || !Utterance) return false;
+  synth.cancel(); const line = new Utterance(text.replace(/[🛁🎂]/gu, '')); line.lang = 'en-US'; line.rate = 1; synth.speak(line); return true;
+}
+function showAnswer(result, question, { say = false } = {}) {
+  const box = $('askAnswer'); if (!box) return;
+  const canSpeak = !!(globalThis.speechSynthesis && globalThis.SpeechSynthesisUtterance);
+  renderHTML(box, `<span class="ask-q">${esc(question)}</span><p class="ask-a">${esc(result.answer)}</p><div class="ask-actions">${canSpeak ? '<button type="button" class="btn" data-ask-speak>🔊 Read aloud</button>' : ''}${result.view && result.view !== 'today' ? `<button type="button" class="btn" data-ask-view="${esc(result.view)}">Open ${esc(VIEW_NAMES[result.view] || result.view)} →</button>` : ''}<button type="button" class="btn ask-close" data-ask-close aria-label="Close the answer">✕</button></div>`);
+  box.hidden = false; box.dataset.answer = result.answer;
+  if (say) speak(result.answer);
+}
+function initAsk() {
+  const box = $('askAnswer'); if (!box) return;
+  box.addEventListener('click', event => {
+    if (event.target.closest('[data-ask-speak]')) speak(box.dataset.answer || '');
+    else if (event.target.closest('[data-ask-view]')) ctx.showView(event.target.closest('[data-ask-view]').dataset.askView);
+    else if (event.target.closest('[data-ask-close]')) { box.hidden = true; globalThis.speechSynthesis?.cancel(); }
+  });
+  window.addEventListener('hh:frankie', event => { frankie = event.detail || null; });
+}
+
 function initQuickAdd() {
-  const form = $('quickAddForm'), input = $('quickAddInput'), preview = $('quickAddPreview');
-  // Frankie logs ("frankie bottle 10:30am 4oz") win over calendar plans.
+  const form = $('quickAddForm'), input = $('quickAddInput'), preview = $('quickAddPreview'), submit = form.querySelector('[type="submit"]');
+  // A question that has an answer wins (“how long has Frankie been awake?” is not a wake-up log), then Frankie logs (“frankie bottle 10:30am 4oz”), then calendar plans.
   const update = () => {
-    const log = parseBabyLog(input.value), draft = log ? null : parseQuickAdd(input.value);
-    preview.textContent = !input.value.trim() ? '' : log ? `↵ ${describeBabyLog(log)}` : draft ? `↵ ${describeDraft(draft)}` : 'Add a day or time — “Fri 7pm”, “tomorrow”, “Dec 5” — or log for Frankie: “frankie bottle 10:30am 4oz”';
-    preview.dataset.ready = String(!!(log || draft));
+    const answer = askHouse(input.value), log = answer ? null : parseBabyLog(input.value), draft = log || answer ? null : parseQuickAdd(input.value);
+    preview.textContent = !input.value.trim() ? '' : log ? `↵ ${describeBabyLog(log)}` : answer ? '↵ Ask Hubert’s House' : draft ? `↵ ${describeDraft(draft)}` : 'Add a day or time — “Fri 7pm”, “tomorrow”, “Dec 5” — log for Frankie: “frankie bottle 10:30am 4oz” — or ask: “what’s on Friday?”';
+    preview.dataset.ready = String(!!(log || draft || answer));
+    submit.textContent = answer ? 'Ask' : 'Add';
   };
-  input.addEventListener('input', update);
+  input.addEventListener('input', () => { delete input.dataset.voice; update(); });
   form.addEventListener('submit', event => {
     event.preventDefault();
-    const log = parseBabyLog(input.value), draft = log ? null : parseQuickAdd(input.value);
+    const answer = askHouse(input.value), log = answer ? null : parseBabyLog(input.value), draft = log || answer ? null : parseQuickAdd(input.value);
     if (log) { if (ctx.logBaby(log) !== false) { input.value = ''; update(); } return; }
+    // Asked out loud? Answer out loud too.
+    if (answer) { showAnswer(answer, input.value.trim(), { say:input.dataset.voice === '1' }); input.value = ''; delete input.dataset.voice; update(); return; }
     if (!draft) { update(); input.focus(); return; }
     ctx.openDraft(draftPayload(draft)); input.value = ''; update();
   });
-  initVoice(form, input, update, undefined, { notice:ctx.notice || (() => {}) });
+  initVoice(form, input, () => { input.dataset.voice = '1'; update(); }, undefined, { notice:ctx.notice || (() => {}) });
 }
 // Speak instead of typing (where the browser offers speech recognition, e.g. Safari
 // and Chrome). The words land in the box with the usual preview; nothing is saved
@@ -119,9 +149,10 @@ function score(text, query) {
 }
 function paletteItems(query) {
   const q = query.trim(), items = [];
-  const log = q ? parseBabyLog(q) : null, draft = q && !log ? parseQuickAdd(q) : null;
+  const answer = q ? askHouse(q) : null, log = q && !answer ? parseBabyLog(q) : null, draft = q && !log ? parseQuickAdd(q) : null;
   if (log) items.push({ group:'Frankie', icon:'✨', label:describeBabyLog(log), run:() => ctx.logBaby(log), boost:200 });
-  if (draft) items.push({ group:'Create', icon:'✨', label:`Add “${draft.title}”`, hint:describeDraft(draft).split(' · ').slice(1).join(' · '), run:() => ctx.openDraft(draftPayload(draft)), boost:200 });
+  if (answer) items.push({ group:'Answer', icon:'💬', label:answer.answer, hint:'↵ show it on Today', run:() => { ctx.showView('today'); showAnswer(answer, q); }, boost:300, answer:true });
+  if (draft && !answer) items.push({ group:'Create', icon:'✨', label:`Add “${draft.title}”`, hint:describeDraft(draft).split(' · ').slice(1).join(' · '), run:() => ctx.openDraft(draftPayload(draft)), boost:200 });
   for (const action of ctx.actions()) items.push({ group:action.group || 'Actions', ...action });
   const now = new Date(), horizon = +now + 60 * 86400000;
   const events = ctx.getEvents().filter(event => new Date(event.end || event.start) >= now && new Date(event.start) <= horizon)
@@ -140,7 +171,7 @@ function initPalette() {
   const render = () => {
     items = paletteItems(input.value); active = Math.min(active, Math.max(0, items.length - 1));
     let group = '';
-    renderHTML(list, items.length ? items.map((item, i) => `${item.group !== group ? `<li class="palette-group" role="presentation">${esc(group = item.group)}</li>` : ''}<li role="option" id="palette-${i}" aria-selected="${i === active}" data-index="${i}" class="palette-item"><span class="palette-icon" aria-hidden="true">${esc(item.icon || '•')}</span><span class="palette-label">${esc(item.label)}</span>${item.hint ? `<span class="palette-hint">${esc(item.hint)}</span>` : ''}</li>`).join('') : '<li class="palette-empty">No matches. Try a plan like “Brunch Sun 11am”.</li>');
+    renderHTML(list, items.length ? items.map((item, i) => `${item.group !== group ? `<li class="palette-group" role="presentation">${esc(group = item.group)}</li>` : ''}<li role="option" id="palette-${i}" aria-selected="${i === active}" data-index="${i}" class="palette-item${item.answer ? ' is-answer' : ''}"><span class="palette-icon" aria-hidden="true">${esc(item.icon || '•')}</span><span class="palette-label">${esc(item.label)}</span>${item.hint ? `<span class="palette-hint">${esc(item.hint)}</span>` : ''}</li>`).join('') : '<li class="palette-empty">No matches. Try a plan like “Brunch Sun 11am”.</li>');
     input.setAttribute('aria-activedescendant', items.length ? `palette-${active}` : '');
     list.querySelector('[aria-selected="true"]')?.scrollIntoView?.({ block:'nearest' });
   };
@@ -164,42 +195,55 @@ function initPalette() {
 }
 
 // ---------- Now & Next ----------
-// One quiet line under the page title: the next plan, Frankie, and rain.
+// Small tiles under the page title: what needs attention, the next plan, Frankie, and rain.
+// Each tile is an icon, a title you can tap, and a quiet detail; Frankie's spans the row.
+const tile = ({ tone = 'plain', icon, link, detail = '', sub = '', wide = false, meter = null }) =>
+  `<div class="nn-item nn-${tone}${wide ? ' nn-wide' : ''}"><span class="nn-icon" aria-hidden="true">${icon}</span><span class="nn-body">${link}${detail ? `<span class="nn-muted">${detail}</span>` : ''}${sub ? `<span class="nn-sub">${sub}</span>` : ''}${meter == null ? '' : `<span class="nn-meter${meter > 1 ? ' is-over' : ''}" role="presentation"><i style="width:${Math.round(Math.min(1, Math.max(0, meter)) * 100)}%"></i></span>`}</span></div>`;
+const viewLink = (view, html) => `<button type="button" class="nn-link" data-nn-view="${view}">${html}</button>`;
 function renderNowNext() {
   const root = $('nowNext'); if (!root) return;
   const now = new Date(), events = ctx.getEvents(), parts = [];
   const eventLink = (event, from, label) => `<button type="button" class="nn-link" data-nn-event="${esc(event.extendedProps?.sourceId || event.id)}" data-nn-occ="${esc(from.toISOString())}">${label}</button>`;
   const { current, next } = nextUp(events, now);
+  // Something outside stopped working (Settings → Connections has the details).
+  if (health.length) { const a = health[0], short = { 'signed-out':'needs reconnecting', denied:'is refusing access', changed:'may have changed', failed:'didn’t send' }[a.problem] || `not answering since ${clock(a.since)}`;
+    parts.push(tile({ tone:'health', icon:'⚠', link:viewLink('settings', `<strong>${esc(a.name)}</strong>`), detail:`${esc(short)}${health.length > 1 ? ` · +${health.length - 1} more` : ''}` })); }
   // Today's birthdays first; otherwise tomorrow's, so there's time to call or send a card.
   if (birthdaysShown()) {
     const start = new Date(now); start.setHours(0, 0, 0, 0); const dayAfter = new Date(start); dayAfter.setDate(dayAfter.getDate() + 2);
     const soon = birthdaysInRange(start, dayAfter), todayKey = dateKey(start), today = soon.filter(b => b.date === todayKey), tomorrow = soon.filter(b => b.date !== todayKey);
     const label = b => b.age ? `${b.name} turns ${b.age}` : `${b.name}’s birthday`;
-    if (today.length) parts.push(`<span class="nn-item nn-birthday"><span aria-hidden="true">🎂</span><button type="button" class="nn-link" data-nn-view="calendar"><strong>${esc(today.map(label).join(' · '))}</strong></button><span class="nn-muted">today</span></span>`);
-    else if (tomorrow.length) parts.push(`<span class="nn-item nn-birthday"><span aria-hidden="true">🎂</span><button type="button" class="nn-link" data-nn-view="calendar">Tomorrow: <strong>${esc(tomorrow.map(label).join(' · '))}</strong></button></span>`);
+    if (today.length) parts.push(tile({ tone:'birthday', icon:'🎂', link:viewLink('calendar', `<strong>${esc(today.map(label).join(' · '))}</strong>`), detail:'today' }));
+    else if (tomorrow.length) parts.push(tile({ tone:'birthday', icon:'🎂', link:viewLink('calendar', `<strong>${esc(tomorrow.map(label).join(' · '))}</strong>`), detail:'tomorrow' }));
   }
   // Bath night, from the afternoon on (mornings are for the day's plans).
-  if (isBathDay(now) && now.getHours() >= 12 && now.getHours() < 22) parts.push('<span class="nn-item nn-bath"><span aria-hidden="true">🛁</span><button type="button" class="nn-link" data-nn-view="settings"><strong>Bath night</strong></button><span class="nn-muted">tonight</span></span>');
+  if (isBathDay(now) && now.getHours() >= 12 && now.getHours() < 22) parts.push(tile({ tone:'bath', icon:'🛁', link:viewLink('settings', '<strong>Bath night</strong>'), detail:'tonight' }));
   // Bin day: the evening before (bins out tonight) and that morning.
   { const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1);
     const today = now.getHours() < 12 ? pickupOn(now) : null, next = now.getHours() >= 15 ? pickupOn(tomorrow) : null;
-    if (today) parts.push(`<span class="nn-item nn-trash"><span aria-hidden="true">🗑️</span><button type="button" class="nn-link" data-nn-view="settings"><strong>${esc(today.title.replace(/^🗑️ |^♻️ /, ''))}</strong></button><span class="nn-muted">today${today.moved ? ` (moved for ${esc(today.moved.holiday)})` : ''}</span></span>`);
-    else if (next) parts.push(`<span class="nn-item nn-trash"><span aria-hidden="true">🗑️</span><button type="button" class="nn-link" data-nn-view="settings"><strong>Bins out tonight</strong></button><span class="nn-muted">${esc(next.title.replace(/^🗑️ |^♻️ /, '').toLowerCase())} tomorrow${next.moved ? ` (moved for ${esc(next.moved.holiday)})` : ''}</span></span>`); }
-  if (current) parts.push(`<span class="nn-item"><span class="nn-live" aria-hidden="true"></span>${eventLink(current.event, current.from, `Now: <strong>${esc(current.event.title)}</strong>`)} <span class="nn-muted">${current.minutesLeft}m left</span></span>`);
-  if (next) parts.push(`<span class="nn-item"><span aria-hidden="true">◷</span>${eventLink(next.event, next.from, `Next: <strong>${esc(next.event.title)}</strong>`)} <span class="nn-muted">${esc(next.minutesUntil < 1440 ? clock(next.from) : `${dayName(next.from)} ${clock(next.from)}`)} · ${esc(untilText(next.minutesUntil))}</span></span>`);
+    const name = pickup => esc(pickup.title.replace(/^🗑️ |^♻️ /, ''));
+    if (today) parts.push(tile({ tone:'trash', icon:'🗑️', link:viewLink('settings', `<strong>${name(today)}</strong>`), detail:`today${today.moved ? ` (moved for ${esc(today.moved.holiday)})` : ''}` }));
+    else if (next) parts.push(tile({ tone:'trash', icon:'🗑️', link:viewLink('settings', '<strong>Bins out tonight</strong>'), detail:`${name(next).toLowerCase()} tomorrow${next.moved ? ` (moved for ${esc(next.moved.holiday)})` : ''}` })); }
+  if (current) parts.push(tile({ tone:'now', icon:'<span class="nn-live"></span>', link:eventLink(current.event, current.from, `<span class="nn-kicker">Now:</span> <strong>${esc(current.event.title)}</strong>`), detail:`${current.minutesLeft}m left` }));
+  if (next) parts.push(tile({ tone:'next', icon:'◷', link:eventLink(next.event, next.from, `<span class="nn-kicker">Next:</span> <strong>${esc(next.event.title)}</strong>`), detail:`${esc(next.minutesUntil < 1440 ? clock(next.from) : `${dayName(next.from)} ${clock(next.from)}`)} · ${esc(untilText(next.minutesUntil))}` }));
   if (baby) {
     const minutes = stamp => Math.max(0, Math.round((+now - Date.parse(stamp)) / 60000)), hm = m => m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`;
-    const status = baby.timer?.active ? `asleep ${hm(minutes(baby.timer.start))}` : baby.lastWake ? `awake ${hm(minutes(baby.lastWake))}` : 'no sleep logged';
+    const asleep = !!baby.timer?.active, status = asleep ? `asleep ${hm(minutes(baby.timer.start))}` : baby.lastWake ? `awake ${hm(minutes(baby.lastWake))}` : 'no sleep logged';
     // Average of the three cats' calls (Hubert, Mia, Mack); hover to see each one.
-    const cats = !baby.timer?.active ? catsConsensus(baby) : null;
-    const nap = cats ? ` · ${cats.kind} ~${clock(cats.target)}${cats.picks.length > 1 ? ` (avg of ${cats.picks.length} cats)` : ` (${cats.picks[0].cat})`}` : '';
+    const cats = !asleep ? catsConsensus(baby) : null;
+    const nap = cats ? `${cats.kind} ~${clock(cats.target)}${cats.picks.length > 1 ? ` (avg of ${cats.picks.length} cats)` : ` (${cats.picks[0].cat})`}` : '';
     const napTitle = cats ? cats.picks.map(p => `${p.cat} ${clock(p.at)}`).join(' · ') + (cats.left.length ? ` · left out: ${cats.left.join(', ')} (a different sleep)` : '') : '';
-    parts.push(`<span class="nn-item"><span aria-hidden="true">${baby.timer?.active ? '☾' : '☀'}</span><button type="button" class="nn-link" data-nn-view="frankie">${esc(baby.name)} <strong>${esc(status)}</strong></button><span class="nn-muted"${napTitle ? ` title="${esc(napTitle)}"` : ''}>${esc(nap)}${baby.lastBottle ? ` · bottle ${esc(hm(minutes(baby.lastBottle)))} ago` : ''}${baby.nextBottle?.available ? ` · next ~${esc(clock(baby.nextBottle.target))}${baby.nextBottle.waitingForWake ? ' when she wakes' : ''}` : ''}</span></span>`);
+    const bottle = [baby.lastBottle ? `bottle ${hm(minutes(baby.lastBottle))} ago` : '', baby.nextBottle?.available ? `next ~${clock(baby.nextBottle.target)}${baby.nextBottle.waitingForWake ? ' when she wakes' : ''}` : ''].filter(Boolean).join(' · ');
+    // How far through her awake window she is (from waking to the cats' call).
+    const wake = Date.parse(baby.lastWake), due = cats ? +new Date(cats.target) : NaN, meter = Number.isFinite(wake) && due > wake ? (+now - wake) / (due - wake) : null;
+    parts.push(tile({ tone:asleep ? 'asleep' : 'frankie', icon:asleep ? '☾' : '☀', wide:true, meter,
+      link:viewLink('frankie', `${esc(baby.name)} <strong>${esc(status)}</strong>`),
+      detail:nap ? `<span${napTitle ? ` title="${esc(napTitle)}"` : ''}>${esc(nap)}</span>` : '', sub:esc(bottle) }));
   }
-  if (litter) parts.push(`<span class="nn-item"><span aria-hidden="true">🐈</span><button type="button" class="nn-link" data-nn-view="devices"><strong>${esc(litter.name)}</strong></button><span class="nn-muted">${litter.full ? 'drawer full' : `drawer ${litter.drawer}% full`}</span></span>`);
-  if (feeders) parts.push(`<span class="nn-item"><span aria-hidden="true">🥣</span><button type="button" class="nn-link" data-nn-view="devices"><strong>${esc(feeders.name)}</strong></button><span class="nn-muted">${feeders.blocked ? 'outlet may be blocked' : 'food low'}${feeders.more ? ` · +${feeders.more} more` : ''}</span></span>`);
+  if (litter) parts.push(tile({ tone:'device', icon:'🐈', link:viewLink('devices', `<strong>${esc(litter.name)}</strong>`), detail:litter.full ? 'drawer full' : `drawer ${litter.drawer}% full` }));
+  if (feeders) parts.push(tile({ tone:'device', icon:'🥣', link:viewLink('devices', `<strong>${esc(feeders.name)}</strong>`), detail:`${feeders.blocked ? 'outlet may be blocked' : 'food low'}${feeders.more ? ` · +${feeders.more} more` : ''}` }));
   const flags = forecast ? weatherFlags(events, forecast.days, now) : [];
-  if (flags.length) parts.push(`<span class="nn-item"><span aria-hidden="true">☔</span>${eventLink({ id:flags[0].id }, new Date(flags[0].start), `<strong>${esc(flags[0].title)}</strong>`)} <span class="nn-muted">${esc(dayName(flags[0].start))} · ${flags[0].rain == null ? esc(flags[0].label) : `${flags[0].rain}% rain`}</span></span>`);
+  if (flags.length) parts.push(tile({ tone:'rain', icon:'☔', link:eventLink({ id:flags[0].id }, new Date(flags[0].start), `<strong>${esc(flags[0].title)}</strong>`), detail:`${esc(dayName(flags[0].start))} · ${flags[0].rain == null ? esc(flags[0].label) : `${flags[0].rain}% rain`}` }));
   renderHTML(root, parts.join(''));
   root.hidden = !parts.length;
   lastFlags = flags; markWeather(flags);
@@ -231,7 +275,7 @@ function markWeather(flags) {
 
 export function initUpgrades(options) {
   ctx = options;
-  initQuickAdd(); initPalette();
+  initAsk(); initQuickAdd(); initPalette();
   $('nowNext').addEventListener('click', event => {
     const target = event.target.closest('[data-nn-event],[data-nn-view]'); if (!target) return;
     if (target.dataset.nnEvent) ctx.openEvent(target.dataset.nnEvent, target.dataset.nnOcc);
@@ -241,6 +285,7 @@ export function initUpgrades(options) {
   window.addEventListener('hh:birthdays', () => renderNowNext());
   window.addEventListener('hh:litter', event => { litter = event.detail; renderNowNext(); });
   window.addEventListener('hh:feeders', event => { feeders = event.detail; renderNowNext(); });
+  window.addEventListener('hh:health', event => { health = event.detail || []; renderNowNext(); });
   window.addEventListener('hh:forecast', event => { forecast = event.detail; renderNowNext(); renderSky(); });
   window.addEventListener('hh:events', () => requestAnimationFrame(() => { renderNowNext(); renderFreeNights(); }));
   $('freeNights')?.addEventListener('click', event => { const button = event.target.closest('[data-free-night]'); if (button) ctx.openDraft(dateNightDraft(new Date(button.dataset.freeNight))); });

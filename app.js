@@ -1,34 +1,22 @@
 import { overlappingEvents, preferredCalendar } from './event-planning.js';
 import { initCatCrew } from './cat-crew.js';
-import { initHuckleberry, logBabyFromText } from './baby.js';
+import { logBabyFromText } from './baby.js';
 import { sweetspotPatch } from './prediction-log.js';
 import { initUpgrades } from './upgrades.js';
-import { initNewsletterSettings } from './newsletter-settings.js';
-import { initSiriSettings } from './siri-settings.js';
-import { initWorldBriefing } from './world-briefing.js';
-import { initInstall } from './install-app.js';
-import { initPullRefresh } from './pull-refresh.js';
 import { parseQuickAdd, describeDraft } from './quick-add.js';
 import { createPlaceWeather, usePlaceWeather, eventWeatherLine, sampleWeatherFetch, searchPlaces, whereBoxText } from './place-weather.js';
 import { initPlaceSuggest } from './place-suggest.js';
 import { OWNER_STYLE, normalizeOwner, CHECKLIST_PRESETS, normalizeDocs, expandRepeats, advanceRepeat, makeInclusiveAllDayEnd, makeFcEvent, renderPanelCardHTML, renderPanelCardHTMLWithProgress, formatWhenForPanel, toInputValue, fromInputValue, roundToNextHour, escapeHtml } from './event-data.js';
-import { initHypotheses, memoryHypotheses } from './hypotheses-view.js';
 import { ensureCatLinkMarkup, setCatMode, LS_CATMODE } from './cat-mode.js';
-import { predictionStore, hypothesisStore, settingsStore, trashStore, firestoreStore } from './stores.js';
+import { firestoreStore } from './stores.js';
+import { startFeatures, showStartupProblems } from './features.js';
 import { renderChecklistUI, addChecklistItemUI, readChecklistUI } from './checklist-ui.js';
 import { renderUpcomingList, renderOutstandingList } from './panels.js';
-import { initDevices } from './devices.js';
-import { initLitter } from './litter.js';
-import { initFeeders } from './feeders.js';
-import { initMeals } from './meals.js';
 import { initEventDateEditor } from './event-editor.js';
 import { holidayEvents, holidaysEnabled } from './holidays.js';
 import { birthdayEvents, birthdaysShown } from './birthdays-model.js';
 import { bathEvents } from './bath-days.js';
-import { initBathDays, memoryBathStore } from './bath-settings.js';
 import { trashEvents } from './trash-days.js';
-import { initTrashDays, memoryTrashStore } from './trash-settings.js';
-import { initBirthdays } from './birthdays.js';
 import { checklistKey, eventChecklistKey } from './checklists.js';
 // app.js — Hubert’s House
 // Household dashboard, authenticated Firebase sync and iCloud calendar integration.
@@ -38,7 +26,7 @@ import { checklistKey, eventChecklistKey } from './checklists.js';
 import { config } from './config.js';
 import { initHousehold, updateHouseholdEvents, showNotice, showView } from './household.js';
 import { initCloudCalendar, setCloudRange, refreshCloud, saveCloudEvent, saveCloudAssignment, deleteCloudEvent } from './cloud-calendar.js';
-import { demoStore, demoEvents, demoMealStore } from './demo.js';
+import { demoStore, demoEvents } from './demo.js';
 import { initDashboard } from './dashboard.js';
 import { initHomeCalendar } from './home-calendar.js';
 import { eventTemplate } from './event-templates.js';
@@ -402,7 +390,7 @@ async function initApp() {
     document.getElementById('accountLabel').textContent = 'Preview mode. No real household or Apple data is loaded.';
     startHousehold(demoStore()); localDocs = demoEvents(); rebuildEvents();
     setCalendarStatus('Sample calendar', 'ready');
-    initCloudCalendar(null,{demo:true,onEvents:() => {},onCalendars:() => {}}); startUpgrades(); initHypotheses({store:memoryHypotheses([{text:'She sleeps longer on bath nights',factor:'bath',outcome:'nightLength',direction:'more'},{text:'She’s fussier on days Hubert sits on her play mat'}])}); initHuckleberry(null,{demo:true}); initNewsletterSettings(null); initSiriSettings(null); initWorldBriefing(null,{demo:true}); initInstall(); initPullRefresh(); initDevices(null,{demo:true}); initLitter(null,{demo:true}); initFeeders(null,{demo:true}); initMeals(null,{demo:true,store:demoMealStore()}); initBirthdays(null,{demo:true,onChange:() => { renderCalendarFromCache(); homeCalendar?.render(); }}); initBathDays({store:memoryBathStore(),onChange:bathChanged}); initTrashDays({store:memoryTrashStore(),onChange:bathChanged}); return;
+    initCloudCalendar(null,{demo:true,onEvents:() => {},onCalendars:() => {}}); startFeatures(featureHooks(null)); return;
   }
   onAuthStateChanged(auth,async user => {
     if (!user) { memberVerified = false; gate.classList.remove('hidden'); if (dataStarted) location.reload(); return; }
@@ -423,8 +411,8 @@ async function initApp() {
         setCalendarStatus('Sync unavailable', 'offline');
         showNotice('The calendar could not sync. Check your connection and household access.');
       });
-      startUpgrades(); initHypotheses({store:hypothesisStore(db)}); initHuckleberry(app,{predictions:predictionStore(db)}); initNewsletterSettings(app); initSiriSettings(app); initWorldBriefing(app); initInstall(); initPullRefresh(); initDevices(app); initLitter(app); initFeeders(app); initMeals(app,{store:firestoreStore(db, 'householdMeals')}); initBirthdays(app,{onChange:() => { renderCalendarFromCache(); homeCalendar?.render(); }}); initBathDays({store:settingsStore(db),onChange:bathChanged}); initTrashDays({store:trashStore(db),onChange:bathChanged});
-      await initCloudCalendar(app,{
+      startFeatures(featureHooks(app));
+      try { await initCloudCalendar(app,{
         onEvents:records => { cloudDocs = records.map(e => ({...e,end:e.editEnd,cloudEnd:e.end,owner:e.owner || 'both',type:'general',checklist:e.checklist || [],repeat:'none'})); rebuildEvents(); },
         onChecklists:records => {cloudChecklistDocs=records;},
         onCalendars:connection => {
@@ -436,7 +424,7 @@ async function initApp() {
           preference.replaceChildren(...[...select.options].map(option => option.cloneNode(true)));
           preference.value = defaultCalendar();
         }
-      });
+      }); } catch (error) { console.error('iCloud calendar didn’t start', error); showStartupProblems([{ name:'iCloud calendar', code:error?.code || error?.name || 'error' }]); }
     } catch (error) {
       // Show what failed (a code, never data), and let the next tap start fresh.
       console.error('Starting after sign-in failed', error);
@@ -469,6 +457,10 @@ function startHousehold(store) {
       }
     }
   });
+}
+// What features.js needs from the calendar here.
+function featureHooks(app) {
+  return { app, db:demo ? null : db, demo, startUpgrades, bathChanged, calendarChanged:() => { renderCalendarFromCache(); homeCalendar?.render(); } };
 }
 function startUpgrades() {
   const click = id => document.getElementById(id)?.click();
@@ -536,11 +528,23 @@ async function saveLocalEvent(id,payload,expectedChecklist) {
   else if (id) await updateDoc(doc(db,'events',id),payload);
   else await addDoc(eventsCol,{...payload,createdAt:serverTimestamp()});
 }
+// Deletes an event. Household events come back with Undo (returns the undo); iCloud ones can't.
 async function removeEvent(id) {
+  const original = rawDocs.find(d => d.id === id), stored = localDocs.find(d => d.id === id);
+  if (original?.icloud) { await deleteCloudEvent(original); cloudDocs=cloudDocs.filter(d => d.id !== id); rebuildEvents(); await refreshCloud(); return null; }
+  if (demo) { localDocs=localDocs.filter(d => d.id !== id); rebuildEvents(); return stored ? async () => { localDocs=[...localDocs,stored]; rebuildEvents(); } : null; }
+  await deleteDoc(doc(db,'events',id));
+  return stored ? async () => { const { id:_, ...data } = stored; await setDoc(doc(db,'events',id),data); } : null;
+}
+// The delete buttons: no “are you sure?” for household events, just Undo for a few seconds.
+async function deleteEventWithUndo(id) {
   const original = rawDocs.find(d => d.id === id);
-  if (original?.icloud) { await deleteCloudEvent(original); cloudDocs=cloudDocs.filter(d => d.id !== id); rebuildEvents(); await refreshCloud(); }
-  else if (demo) { localDocs=localDocs.filter(d => d.id !== id); rebuildEvents(); }
-  else await deleteDoc(doc(db,'events',id));
+  if (original?.icloud && !confirm('Delete this event from iCloud? This can’t be undone.')) return false;
+  let undo;
+  try { undo = await removeEvent(id); } catch (e) { showNotice(e.message); return false; }
+  const title = original?.title ? `“${original.title}”` : 'the event';
+  showNotice(`Deleted ${title}.`, undo ? { label:'Undo', run:async () => { await undo(); showNotice(`${title[0].toUpperCase()}${title.slice(1)} is back.`); } } : undefined);
+  return true;
 }
 
 // ---------- UI hooks ----------
@@ -653,9 +657,7 @@ function initUIHooks() {
 
   deleteBtn?.addEventListener("click", async () => {
     if (!editingDocId) return;
-    if (!confirm("Delete this event?")) return;
-    try { await removeEvent(editingDocId); } catch (e) { showNotice(e.message); return; }
-    closeModal();
+    if (await deleteEventWithUndo(editingDocId)) closeModal();
   });
 
   taskClose?.addEventListener("click", closeTaskModal);
@@ -1282,9 +1284,7 @@ detailsEditBtn?.addEventListener("click", () => {
 
 detailsDeleteBtn?.addEventListener("click", async () => {
   if (!detailsDocId) return;
-  if (!confirm("Delete this event?")) return;
-  try { await removeEvent(detailsDocId); } catch (e) { showNotice(e.message); return; }
-  closeDetailsModal();
+  if (await deleteEventWithUndo(detailsDocId)) closeDetailsModal();
 });
 
 function calendarPreferenceKey() { return `hh_default_calendar_${auth?.currentUser?.uid || (demo ? 'preview' : 'signed-out')}`; }

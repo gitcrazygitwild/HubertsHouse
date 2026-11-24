@@ -9,18 +9,50 @@
 .smart-add-preview:empty { display:none; }
 .smart-add-preview[data-ready="true"] { color:var(--accent); font-weight:600; }
 
-/* Now & Next: a single quiet line under the page title. */
-.now-next { display:flex; flex-wrap:wrap; align-items:center; gap:6px 22px; margin:-6px 0 18px; padding:9px 14px; border-radius:12px; background:color-mix(in srgb, var(--soft) 55%, transparent); font-size:12px; color:var(--muted); }
+/* Now & Next: small tiles under the page title (icon, title, quiet detail). */
+.now-next { --nn-tint:var(--soft); display:grid; grid-template-columns:repeat(auto-fill, minmax(210px, 1fr)); gap:8px; margin:-6px 0 18px; font-size:12px; color:var(--muted); }
 .now-next[hidden] { display:none; }
-.nn-item { display:inline-flex; align-items:baseline; gap:6px; min-width:0; white-space:nowrap; }
-.nn-link { border:0; padding:0; background:none; color:var(--text); font:inherit; cursor:pointer; text-align:left; }
-.nn-link strong { font-weight:600; }
-.nn-link:hover strong { text-decoration:underline; text-underline-offset:3px; }
-.nn-muted { color:var(--muted); white-space:nowrap; }
-.nn-live { width:7px; height:7px; border-radius:50%; background:#d4574e; align-self:center; animation:nn-pulse 2s ease-in-out infinite; }
+.nn-item { --nn-tint:color-mix(in srgb, var(--soft) 80%, var(--card)); --nn-ink:var(--accent); position:relative; display:flex; align-items:flex-start; gap:10px; min-width:0; padding:10px 12px; border-radius:14px; background:color-mix(in srgb, var(--nn-tint) 55%, var(--card)); border:1px solid color-mix(in srgb, var(--nn-tint) 70%, var(--border)); }
+.nn-wide { grid-column:span 2; }
+body[data-view]:not([data-view="today"]) .now-next { display:none !important; } /* Today's tiles */
+.nn-meter.is-over i { background:#c98a2b; }
+.nn-icon { flex:none; display:grid; place-items:center; width:30px; height:30px; border-radius:50%; background:var(--card); color:var(--nn-ink); font-size:15px; line-height:1; box-shadow:0 1px 2px #0000000f; }
+.nn-body { display:flex; flex-direction:column; gap:1px; min-width:0; flex:1; }
+.nn-link { border:0; padding:0; background:none; color:var(--text); font:inherit; font-size:13px; line-height:1.3; cursor:pointer; text-align:left; overflow-wrap:anywhere; }
+.nn-link::after { content:''; position:absolute; inset:0; border-radius:inherit; } /* the whole tile is the button */
+.nn-link:focus-visible { outline:none; } .nn-item:has(.nn-link:focus-visible) { outline:3px solid #ab885b; outline-offset:2px; }
+.nn-link strong { font-weight:650; }
+.nn-item:hover .nn-link strong { text-decoration:underline; text-underline-offset:3px; }
+.nn-kicker { display:block; font-size:10px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--nn-ink); }
+.nn-muted, .nn-sub { color:var(--muted); line-height:1.35; overflow-wrap:anywhere; }
+.nn-sub { font-size:11.5px; }
+.nn-meter { position:relative; display:block; height:4px; margin-top:6px; border-radius:99px; background:color-mix(in srgb, var(--nn-ink) 14%, transparent); overflow:hidden; }
+.nn-meter i { position:absolute; inset:0 auto 0 0; border-radius:inherit; background:var(--nn-ink); }
+.nn-live { width:9px; height:9px; border-radius:50%; background:#d4574e; animation:nn-pulse 2s ease-in-out infinite; }
 @keyframes nn-pulse { 50% { opacity:.35; } }
 @media (prefers-reduced-motion:reduce) { .nn-live { animation:none; } }
-@media (max-width:650px) { .now-next { font-size:11.5px; gap:5px 12px; margin-top:0; } .nn-item { white-space:normal; flex-wrap:wrap; } }
+.nn-health { --nn-tint:#f6e7c8; --nn-ink:#a0701c; } .nn-health .nn-link strong { color:#a0701c; }
+.nn-birthday { --nn-tint:#f7dfe6; --nn-ink:#b0476b; }
+.nn-bath { --nn-tint:#dceaf6; --nn-ink:#3c6c96; }
+.nn-trash { --nn-tint:#e3ead9; --nn-ink:#55704a; }
+.nn-now { --nn-tint:#f6dcd8; --nn-ink:#b3443b; }
+.nn-next { --nn-tint:#dfe9e2; }
+.nn-frankie { --nn-tint:#ece4f4; --nn-ink:#7a5ea8; }
+.nn-asleep { --nn-tint:#dfe2f3; --nn-ink:#4d5a9a; }
+.nn-device { --nn-tint:#efe7da; --nn-ink:#8a6a3c; }
+.nn-rain { --nn-tint:#dde8f2; --nn-ink:#2c4f73; }
+[data-theme="dark"] .nn-item { --nn-tint:color-mix(in srgb, var(--soft) 70%, var(--card)); }
+[data-theme="dark"] .nn-health { --nn-tint:#4a3a1c; --nn-ink:#e3b765; } [data-theme="dark"] .nn-health .nn-link strong { color:#e3b765; }
+[data-theme="dark"] .nn-birthday { --nn-tint:#4a2a36; --nn-ink:#efa3bd; }
+[data-theme="dark"] .nn-bath { --nn-tint:#243a4e; --nn-ink:#9cc4e8; }
+[data-theme="dark"] .nn-trash { --nn-tint:#2e3a28; --nn-ink:#a9c59a; }
+[data-theme="dark"] .nn-now { --nn-tint:#4a2622; --nn-ink:#f0a49c; }
+[data-theme="dark"] .nn-next { --nn-tint:#26382d; }
+[data-theme="dark"] .nn-frankie { --nn-tint:#382e48; --nn-ink:#c3abe8; }
+[data-theme="dark"] .nn-asleep { --nn-tint:#2a2f4c; --nn-ink:#aab4ef; }
+[data-theme="dark"] .nn-device { --nn-tint:#3e3426; --nn-ink:#dcbb8a; }
+[data-theme="dark"] .nn-rain { --nn-tint:#26364a; --nn-ink:#a9c8e6; }
+@media (max-width:650px) { .nn-wide { grid-column:1/-1; } .now-next { grid-template-columns:1fr 1fr; gap:6px; margin-top:0; } .nn-item { padding:9px 10px; gap:8px; } .nn-icon { width:26px; height:26px; font-size:13px; } .nn-link { font-size:12.5px; } .nn-muted { font-size:11.5px; } }
 
 .rain-badge { display:inline-block; margin-top:4px; padding:1px 6px; border-radius:6px; font-size:9.5px; font-weight:650; background:#e3edf6; color:#2c4f73; width:fit-content; }
 [data-theme="dark"] .rain-badge { background:#2a3744; color:#b6d0ea; }
@@ -142,3 +174,34 @@
 .trash-soon span { display:inline-block; min-width:96px; color:var(--muted); }
 .trash-soon small { color:var(--muted); }
 @media (max-width:650px) { .trash-grid { grid-template-columns:1fr; } }
+/* Settings → Connections */
+.health-list { list-style:none; margin:8px 0; padding:0; display:grid; gap:8px; }
+.health-list li { display:flex; gap:10px; align-items:flex-start; padding:10px 12px; border-radius:12px; background:var(--soft, #f1f2ea); }
+.health-list b { display:block; font-weight:600; }
+.health-list small { display:block; color:var(--muted); font-size:12px; line-height:1.45; }
+.health-icon { width:20px; text-align:center; font-weight:700; color:var(--accent); flex:none; }
+.health-warning { background:#fbf1dc !important; } .health-warning .health-icon { color:#a0701c; }
+[data-theme="dark"] .health-warning { background:#3d3322 !important; } [data-theme="dark"] .health-warning .health-icon { color:#e3b765; }
+/* Phones: long Now & Next details (Frankie's line) wrap instead of running off the card. */
+
+/* Startup problems (features.js): one part didn't start; the rest works. */
+.startup-problems { display:flex; align-items:center; gap:12px; margin:0 0 14px; padding:10px 14px; border-radius:14px; background:#fbf1dc; border:1px solid #ecd6a6; color:#6b4d12; font-size:12.5px; line-height:1.4; }
+.startup-problems[hidden] { display:none; }
+.startup-problems span { flex:1; }
+.startup-problems .btn { flex:none; min-height:34px; padding:6px 14px; }
+[data-theme="dark"] .startup-problems { background:#3d321c; border-color:#5c4a26; color:#ecd3a0; }
+
+/* Ask the house (ask.js): the answer under the quick-add box, and in ⌘K. */
+.ask-answer { position:relative; display:grid; gap:6px; padding:14px 16px; border-radius:16px; background:linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, var(--card)), var(--card)); border:1px solid color-mix(in srgb, var(--accent) 25%, var(--border)); animation:ask-in .25s ease-out; }
+.ask-answer[hidden] { display:none; }
+.ask-q { font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+.ask-q::before { content:'💬 '; }
+.ask-a { margin:0; font-family:var(--serif, Georgia, serif); font-size:19px; line-height:1.35; color:var(--text); }
+.ask-actions { display:flex; flex-wrap:wrap; gap:6px; margin-top:2px; }
+.ask-actions .btn { min-height:32px; padding:5px 12px; font-size:12px; }
+.ask-actions .ask-close { margin-left:auto; border:0; background:none; color:var(--muted); }
+@keyframes ask-in { from { opacity:0; transform:translateY(-4px); } }
+@media (prefers-reduced-motion:reduce) { .ask-answer { animation:none; } }
+.palette-item.is-answer { align-items:flex-start; background:color-mix(in srgb, var(--accent) 8%, transparent); }
+.palette-item.is-answer .palette-label { white-space:normal; font-weight:600; line-height:1.4; }
+@media (max-width:650px) { .ask-a { font-size:17px; } }
