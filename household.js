@@ -123,9 +123,11 @@ export function initHousehold(options) {
   $('itemDialog').addEventListener('click', e => { if (e.target === $('itemDialog')) { const r = e.target.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) e.target.close(); } });
   $('itemForm').addEventListener('submit', saveItem);
   $('deleteItem').addEventListener('click', async () => {
-    const item = items.find(x => x.id === $('itemId').value); if (!item || !confirm(`Delete “${item.title}”?`)) return;
+    // Deletes right away, with Undo for a few seconds (instead of an “are you sure?”).
+    const item = items.find(x => x.id === $('itemId').value); if (!item) return;
     $('deleteItem').disabled = true;
-    try { await store.remove(item); $('itemDialog').close(); showNotice('Item deleted.'); } catch (e) { $('itemError').textContent = friendlyError(e); } finally { $('deleteItem').disabled = false; }
+    try { await store.remove(item); $('itemDialog').close(); showNotice(`Deleted “${item.title}”.`, store.restore ? { label:'Undo', run:async () => { await store.restore(item); showNotice(`“${item.title}” is back.`); } } : undefined); }
+    catch (e) { $('itemError').textContent = friendlyError(e); } finally { $('deleteItem').disabled = false; }
   });
   $('quickGroceryForm').addEventListener('submit', async e => {
     e.preventDefault(); const input = $('quickGrocery'); const title = input.value.trim(); if (!title) return;

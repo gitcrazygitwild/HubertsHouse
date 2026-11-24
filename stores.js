@@ -65,6 +65,8 @@ export function firestoreStore(db, name = 'householdItems') {
       });
     },
     async remove(item) { await runTransaction(db,async t => { const ref=doc(col,item.id); check(await t.get(ref),item); t.delete(ref); }); },
+    // Undo a delete: the item comes back under its old id, as a new document (version 0).
+    async restore(item) { const { id, ...data } = item; await setDoc(doc(col,id),{...data,version:0,updatedAt:serverTimestamp()}); return { ...item, version:0 }; },
     async removeMany(items) { await runTransaction(db,async t => {
       if (items.length > 400) throw new Error('Clear fewer than 400 bought items at a time.');
       const snapshots = await Promise.all(items.map(item => t.get(doc(col,item.id))));

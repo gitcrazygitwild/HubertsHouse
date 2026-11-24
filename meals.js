@@ -153,8 +153,9 @@ export function initMeals(app, { demo = false, store } = {}) {
     } catch (e) { $('mealError').textContent = e?.message || 'Couldn’t save that dinner.'; } finally { $('saveMeal').disabled = false; }
   });
   $('deleteMeal')?.addEventListener('click', async () => {
-    const meal = byId($('mealId').value); if (!meal || !confirm(`Delete “${meal.name}”?`)) return;
-    try { await store.remove(meal); dialog.close(); showNotice('Dinner deleted.'); } catch (e) { $('mealError').textContent = e?.message || 'Couldn’t delete it.'; }
+    const meal = byId($('mealId').value); if (!meal) return; // deleted right away, with Undo
+    try { await store.remove(meal); dialog.close(); showNotice(`Deleted “${meal.name}”.`, store.restore ? { label:'Undo', run:async () => { await store.restore(meal); showNotice(`${meal.name} is back.`); } } : undefined); }
+    catch (e) { $('mealError').textContent = e?.message || 'Couldn’t delete it.'; }
   });
   draw();
 }

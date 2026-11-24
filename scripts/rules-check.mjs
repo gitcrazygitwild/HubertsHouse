@@ -32,6 +32,10 @@ await expect('stranger cannot delete', 403, await req('DELETE', 'householdMeals/
 await expect('member deletes', 200, await req('DELETE', 'householdMeals/a', null, token('m1')));
 await expect('server-only Publix cache is closed', 403, await req('GET', 'privatePublixDeals/store-1588', null, token('m1')));
 await expect('household items still work', 200, await req('PATCH', 'householdItems/g', fields({ kind:'grocery', title:'chicken thighs', owner:'both', due:'', cadence:'none', list:'', category:'Meat & fish', quantity:'for Chicken tacos', completed:false, version:0 }), token('m1')));
+// Undo (stores.js restore): a deleted item or dinner comes back under its old id at version 0.
+await expect('Undo restores a deleted dinner', 200, await req('PATCH', 'householdMeals/a', fields(meal), token('m1')));
+await expect('member deletes a to-do', 200, await req('DELETE', 'householdItems/g', null, token('m1')));
+await expect('Undo restores it', 200, await req('PATCH', 'householdItems/g', fields({ kind:'grocery', title:'chicken thighs', owner:'both', due:'', cadence:'none', list:'', category:'Meat & fish', quantity:'for Chicken tacos', completed:false, version:0 }), token('m1')));
 const full = { ...meal, steps:['Brown the turkey.', 'Simmer.'], minutes:45 };
 await expect('meal with steps and minutes', 200, await req('PATCH', 'householdMeals/r1', fields(full), token('m1')));
 await expect('21 steps rejected', 403, await req('PATCH', 'householdMeals/r2', fields({ ...full, steps:Array.from({ length:21 }, (_, i) => `s${i}`) }), token('m1')));

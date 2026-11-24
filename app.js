@@ -528,11 +528,23 @@ async function saveLocalEvent(id,payload,expectedChecklist) {
   else if (id) await updateDoc(doc(db,'events',id),payload);
   else await addDoc(eventsCol,{...payload,createdAt:serverTimestamp()});
 }
+// Deletes an event. Household events come back with Undo (returns the undo); iCloud ones can't.
 async function removeEvent(id) {
+  const original = rawDocs.find(d => d.id === id), stored = localDocs.find(d => d.id === id);
+  if (original?.icloud) { await deleteCloudEvent(original); cloudDocs=cloudDocs.filter(d => d.id !== id); rebuildEvents(); await refreshCloud(); return null; }
+  if (demo) { localDocs=localDocs.filter(d => d.id !== id); rebuildEvents(); return stored ? async () => { localDocs=[...localDocs,stored]; rebuildEvents(); } : null; }
+  await deleteDoc(doc(db,'events',id));
+  return stored ? async () => { const { id:_, ...data } = stored; await setDoc(doc(db,'events',id),data); } : null;
+}
+// The delete buttons: no “are you sure?” for household events, just Undo for a few seconds.
+async function deleteEventWithUndo(id) {
   const original = rawDocs.find(d => d.id === id);
-  if (original?.icloud) { await deleteCloudEvent(original); cloudDocs=cloudDocs.filter(d => d.id !== id); rebuildEvents(); await refreshCloud(); }
-  else if (demo) { localDocs=localDocs.filter(d => d.id !== id); rebuildEvents(); }
-  else await deleteDoc(doc(db,'events',id));
+  if (original?.icloud && !confirm('Delete this event from iCloud? This can’t be undone.')) return false;
+  let undo;
+  try { undo = await removeEvent(id); } catch (e) { showNotice(e.message); return false; }
+  const title = original?.title ? `“${original.title}”` : 'the event';
+  showNotice(`Deleted ${title}.`, undo ? { label:'Undo', run:async () => { await undo(); showNotice(`${title[0].toUpperCase()}${title.slice(1)} is back.`); } } : undefined);
+  return true;
 }
 
 // ---------- UI hooks ----------
@@ -645,9 +657,7 @@ function initUIHooks() {
 
   deleteBtn?.addEventListener("click", async () => {
     if (!editingDocId) return;
-    if (!confirm("Delete this event?")) return;
-    try { await removeEvent(editingDocId); } catch (e) { showNotice(e.message); return; }
-    closeModal();
+    if (await deleteEventWithUndo(editingDocId)) closeModal();
   });
 
   taskClose?.addEventListener("click", closeTaskModal);
@@ -1274,9 +1284,7 @@ detailsEditBtn?.addEventListener("click", () => {
 
 detailsDeleteBtn?.addEventListener("click", async () => {
   if (!detailsDocId) return;
-  if (!confirm("Delete this event?")) return;
-  try { await removeEvent(detailsDocId); } catch (e) { showNotice(e.message); return; }
-  closeDetailsModal();
+  if (await deleteEventWithUndo(detailsDocId)) closeDetailsModal();
 });
 
 function calendarPreferenceKey() { return `hh_default_calendar_${auth?.currentUser?.uid || (demo ? 'preview' : 'signed-out')}`; }

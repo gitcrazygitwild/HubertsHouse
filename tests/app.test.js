@@ -895,3 +895,25 @@ test('logging windows: drag bars set the time, the amount, how long she slept an
   assert.equal(doc.getElementById('babyLogStartAgo').value, '-240', 'the bar stops at its end');
   assert.deepEqual(errors, []);
 });
+
+test('deleting a to-do or a household event happens at once, with Undo instead of a confirm box', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  w.confirm=() => { throw new Error('should not ask'); };
+  doc.querySelector('[data-life-tab="groceries"]').click();
+  const before=doc.querySelectorAll('#groceryGroups .item-row').length, row=doc.querySelector('#groceryGroups .item-row'), name=row.querySelector('strong, .item-title')?.textContent || '';
+  row.querySelector('[data-edit-item]').click(); doc.getElementById('deleteItem').click(); await settle();
+  assert.equal(doc.querySelectorAll('#groceryGroups .item-row').length,before-1);
+  assert.match(doc.getElementById('notice').textContent,/^Deleted “.+”\.Undo$/);
+  doc.querySelector('#notice button').click(); await settle();
+  assert.equal(doc.querySelectorAll('#groceryGroups .item-row').length,before);
+  if (name) assert.ok(doc.getElementById('groceryGroups').textContent.includes(name));
+  assert.match(doc.getElementById('notice').textContent,/is back/);
+  // A household event, from the home calendar.
+  const count=() => w.__testApp.getDocs().length, total=count(), ids=new Set(w.__testApp.getDocs().filter(d => !d.icloud).map(d => d.id));
+  const event=[...doc.querySelectorAll('[data-home-event]')].find(el => ids.has(el.dataset.homeEvent)); event.click(); await settle();
+  doc.getElementById('deleteBtn').click(); await settle();
+  assert.equal(count(),total-1); assert.match(doc.getElementById('notice').textContent,/^Deleted “.+”\.Undo$/);
+  doc.querySelector('#notice button').click(); await settle();
+  assert.equal(count(),total); assert.match(doc.getElementById('notice').textContent,/is back\./);
+  assert.deepEqual(errors,[]);
+});
