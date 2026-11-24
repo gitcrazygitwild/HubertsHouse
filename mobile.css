@@ -106,3 +106,19 @@ html, body { overflow-x: clip; max-width: 100%; }
   body { padding-bottom:0 !important; }
   .house-main, .display-mode .house-main, :root[data-density="compact"] .house-main { position:fixed; inset:0; z-index:1; overflow-x:hidden; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior-y:contain; }
 }
+
+/* Phones: a two-line header. The date with the app icons beside it, then the title with
+   Search and Add. Light/dark lives in Settings and ⌘K, so its button steps aside here. */
+@media (max-width: 650px) {
+  body .house-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "date apps" "title actions"; gap: 4px 10px; align-items: center; margin-bottom: 12px; }
+  body .house-header > div:first-child { display: contents; }
+  body .house-header #houseDate { grid-area: date; margin: 0; align-self: center; }
+  body .house-header h1 { grid-area: title; margin: 0; line-height: 1.1; }
+  body .house-header .app-links { grid-area: apps; grid-row: auto; grid-column: auto; justify-self: end; gap: 6px; }
+  body .app-links .app-link.icon-only { min-width: 32px; min-height: 32px; padding: 3px; border-radius: 10px; box-shadow: none; }
+  body .app-links .app-link.icon-only .app-link-icon { width: 26px; height: 26px; border-radius: 8px; }
+  body .house-header .header-actions { grid-area: actions; grid-row: auto; grid-column: auto; gap: 6px; }
+  body .house-header #themeToggle { display: none; }
+  body .house-header .header-actions .hdr-btn { width: 40px !important; min-width: 40px; height: 40px; min-height: 40px; border-radius: 13px; }
+  body[data-view]:not([data-view="today"]) .house-header { grid-template-areas: "date date" "title actions"; }
+}
