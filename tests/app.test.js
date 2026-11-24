@@ -60,6 +60,8 @@ async function fixture(options = {}) {
   await module('day-ring.js',['dayRing','dayRingHTML']);
   await module('week-story.js',['weekStory','weekStoryText']);
   await module('story-view.js',['slideHTML','openStory'],'const esc=escapeHTML;');
+  await module('night-insights.js',['lastNight','weekdayLinks','weekdayPattern','WEEKDAYS']);
+  await module('night-insights-view.js',['lastNightTile','weekdayHTML'],'const esc=escapeHTML;');
   await module('frankie-charts.js',['hm','oz','clock','dayLabel','sleepChart','bottleChart','pumpChart','timeline','legend','table'],'const esc=escapeHTML;');
   await module('frankie.js',['renderFrankie','initFrankie','frankieDayText','bottleLinksHTML', 'pumpsHTML', 'paceHTML','challengeHTML','napNightHTML','hatHTML','callsSlides'],'const esc=escapeHTML;');
   await module('baby-logs.js',['LOG_FILTERS','describeLog','logKey','logsHTML'],'const esc=escapeHTML;');
@@ -416,7 +418,7 @@ test('quick add, the command palette, Now & Next, the Frankie page and the after
   doc.querySelector('[data-view="frankie"]').click(); await settle();
   assert.ok(doc.querySelector('#frankieBottles svg .mark-bottle')); assert.ok(doc.querySelector('#frankieTimeline svg .mark-nap'));
   assert.equal(doc.querySelectorAll('#frankieScore .score-card').length, 3);
-  assert.equal(doc.querySelectorAll('#frankieLinks .link-row').length, 4); assert.match(doc.getElementById('frankieLinks').textContent, /Frankie is 4 months old/);
+  assert.equal(doc.querySelectorAll('#frankieLinks .link-row:not(.wd-row)').length, 4); assert.equal(doc.querySelectorAll('#frankieLinks .wd-row').length, 5); assert.match(doc.getElementById('frankieStatus').textContent, /Last night/); assert.match(doc.getElementById('frankieLinks').textContent, /Frankie is 4 months old/);
   assert.match(doc.getElementById('frankieScore').textContent, /keep the forecasts her first version made/);
   // The after-dark joke is folded away and can be hidden per device.
   assert.equal(doc.getElementById('afterDarkJoke').open, false); assert.ok(doc.getElementById('afterDarkSetup').textContent.length > 8);

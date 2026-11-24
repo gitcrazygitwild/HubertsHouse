@@ -31,7 +31,8 @@ test('Frankie: last bottle, how much today, awake, next nap, sleep', () => {
   assert.match(ask('How much has she eaten today?'), /^Frankie has had 7\.5 oz today over 2 bottles/);
   assert.equal(ask('How long has Frankie been awake?'), 'Frankie has been awake for 30 minutes, since 9:30 AM.');
   assert.match(ask('When is her next nap?'), /^The cats think Frankie’s next nap is around 11:05 AM \(in 1h 5m\)\. That’s the average of Hubert 11:00 AM and Mia 11:10 AM\.$/);
-  assert.match(ask('How much did she sleep last night?'), /^Frankie slept .* yesterday/);
+  assert.match(ask('How did she sleep last night?'), /^Last night Frankie slept 11h 00m, from 7:00 PM to 6:00 AM: 0 wake-ups, no feeds, longest stretch 11h 00m\.$/);
+  assert.match(ask('How much did she sleep yesterday?'), /^Frankie slept .* yesterday/);
   assert.equal(answerQuestion('is the baby asleep', { now, baby:{ ...baby, timer:{ active:true, start:at(24, 9) } } }).answer, 'Frankie has been asleep for 1h, since 9:00 AM.');
 });
 

@@ -324,3 +324,21 @@ rect.is-hovered.mark-night,rect.is-hovered.mark-nap { stroke:var(--card); stroke
 .story-card { min-height:100%; box-sizing:border-box; text-shadow:0 1px 12px #0002; }
 @media (max-width:520px) { .story-dialog { width:100vw; height:100dvh; border-radius:0; } .story-card { padding:72px 26px calc(40px + env(safe-area-inset-bottom, 0px)); } }
 @media (prefers-reduced-motion:reduce) { .story-card, .story-bars i { animation:none; } }
+
+/* Last night (night-insights.js) and Days of the week. */
+.frankie-status { grid-template-columns:repeat(5, minmax(0, 1fr)); grid-auto-flow:dense; }
+.frankie-tile.is-night { background:linear-gradient(135deg, #e3e6f7, var(--card)); border-color:#c9cfee; }
+.frankie-tile.is-night span { color:#4d5a9a; font-weight:600; }
+[data-theme="dark"] .frankie-tile.is-night { background:linear-gradient(135deg, #2a2f4c, var(--card)); border-color:#424a75; }
+[data-theme="dark"] .frankie-tile.is-night span { color:#aab4ef; }
+@media (max-width:1100px) { .frankie-status { grid-template-columns:repeat(3, minmax(0, 1fr)); } }
+@media (max-width:900px) { .frankie-status { grid-template-columns:1fr 1fr; } .frankie-tile.is-night { grid-column:1 / -1; } }
+.wd-title { margin:18px 0 8px; font-size:13px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+.wd-bars { display:grid; grid-template-columns:repeat(7, 1fr); gap:6px; height:52px; margin-top:8px; max-width:340px; }
+.wd-bars span { position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.wd-bars span::before { content:''; position:absolute; left:0; right:0; top:calc(50% - 7px); border-top:1px solid var(--border); }
+.wd-bars i { position:absolute; left:20%; right:20%; border-radius:3px; background:color-mix(in srgb, var(--chart-nap) 55%, transparent); }
+.wd-bars .up i { bottom:calc(50% + 7px); } .wd-bars .down i { top:calc(50% - 7px); }
+.wd-bars .is-mark i { background:var(--chart-night); }
+.wd-bars small { position:absolute; bottom:-2px; font-size:10px; color:var(--muted); }
+.link-not-enough .wd-bars { display:none; }

@@ -7,6 +7,7 @@ import { nextUp, untilText } from './smart-home.js';
 import { nextPickup, pickupOn } from './trash-days.js';
 import { isBathDay, nextBathDay } from './bath-days.js';
 import { birthdaysInRange } from './birthdays-model.js';
+import { lastNight } from './night-insights.js';
 
 const DAY = 86400000, WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const clock = value => new Date(value).toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
@@ -59,6 +60,10 @@ export function answerQuestion(text, { now = new Date(), events = [], baby = nul
     const call = baby ? catsConsensus(baby) : null;
     if (!call) return { answer:`The cats don’t have a call for ${name}’s next sleep right now.`, view:'frankie' };
     return { answer:`The cats think ${name}’s next ${call.kind === 'bedtime' ? 'sleep is bedtime,' : 'nap is'} around ${clock(call.target)} (${untilText(Math.max(0, Math.round((Date.parse(call.target) - +now) / 60000)))}).${call.picks.length > 1 ? ` That’s the average of ${list(call.picks.map(p => `${p.cat} ${clock(p.at)}`))}.` : ''}`, view:'frankie' };
+  }
+  if (/last night/.test(t) && /sleep|slept|night|go|do/.test(t) && frankie?.snapshot) {
+    const n = lastNight({ ...frankie.snapshot, timezone:frankie.timezone, now:+now });
+    if (n.available) return { answer:`Last night ${name} slept ${hours(n.slept / 60)}, from ${clock(n.bedtime)} to ${n.morning ? clock(n.morning) : 'now (still asleep)'}: ${n.wakeups} wake-up${n.wakeups === 1 ? '' : 's'}, ${n.feeds ? `${n.feeds} feed${n.feeds === 1 ? '' : 's'}` : 'no feeds'}, longest stretch ${hours(n.longest / 60)}.${n.vsAverage != null && Math.abs(n.vsAverage) >= 15 ? ` That’s ${hours(Math.abs(n.vsAverage) / 60)} ${n.vsAverage > 0 ? 'more' : 'less'} than her usual.` : ''}`, view:'frankie' };
   }
   if (/how much.*sleep|sleep (yesterday|today|last night)|slept/.test(t) && frankie?.snapshot) {
     const rows = dailySleep(frankie.snapshot.sleeps || [], frankie.timezone, 2, +now), row = /yesterday|last night/.test(t) ? rows[0] : rows[1];
