@@ -44,6 +44,7 @@ async function fixture(options = {}) {
     w.demoStore = () => ({ ...originalStore(), update: async () => { throw new Error('The connection interrupted this save.'); } });
   }
   await module('checklists.js',['checklistKey','eventChecklistKey','eventChecklistGroups']);
+  await module('monitor-mode.js',['initMonitor']);
   await module('household.js',['initHousehold','updateHouseholdEvents','showNotice','showView','householdItems','addHouseholdItems'],'const esc=escapeHTML;');
   await module('cloud-calendar.js',['initCloudCalendar','setCloudRange','refreshCloud','saveCloudEvent','saveCloudAssignment','deleteCloudEvent'],'const esc=escapeHTML;');
   await module('baby-history.js',['toOunces','localDay','dayStart','dayKeys','sleepKind','dayStory','dayStoryText','nightLine','clockAt','DEFAULT_NIGHT_LINE','dailySleep','dailyBottles', 'dailyPumps','timelineRows','babySummary']);
