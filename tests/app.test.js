@@ -44,6 +44,7 @@ async function fixture(options = {}) {
     w.demoStore = () => ({ ...originalStore(), update: async () => { throw new Error('The connection interrupted this save.'); } });
   }
   await module('checklists.js',['checklistKey','eventChecklistKey','eventChecklistGroups']);
+  await module('monitor-mode.js',['initMonitor']);
   await module('household.js',['initHousehold','updateHouseholdEvents','showNotice','showView','householdItems','addHouseholdItems'],'const esc=escapeHTML;');
   await module('cloud-calendar.js',['initCloudCalendar','setCloudRange','refreshCloud','saveCloudEvent','saveCloudAssignment','deleteCloudEvent'],'const esc=escapeHTML;');
   await module('baby-history.js',['toOunces','localDay','dayStart','dayKeys','sleepKind','dayStory','dayStoryText','nightLine','clockAt','DEFAULT_NIGHT_LINE','dailySleep','dailyBottles', 'dailyPumps','timelineRows','babySummary']);
@@ -59,8 +60,13 @@ async function fixture(options = {}) {
   await module('day-ring.js',['dayRing','dayRingHTML']);
   await module('week-story.js',['weekStory','weekStoryText']);
   await module('story-view.js',['slideHTML','openStory'],'const esc=escapeHTML;');
+  await module('frankie-charts.js',['hm','oz','clock','dayLabel','sleepChart','bottleChart','pumpChart','timeline','legend','table'],'const esc=escapeHTML;');
   await module('frankie.js',['renderFrankie','initFrankie','frankieDayText','bottleLinksHTML', 'pumpsHTML', 'paceHTML','challengeHTML','napNightHTML','hatHTML','callsSlides'],'const esc=escapeHTML;');
   await module('baby-logs.js',['LOG_FILTERS','describeLog','logKey','logsHTML'],'const esc=escapeHTML;');
+  await module('night-mode.js',['initNightMode'],'const esc=escapeHTML;');
+  await module('recent-logs.js',['initRecentLogs']);
+  await module('log-sheet.js',['initLogSheet']);
+  await module('nap-recovery.js',['initNapRecovery'],'const esc=escapeHTML;');
   await module('baby.js',['initHuckleberry','logBabyFromText'],'const esc=escapeHTML;');
   await module('calendar-view.js',['initCalendarExperience','calendarEventContent'],'const esc=escapeHTML;');
   await module('weather-shared.js',['richmondDay','forecastCondition','weatherIcon']);

@@ -2,9 +2,10 @@ import { dateKey, dueLabel, completionPatch, validateItem, escapeHTML as esc, OW
 import { eventsOnDay, localDate, eventEnd } from './calendar-model.js';
 import { renderHTML } from './dom.js';
 import { eventChecklistGroups, eventChecklistKey } from './checklists.js';
+import { initMonitor } from './monitor-mode.js';
 const $ = id => document.getElementById(id);
 let store, items = [], events = [], currentKind = 'chore', taskFocus = 'all', openEvent, newEvent, viewChanged, onData;
-let noticeTimer, wakeLock, displayMode = false, activeView = 'today', monitorFullscreen = false;
+let noticeTimer, monitor, activeView = 'today';
 let getEventRecords=()=>[],saveEventChecklist,editEventChecklist,taskSource='all';
 const pendingChecklists=new Set();
 const titles = { today: 'Today at home', calendar: 'Your calendar, all together.', life: 'Life, handled.', settings: 'Your house, your way', frankie: 'Frankie', devices: 'Smart home' };
@@ -34,39 +35,6 @@ export function showView(view) {
   $('viewTitle').textContent = titles[view];
   history.replaceState(null, '', `${location.pathname}${location.search}#${view === 'life' && lifeTab !== 'todos' ? lifeTab : view}`);
   if (['calendar','today','life'].includes(view)) requestAnimationFrame(() => viewChanged?.(view));
-}
-async function setDisplayMode(on) {
-  displayMode = on; document.body.classList.toggle('display-mode', on);
-  document.body.classList.toggle('monitor-mode', on);
-  localStorage.setItem('hh_display', on ? '1' : '0');
-  $('displayBtn').setAttribute('aria-pressed', String(on));
-  { const button = $('displayBtn'), label = button.querySelector('.btn-label'), text = on ? 'Exit monitor' : 'Monitor mode'; if (label) { label.textContent = text; button.title = text; } else button.textContent = text; }
-  $('settingsDisplayBtn').textContent = on ? 'Exit monitor mode' : 'Open monitor mode';
-  if (wakeLock) { await wakeLock.release().catch(() => {}); wakeLock = null; }
-  if (on && document.visibilityState === 'visible') {
-    try {
-      if (!navigator.wakeLock) throw new Error('unsupported');
-      wakeLock = await navigator.wakeLock.request('screen');
-      $('wakeStatus').textContent = 'Keeping this screen awake while the page is visible.';
-      wakeLock.addEventListener('release', () => { $('wakeStatus').textContent = 'Screen wake lock released by this device.'; });
-    } catch { $('wakeStatus').textContent = 'Screen wake lock is unavailable. Adjust your device’s auto-lock setting for a shared display.'; }
-  } else if (!on) $('wakeStatus').textContent = '';
-  requestAnimationFrame(() => viewChanged?.(activeView));
-}
-async function toggleMonitor() {
-  if (displayMode) {
-    monitorFullscreen = false;
-    setDisplayMode(false);
-    if (document.fullscreenElement) await document.exitFullscreen().catch(() => {});
-    return;
-  }
-  // Request fullscreen directly from the click so browser user activation is retained.
-  const request = document.documentElement.requestFullscreen?.();
-  setDisplayMode(true);
-  try {
-    if (!request) throw new Error('unsupported');
-    await request; monitorFullscreen = !!document.fullscreenElement;
-  } catch { showNotice('Monitor layout is on. This browser does not support full screen; use its full-screen controls if available.'); }
 }
 function tick() {
   const now = new Date();
@@ -112,13 +80,8 @@ export function initHousehold(options) {
   $('resetTaskFilters').addEventListener('click', () => { taskFocus = 'all'; $('taskSearch').value = ''; render(); });
   $('houseOwner').addEventListener('change', render); $('showCompleted').addEventListener('change', render);
   $('quickEvent').addEventListener('click', () => newEvent());
-  $('displayBtn').addEventListener('click', toggleMonitor);
-  $('settingsDisplayBtn').addEventListener('click', toggleMonitor);
-  document.addEventListener('fullscreenchange', () => {
-    if (monitorFullscreen && !document.fullscreenElement) { monitorFullscreen = false; setDisplayMode(false); }
-  });
-  document.addEventListener('keydown', event => { if (event.key === 'Escape' && displayMode && !document.fullscreenElement) setDisplayMode(false); });
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { tick(); if (displayMode) setDisplayMode(true); } });
+  monitor = initMonitor({ notice:showNotice, layoutChanged:() => viewChanged?.(activeView) });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { tick(); monitor.resume(); } });
   $('closeItemDialog').addEventListener('click', () => $('itemDialog').close());
   $('itemDialog').addEventListener('click', e => { if (e.target === $('itemDialog')) { const r = e.target.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) e.target.close(); } });
   $('itemForm').addEventListener('submit', saveItem);
@@ -170,7 +133,7 @@ export function initHousehold(options) {
     } catch (error) { checkbox.checked = !!item.completed; checkbox.disabled = false; showNotice(friendlyError(error)); render(); }
   });
   showView(location.hash.slice(1)); tick(); setInterval(() => { if (document.visibilityState === 'visible') tick(); }, 30000);
-  if (localStorage.getItem('hh_display') === '1') setDisplayMode(true);
+  monitor.restore();
 }
 export function updateHouseholdEvents(next) { events = next; render(); }
 // One tap (or a swipe left) removes a grocery item, with Undo instead of a confirm.
