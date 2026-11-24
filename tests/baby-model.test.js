@@ -63,3 +63,20 @@ test('asleep: the next bottle waits for the cats’ averaged wake-up call', asyn
   assert.equal(sleepAwareBottle(forecast, { target:at('01:00') }), forecast, 'waking before the usual gap changes nothing');
   assert.equal(sleepAwareBottle(forecast, null), forecast);
 });
+
+test('Hubert guesses when a nap ends: how long her naps around that time of day usually last', () => {
+  const tz = 'America/New_York', day = d => `2026-11-${String(d).padStart(2, '0')}`;
+  const sleeps = [];
+  for (let d = 15; d <= 23; d++) {
+    sleeps.push({ start:`${day(d - 1)}T19:30:00-05:00`, end:`${day(d)}T06:30:00-05:00` });
+    sleeps.push({ start:`${day(d)}T09:00:00-05:00`, end:`${day(d)}T10:30:00-05:00` }); // morning naps: 90 min
+    sleeps.push({ start:`${day(d)}T14:00:00-05:00`, end:`${day(d)}T14:40:00-05:00` }); // afternoon naps: 40 min
+  }
+  sleeps.push({ start:`${day(23)}T19:30:00-05:00`, end:`${day(24)}T06:30:00-05:00` });
+  const morning = purrfectWindow({ sleeps, timer:{ active:true, start:`${day(24)}T09:10:00-05:00` }, timezone:tz }, new Date(`${day(24)}T09:30:00-05:00`));
+  assert.equal(morning.available, true); assert.equal(morning.kind, 'wake'); assert.equal(morning.nap, true);
+  assert.equal(morning.typicalMinutes, 90); assert.equal(morning.target, new Date(`${day(24)}T10:40:00-05:00`).toISOString());
+  const afternoon = purrfectWindow({ sleeps, timer:{ active:true, start:`${day(24)}T14:05:00-05:00` }, timezone:tz }, new Date(`${day(24)}T14:10:00-05:00`));
+  assert.equal(afternoon.typicalMinutes, 40, 'matched to naps at that time of day');
+  assert.equal(purrfectWindow({ sleeps:sleeps.slice(0, 4), timer:{ active:true, start:`${day(24)}T09:10:00-05:00` }, timezone:tz }, new Date(`${day(24)}T09:30:00-05:00`)).available, false, 'needs a few naps first');
+});
