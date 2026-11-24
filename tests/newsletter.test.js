@@ -48,6 +48,8 @@ test('the email renders every section, escapes text and respects the after-dark 
   for (const part of ['Good morning, hanry', 'Today in Richmond', 'Little moments, big love', 'Slept yesterday', 'Around the house', 'Free nights for a date', 'Dad joke', 'After dark', 'Newsletter settings', 'Last week’s awards'])
     assert.ok(html.includes(part), part);
   assert.ok(!html.includes('<script>alert')); assert.ok(html.includes('&lt;script&gt;'));
+  assert.equal(d.baby.lastNight.available, true); assert.match(html, /🌙 <strong>Last night: \d+h \d+m<\/strong>/); assert.match(html, /wake-up/);
+  assert.deepEqual(d.baby.patterns, [], 'random sample data has no weekday pattern');
   assert.match(text, /Dad joke:/);
   const plain = composeEmail(buildDigest({ now, household, icloud, items, forecast }));
   assert.ok(!plain.html.includes('After dark')); assert.ok(plain.html.includes('Good morning.'));
@@ -126,4 +128,11 @@ test('the email warns when Huckleberry or Publix stopped working (not about itse
   const { html, text } = composeEmail(d);
   assert.match(html, /⚠ Huckleberry stopped accepting the saved sign-in/); assert.match(text, /⚠ Huckleberry stopped accepting/);
   assert.deepEqual(buildDigest({ now, household, icloud, items, forecast }).alerts, [], 'all fine: no note');
+});
+
+test('a real weekday pattern gets one plain line in the email', async () => {
+  const { patternLines } = await import('../functions/newsletter.js');
+  const html = patternLines({ patterns:[{ key:'night', label:'Night sleep', high:'Saturday', highDiff:65, low:'Tuesday', lowDiff:-25, unit:'min' }] });
+  assert.match(html, /A weekday pattern:<\/strong> night sleep runs 1h 5m longer on Saturdays, 25m shorter on Tuesdays\./);
+  assert.equal(patternLines({ patterns:[] }), '');
 });

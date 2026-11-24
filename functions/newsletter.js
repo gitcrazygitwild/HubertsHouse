@@ -16,6 +16,7 @@ import { healthAlerts } from './shared/service-health-model.js';
 import { freeEvenings } from './shared/free-nights.js';
 import { upcomingBirthdays } from './shared/birthdays-model.js';
 import { scoreMornings, scoreBottles, bottlePicks, CHALLENGES } from './shared/cat-challenges.js';
+import { lastNight, weekdayLinks } from './shared/night-insights.js';
 
 export const HOUSE_TZ = 'America/New_York';
 export const APP_URL = 'https://huberts-house.web.app';
@@ -108,6 +109,10 @@ export function buildDigest({ name = '', now = new Date(), household = [], iclou
     digest.baby = { name:snapshot.name || 'Frankie', tz, timer:snapshot.timer, lastWake:snapshot.sleeps.at(-1)?.end || null, lastBottle:snapshot.bottles?.at(-1) || null, summary, yesterday,
       predictions:{ huck, purr, mia }, leader:score.leader ? score.summary.find(m => m.key === score.leader) : null, scored:score.scoredNaps,
       awards:now.getDay() === 1 ? frankieAwards(snapshot, tz, +now).awards.slice(0, 4) : [] };
+    // Last night, and any day-of-the-week pattern that's real (not "maybe").
+    digest.baby.lastNight = lastNight({ ...snapshot, timezone:tz, now:+now });
+    const weekdays = weekdayLinks({ ...snapshot, timezone:tz, now:+now });
+    digest.baby.patterns = Object.entries(weekdays).filter(([, m]) => m.verdict === 'clear').map(([key, m]) => ({ key, label:m.label, high:m.high.name, highDiff:m.high.diff, low:m.low.name, lowDiff:m.low.diff, unit:m.unit }));
     // The cats' other challenges: who leads, and today's Bottle Bet guesses.
     const owner = (kind, key) => CHALLENGES[kind].find(m => m.key === key)?.owner;
     const mornings = scoreMornings(snapshot.sleeps, tz, +now, { birthdate:snapshot.birthdate }), bottles = scoreBottles(snapshot.bottles || [], tz, +now, { birthdate:snapshot.birthdate });
@@ -137,6 +142,20 @@ const plural = (n, word, words = `${word}s`) => `${n} ${n === 1 ? word : words}`
 // A few plain sentences about Frankie's yesterday.
 export function storyText(b) {
   return dayStoryText(b.yesterday.story, { name:b.name, timezone:b.tz, asleep:!!b.timer?.active, totalHours:b.yesterday.sleep?.total, averageHours:b.summary.avgSleep });
+}
+// "Last night: 10h 44m (7:30 PM → 6:36 AM) · 1 wake-up · 1 feed · longest 6h 46m · about her usual"
+export function lastNightLine(b) {
+  const n = b.lastNight; if (!n?.available) return '';
+  const vs = n.vsAverage == null || n.inProgress ? '' : Math.abs(n.vsAverage) < 15 ? ' · about her usual' : ` · ${minutes(Math.abs(n.vsAverage))} ${n.vsAverage > 0 ? 'more' : 'less'} than usual`;
+  const bits = [plural(n.wakeups, 'wake-up'), n.feeds ? plural(n.feeds, 'feed') : 'no feeds', `longest ${minutes(n.longest)}`];
+  return p(`🌙 <strong>${n.inProgress ? 'Tonight so far' : 'Last night'}: ${minutes(n.slept)}</strong> ${small(`(${esc(clock(n.bedtime, b.tz))} → ${n.morning ? esc(clock(n.morning, b.tz)) : 'still asleep'})`)} · ${bits.join(' · ')}${vs}`, 'margin-bottom:10px');
+}
+// Only real weekday patterns make the email ("Saturdays: 1h 05m longer night sleep").
+export function patternLines(b) {
+  if (!b.patterns?.length) return '';
+  const words = { night:['longer', 'shorter'], naps:['longer', 'shorter'], bedtime:['later', 'earlier'], wake:['later', 'earlier'], ounces:['more', 'less'] };
+  const size = (m, d) => m.unit === 'oz' ? `${Math.round(Math.abs(d) * 10) / 10} oz` : minutes(Math.round(Math.abs(d)));
+  return p(`📅 <strong>A weekday pattern:</strong> ${b.patterns.map(m => `${esc(m.label.toLowerCase())} runs ${size(m, m.highDiff)} ${words[m.key][0]} on ${esc(m.high)}s, ${size(m, m.lowDiff)} ${words[m.key][1]} on ${esc(m.low)}s`).join('; ')}.`, 'font-size:13px;margin-top:6px');
 }
 function worldSection(world) {
   const tiles = world.markets.map(m => { const change = marketChange(m), color = change.tone === 'up' ? '#2f7d4f' : change.tone === 'down' ? '#b4232a' : C.muted;
@@ -184,7 +203,7 @@ export function composeEmail(d) {
     const tiles = `<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>${stats.map(([label, value, note]) => `<td style="width:33%;padding:10px 8px 10px 0;vertical-align:top"><div style="font:11px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.muted}">${esc(label)}</div><div style="font:400 20px/1.3 Georgia,serif;color:${C.ink}">${esc(value)}</div><div style="font:11px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${C.muted}">${esc(note)}</div></td>`).join('')}</tr></table>`;
     const awards = b.awards.length ? `<div style="margin-top:10px;padding:10px 12px;border-radius:12px;background:#fbf3df">${p(`<strong>🏆 Last week’s awards:</strong> ${b.awards.map(a => `${a.icon} ${esc(a.title)} <strong>${esc(a.value)}</strong>`).join(' · ')}`, 'margin:0;font-size:13px')}</div>` : '';
     sections.push(section('Little moments, big love', `${esc(b.name)} is ${esc(status)}`,
-      (b.yesterday.story ? p(esc(storyText(b)), 'margin-bottom:10px') : '') + tiles + (nap.length ? p(`<strong>Next nap:</strong> ${esc(nap.join(' · '))}`, 'font-size:13px;margin-top:6px') : '')
+      lastNightLine(b) + (b.yesterday.story ? p(esc(storyText(b)), 'margin-bottom:10px') : '') + tiles + patternLines(b) + (nap.length ? p(`<strong>Next nap:</strong> ${esc(nap.join(' · '))}`, 'font-size:13px;margin-top:6px') : '')
       + (b.lastBottle ? p(small(`Last bottle ${esc(ago(b.lastBottle.start, now))} ago · ${esc(b.lastBottle.amount)} ${esc(b.lastBottle.units)}`)) : '')
       + (b.leader ? p(`🏆 <strong>${esc(b.leader.owner)}’s ${esc(b.leader.name)}</strong> leads the nap challenge · ±${b.leader.mae} min over ${b.leader.n} naps`, 'font-size:13px') : '')
       + (b.challenges?.morning || b.challenges?.bottle ? p(`🐾 ${[b.challenges.morning ? `<strong>${esc(b.challenges.morning)}</strong> leads the morning wake-up challenge` : '', b.challenges.bottle ? `<strong>${esc(b.challenges.bottle)}</strong> leads the Bottle Bet` : ''].filter(Boolean).join(' · ')}`, 'font-size:13px') : '')
