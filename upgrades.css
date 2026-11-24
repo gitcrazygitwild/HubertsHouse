@@ -188,3 +188,18 @@
 .startup-problems span { flex:1; }
 .startup-problems .btn { flex:none; min-height:34px; padding:6px 14px; }
 [data-theme="dark"] .startup-problems { background:#3d321c; border-color:#5c4a26; color:#ecd3a0; }
+
+/* Ask the house (ask.js): the answer under the quick-add box, and in ⌘K. */
+.ask-answer { position:relative; display:grid; gap:6px; padding:14px 16px; border-radius:16px; background:linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, var(--card)), var(--card)); border:1px solid color-mix(in srgb, var(--accent) 25%, var(--border)); animation:ask-in .25s ease-out; }
+.ask-answer[hidden] { display:none; }
+.ask-q { font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+.ask-q::before { content:'💬 '; }
+.ask-a { margin:0; font-family:var(--serif, Georgia, serif); font-size:19px; line-height:1.35; color:var(--text); }
+.ask-actions { display:flex; flex-wrap:wrap; gap:6px; margin-top:2px; }
+.ask-actions .btn { min-height:32px; padding:5px 12px; font-size:12px; }
+.ask-actions .ask-close { margin-left:auto; border:0; background:none; color:var(--muted); }
+@keyframes ask-in { from { opacity:0; transform:translateY(-4px); } }
+@media (prefers-reduced-motion:reduce) { .ask-answer { animation:none; } }
+.palette-item.is-answer { align-items:flex-start; background:color-mix(in srgb, var(--accent) 8%, transparent); }
+.palette-item.is-answer .palette-label { white-space:normal; font-weight:600; line-height:1.4; }
+@media (max-width:650px) { .ask-a { font-size:17px; } }

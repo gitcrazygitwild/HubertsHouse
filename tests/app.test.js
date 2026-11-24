@@ -72,6 +72,7 @@ async function fixture(options = {}) {
   await module('smart-home.js',['isOutdoor','weatherFlags','nextUp','untilText']);
   await module('free-nights.js',['freeEvenings','dateNightDraft']);
   await module('sky.js',['skyState','skyArt']);
+  await module('ask.js',['answerQuestion','isQuestion','daysAsked','SAMPLE_QUESTIONS']);
   await module('upgrades.js',['initUpgrades'],'const esc=escapeHTML;');
   await module('newsletter-settings.js',['initNewsletterSettings','lastTestNote'],'const esc=escapeHTML;');
   await module('siri-settings.js',['initSiriSettings','shortcutSteps'],'const esc=escapeHTML;');
@@ -915,5 +916,24 @@ test('deleting a to-do or a household event happens at once, with Undo instead o
   assert.equal(count(),total-1); assert.match(doc.getElementById('notice').textContent,/^Deleted “.+”\.Undo$/);
   doc.querySelector('#notice button').click(); await settle();
   assert.equal(count(),total); assert.match(doc.getElementById('notice').textContent,/is back\./);
+  assert.deepEqual(errors,[]);
+});
+
+test('asking the house a question in the quick-add box answers it instead of adding a plan', async t => {
+  const {dom,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  const input=doc.getElementById('quickAddInput'), form=doc.getElementById('quickAddForm');
+  input.value='What’s on tomorrow?'; input.dispatchEvent(new dom.window.Event('input'));
+  assert.equal(form.querySelector('[type="submit"]').textContent,'Ask');
+  form.dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true})); await settle();
+  const box=doc.getElementById('askAnswer');
+  assert.equal(box.hidden,false); assert.match(box.textContent,/What’s on tomorrow\?/); assert.match(box.querySelector('.ask-a').textContent,/^Tomorrow: /);
+  assert.equal(doc.getElementById('modalBackdrop').classList.contains('hidden') || !doc.getElementById('modalBackdrop').classList.contains('open'),true,'no event window opened');
+  assert.equal(input.value,''); assert.equal(form.querySelector('[type="submit"]').textContent,'Add');
+  box.querySelector('[data-ask-close]').click(); assert.equal(box.hidden,true);
+  // A question about Frankie is never mistaken for a log.
+  input.value='How long has Frankie been awake?'; input.dispatchEvent(new dom.window.Event('input'));
+  assert.equal(doc.getElementById('quickAddPreview').textContent,'↵ Ask Hubert’s House');
+  form.dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true})); await settle();
+  assert.match(box.querySelector('.ask-a').textContent,/^Frankie has been awake for /);
   assert.deepEqual(errors,[]);
 });

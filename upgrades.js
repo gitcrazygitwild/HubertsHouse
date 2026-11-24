@@ -10,35 +10,65 @@ import { pickupOn } from './trash-days.js';
 import { catsConsensus } from './baby-model.js';
 import { freeEvenings, dateNightDraft } from './free-nights.js';
 import { skyState, skyArt } from './sky.js';
+import { answerQuestion, isQuestion } from './ask.js';
 
 const $ = id => document.getElementById(id);
 const read = key => { try { return localStorage.getItem(key); } catch { return null; } };
 const write = (key, value) => { try { localStorage.setItem(key, value); } catch { /* optional */ } };
 const clock = date => new Date(date).toLocaleTimeString([], { hour:'numeric', minute:'2-digit' });
 const dayName = date => new Date(date).toLocaleDateString([], { weekday:'short' });
-let ctx, baby = null, forecast = null, litter = null, feeders = null, health = [], lastFlags = [];
+let ctx, baby = null, forecast = null, litter = null, feeders = null, health = [], lastFlags = [], frankie = null;
 
 // ---------- Quick add ----------
 function draftPayload(draft) {
   return { mode:'create', title:draft.title, start:draft.start, end:draft.end, allDay:draft.allDay, owner:draft.owner, withFrankie:draft.withFrankie, type:draft.type, repeat:'none', notes:'', checklist:[] };
 }
+// ---------- Ask the house ----------
+// Questions typed (or said) into the quick-add box or ⌘K get an answer from ask.js.
+const askData = () => ({ now:new Date(), events:ctx.getEvents(), baby, frankie, forecast });
+export function askHouse(text) { return isQuestion(text) ? answerQuestion(text, askData()) : null; }
+const VIEW_NAMES = { frankie:'Frankie', calendar:'Calendar', settings:'Settings', today:'Today' };
+export function speak(text, synth = globalThis.speechSynthesis, Utterance = globalThis.SpeechSynthesisUtterance) {
+  if (!synth || !Utterance) return false;
+  synth.cancel(); const line = new Utterance(text.replace(/[🛁🎂]/gu, '')); line.lang = 'en-US'; line.rate = 1; synth.speak(line); return true;
+}
+function showAnswer(result, question, { say = false } = {}) {
+  const box = $('askAnswer'); if (!box) return;
+  const canSpeak = !!(globalThis.speechSynthesis && globalThis.SpeechSynthesisUtterance);
+  renderHTML(box, `<span class="ask-q">${esc(question)}</span><p class="ask-a">${esc(result.answer)}</p><div class="ask-actions">${canSpeak ? '<button type="button" class="btn" data-ask-speak>🔊 Read aloud</button>' : ''}${result.view && result.view !== 'today' ? `<button type="button" class="btn" data-ask-view="${esc(result.view)}">Open ${esc(VIEW_NAMES[result.view] || result.view)} →</button>` : ''}<button type="button" class="btn ask-close" data-ask-close aria-label="Close the answer">✕</button></div>`);
+  box.hidden = false; box.dataset.answer = result.answer;
+  if (say) speak(result.answer);
+}
+function initAsk() {
+  const box = $('askAnswer'); if (!box) return;
+  box.addEventListener('click', event => {
+    if (event.target.closest('[data-ask-speak]')) speak(box.dataset.answer || '');
+    else if (event.target.closest('[data-ask-view]')) ctx.showView(event.target.closest('[data-ask-view]').dataset.askView);
+    else if (event.target.closest('[data-ask-close]')) { box.hidden = true; globalThis.speechSynthesis?.cancel(); }
+  });
+  window.addEventListener('hh:frankie', event => { frankie = event.detail || null; });
+}
+
 function initQuickAdd() {
-  const form = $('quickAddForm'), input = $('quickAddInput'), preview = $('quickAddPreview');
-  // Frankie logs ("frankie bottle 10:30am 4oz") win over calendar plans.
+  const form = $('quickAddForm'), input = $('quickAddInput'), preview = $('quickAddPreview'), submit = form.querySelector('[type="submit"]');
+  // A question that has an answer wins (“how long has Frankie been awake?” is not a wake-up log), then Frankie logs (“frankie bottle 10:30am 4oz”), then calendar plans.
   const update = () => {
-    const log = parseBabyLog(input.value), draft = log ? null : parseQuickAdd(input.value);
-    preview.textContent = !input.value.trim() ? '' : log ? `↵ ${describeBabyLog(log)}` : draft ? `↵ ${describeDraft(draft)}` : 'Add a day or time — “Fri 7pm”, “tomorrow”, “Dec 5” — or log for Frankie: “frankie bottle 10:30am 4oz”';
-    preview.dataset.ready = String(!!(log || draft));
+    const answer = askHouse(input.value), log = answer ? null : parseBabyLog(input.value), draft = log || answer ? null : parseQuickAdd(input.value);
+    preview.textContent = !input.value.trim() ? '' : log ? `↵ ${describeBabyLog(log)}` : answer ? '↵ Ask Hubert’s House' : draft ? `↵ ${describeDraft(draft)}` : 'Add a day or time — “Fri 7pm”, “tomorrow”, “Dec 5” — log for Frankie: “frankie bottle 10:30am 4oz” — or ask: “what’s on Friday?”';
+    preview.dataset.ready = String(!!(log || draft || answer));
+    submit.textContent = answer ? 'Ask' : 'Add';
   };
-  input.addEventListener('input', update);
+  input.addEventListener('input', () => { delete input.dataset.voice; update(); });
   form.addEventListener('submit', event => {
     event.preventDefault();
-    const log = parseBabyLog(input.value), draft = log ? null : parseQuickAdd(input.value);
+    const answer = askHouse(input.value), log = answer ? null : parseBabyLog(input.value), draft = log || answer ? null : parseQuickAdd(input.value);
     if (log) { if (ctx.logBaby(log) !== false) { input.value = ''; update(); } return; }
+    // Asked out loud? Answer out loud too.
+    if (answer) { showAnswer(answer, input.value.trim(), { say:input.dataset.voice === '1' }); input.value = ''; delete input.dataset.voice; update(); return; }
     if (!draft) { update(); input.focus(); return; }
     ctx.openDraft(draftPayload(draft)); input.value = ''; update();
   });
-  initVoice(form, input, update, undefined, { notice:ctx.notice || (() => {}) });
+  initVoice(form, input, () => { input.dataset.voice = '1'; update(); }, undefined, { notice:ctx.notice || (() => {}) });
 }
 // Speak instead of typing (where the browser offers speech recognition, e.g. Safari
 // and Chrome). The words land in the box with the usual preview; nothing is saved
@@ -119,9 +149,10 @@ function score(text, query) {
 }
 function paletteItems(query) {
   const q = query.trim(), items = [];
-  const log = q ? parseBabyLog(q) : null, draft = q && !log ? parseQuickAdd(q) : null;
+  const answer = q ? askHouse(q) : null, log = q && !answer ? parseBabyLog(q) : null, draft = q && !log ? parseQuickAdd(q) : null;
   if (log) items.push({ group:'Frankie', icon:'✨', label:describeBabyLog(log), run:() => ctx.logBaby(log), boost:200 });
-  if (draft) items.push({ group:'Create', icon:'✨', label:`Add “${draft.title}”`, hint:describeDraft(draft).split(' · ').slice(1).join(' · '), run:() => ctx.openDraft(draftPayload(draft)), boost:200 });
+  if (answer) items.push({ group:'Answer', icon:'💬', label:answer.answer, hint:'↵ show it on Today', run:() => { ctx.showView('today'); showAnswer(answer, q); }, boost:300, answer:true });
+  if (draft && !answer) items.push({ group:'Create', icon:'✨', label:`Add “${draft.title}”`, hint:describeDraft(draft).split(' · ').slice(1).join(' · '), run:() => ctx.openDraft(draftPayload(draft)), boost:200 });
   for (const action of ctx.actions()) items.push({ group:action.group || 'Actions', ...action });
   const now = new Date(), horizon = +now + 60 * 86400000;
   const events = ctx.getEvents().filter(event => new Date(event.end || event.start) >= now && new Date(event.start) <= horizon)
@@ -140,7 +171,7 @@ function initPalette() {
   const render = () => {
     items = paletteItems(input.value); active = Math.min(active, Math.max(0, items.length - 1));
     let group = '';
-    renderHTML(list, items.length ? items.map((item, i) => `${item.group !== group ? `<li class="palette-group" role="presentation">${esc(group = item.group)}</li>` : ''}<li role="option" id="palette-${i}" aria-selected="${i === active}" data-index="${i}" class="palette-item"><span class="palette-icon" aria-hidden="true">${esc(item.icon || '•')}</span><span class="palette-label">${esc(item.label)}</span>${item.hint ? `<span class="palette-hint">${esc(item.hint)}</span>` : ''}</li>`).join('') : '<li class="palette-empty">No matches. Try a plan like “Brunch Sun 11am”.</li>');
+    renderHTML(list, items.length ? items.map((item, i) => `${item.group !== group ? `<li class="palette-group" role="presentation">${esc(group = item.group)}</li>` : ''}<li role="option" id="palette-${i}" aria-selected="${i === active}" data-index="${i}" class="palette-item${item.answer ? ' is-answer' : ''}"><span class="palette-icon" aria-hidden="true">${esc(item.icon || '•')}</span><span class="palette-label">${esc(item.label)}</span>${item.hint ? `<span class="palette-hint">${esc(item.hint)}</span>` : ''}</li>`).join('') : '<li class="palette-empty">No matches. Try a plan like “Brunch Sun 11am”.</li>');
     input.setAttribute('aria-activedescendant', items.length ? `palette-${active}` : '');
     list.querySelector('[aria-selected="true"]')?.scrollIntoView?.({ block:'nearest' });
   };
@@ -244,7 +275,7 @@ function markWeather(flags) {
 
 export function initUpgrades(options) {
   ctx = options;
-  initQuickAdd(); initPalette();
+  initAsk(); initQuickAdd(); initPalette();
   $('nowNext').addEventListener('click', event => {
     const target = event.target.closest('[data-nn-event],[data-nn-view]'); if (!target) return;
     if (target.dataset.nnEvent) ctx.openEvent(target.dataset.nnEvent, target.dataset.nnOcc);
