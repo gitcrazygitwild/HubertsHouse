@@ -110,6 +110,8 @@ async function fixture(options = {}) {
   await module('birthdays.js',['sampleBirthdays','birthdayPanelHTML','initBirthdays'],'const esc=escapeHTML;');
   await module('features.js',['startParts','featureParts','startFeatures','showStartupProblems','startupProblemText']);
   if (options.breakPart) { const real = w[options.breakPart]; w[options.breakPart] = () => { const e = new Error('broken on purpose'); e.code = 'invalid-argument'; throw e; }; w.__realPart = real; }
+  await module('event-window.js',['connectEventWindow','initDateEditor','wireEventWindow','openEventModal','openTaskModal','persistMovedEvent','updateEventOverlap','defaultCalendar','drawDetailsWhere']);
+  await module('calendar-page.js',['connectCalendarPage','wireCalendarPage','getCalendar','getVisibleEvents','initCalendarUI','openFromPanel','renderCalendarFromCache','renderPanels','setSearchUIState']);
   w.eval(clean(await read('app.js')) + ';window.__testApp={getDocs:()=>rawDocs,setCloudDocs:(records)=>{cloudDocs=records;rebuildEvents();},persistMovedEvent,redraw:()=>updateHouseholdEvents(expandedEvents)};'); await settle();
   return {dom,w,doc:w.document,errors,strict};
 }

@@ -205,3 +205,8 @@ body[data-view]:not([data-view="today"]) .now-next { display:none !important; } 
 .palette-item.is-answer { align-items:flex-start; background:color-mix(in srgb, var(--accent) 8%, transparent); }
 .palette-item.is-answer .palette-label { white-space:normal; font-weight:600; line-height:1.4; }
 @media (max-width:650px) { .ask-a { font-size:17px; } }
+
+/* The Miateorology and Flapurr links: just their icons. */
+.app-links .app-link.icon-only { justify-content:center; gap:0; padding:7px; min-width:53px; }
+.app-links .app-link.icon-only:focus-visible { outline:3px solid #ab885b; outline-offset:2px; }
+@media (max-width:650px) { .app-links .app-link.icon-only { flex:none; padding:6px; min-width:46px; min-height:46px; } }

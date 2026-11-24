@@ -38,7 +38,7 @@ Two AI assistants work on this repository: **Codex** and **Claude**. They never 
 
 | Area | Files |
 |---|---|
-| App shell, events, Firebase wiring | `app.js`, `index.html`, `household.js`, `monitor-mode.js`, `features.js` (starts every part after sign-in on its own; one that fails shows a banner and the rest keep going), `stores.js` |
+| App shell, events, Firebase wiring | `app.js` (sign-in, Firestore events, startup), `event-window.js` (details, add/edit and checklist windows), `calendar-page.js` (FullCalendar views, search, filters, panels), `index.html`, `household.js`, `monitor-mode.js`, `features.js` (starts every part after sign-in on its own; one that fails shows a banner and the rest keep going), `stores.js` |
 | Baby tracking, Huckleberry UI | `baby.js` (Today's card, Huckleberry settings, refresh/write; shares a `ctx` with its parts:), `log-sheet.js` (the log window), `night-mode.js`, `recent-logs.js`, `nap-recovery.js`, `baby-model.js` (Purrfect Window, Mia’s Catnap Forecast), `frankie.js` (Frankie page), `frankie-charts.js` (its SVG charts and tables), `day-ring.js` (her last 24 hours as a clock), `week-story.js` + `story-view.js` (Frankie’s week as story cards), `baby-history.js`, `awards.js`, `prediction-log.js` (scoreboard) |
 | Smart features | `upgrades.js` (quick add, ⌘K, Now & Next tiles, sky, free nights), `ask.js` (Ask the house: questions answered from local data), `quick-add.js`, `smart-home.js`, `free-nights.js`, `sky.js` |
 | Life page (to-dos, groceries, meals) | `household.js` (tabs; `#tasks`/`#groceries`/`#meals` open the right tab), `meals.js`, `meals-view.js`, `meal-ideas.js` (ideas library, BOGO matching), `functions/publix.js` (unofficial Publix weekly ad, store 1588 Carytown by default) |
