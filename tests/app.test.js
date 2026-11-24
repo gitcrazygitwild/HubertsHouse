@@ -59,6 +59,7 @@ async function fixture(options = {}) {
   await module('day-ring.js',['dayRing','dayRingHTML']);
   await module('week-story.js',['weekStory','weekStoryText']);
   await module('story-view.js',['slideHTML','openStory'],'const esc=escapeHTML;');
+  await module('frankie-charts.js',['hm','oz','clock','dayLabel','sleepChart','bottleChart','pumpChart','timeline','legend','table'],'const esc=escapeHTML;');
   await module('frankie.js',['renderFrankie','initFrankie','frankieDayText','bottleLinksHTML', 'pumpsHTML', 'paceHTML','challengeHTML','napNightHTML','hatHTML','callsSlides'],'const esc=escapeHTML;');
   await module('baby-logs.js',['LOG_FILTERS','describeLog','logKey','logsHTML'],'const esc=escapeHTML;');
   await module('baby.js',['initHuckleberry','logBabyFromText'],'const esc=escapeHTML;');
