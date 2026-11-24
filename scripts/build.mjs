@@ -17,7 +17,8 @@ for (const [index, file] of files.entries()) {
     source = source.replace(/(\.\/(?:app\.js|[^"?]+\.css))\?v=[^"']+/g, `$1?v=${revision}`);
     // Ask for every app module at once. Without this the browser only finds each layer
     // of imports after the previous one arrives, a slow chain of round trips on a phone.
-    const preload = files.filter(name => name.endsWith('.js') && name !== 'sw.js') // the service worker is registered, not imported.map(name => `  <link rel="modulepreload" href="./${name}?v=${revision}" />`).join('\n');
+    // (sw.js is left out: the service worker is registered, not imported.)
+    const preload = files.filter(name => name.endsWith('.js') && name !== 'sw.js').map(name => `  <link rel="modulepreload" href="./${name}?v=${revision}" />`).join('\n');
     source = source.replace('</head>', `${preload}\n</head>`);
   }
   await writeFile(`dist/${file}`, source);
