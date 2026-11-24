@@ -45,8 +45,6 @@
 .dial-tick { stroke:var(--muted); stroke-width:1; opacity:.35; }
 .dial-tick.big { stroke-width:2; opacity:.6; }
 .dial-hour { font:600 12px var(--font-ui, system-ui); fill:var(--muted); }
-.dial-hand { stroke:var(--accent); stroke-width:2; stroke-linecap:round; opacity:.5; }
-.dial-hub { fill:var(--accent); }
 .dial-dot { cursor:grab; outline:none; transition:r .12s ease; }
 .dial-dot.start { fill:var(--accent); stroke:var(--card); stroke-width:3; filter:drop-shadow(0 2px 4px #0003); }
 .dial-dot.end { fill:var(--card); stroke:var(--accent); stroke-width:3; }

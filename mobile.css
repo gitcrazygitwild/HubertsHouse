@@ -10,8 +10,6 @@
   body[data-view]:not([data-view="today"]) .now-next { display: none !important; }
   .app-links { gap: 8px; }
   .app-link { padding: 8px 10px; }
-  .app-link-name small { display: none; }
-  .nav-long { display: none; }
 
   /* Today's week: tap a day heading (or ＋) to add, so the per-day boxes go. */
   #homeWeek[data-calendar-mode="week"] .home-day-add,
@@ -29,7 +27,6 @@
   .baby-predictions::-webkit-scrollbar, .score-grid::-webkit-scrollbar, .world-markets::-webkit-scrollbar { display: none; }
   .baby-predictions > *, .score-grid > * { flex: 0 0 84%; scroll-snap-align: center; }
   .world-markets > * { flex: 0 0 42%; scroll-snap-align: start; }
-  .swipe-hint { display: block !important; }
 
   /* Duplicates of the calendar and the week-ahead card. */
   .home-stats, .home-columns > .home-card:first-child { display: none; }
@@ -42,7 +39,6 @@
   /* Comfortable tap targets. */
   .baby-actions .btn, .item-row .item-check { min-height: 44px; }
 }
-.swipe-hint { display: none; font-size: 11px; color: var(--muted); margin: -2px 0 8px; }
 @media (max-width: 650px) {
   /* One tidy row of header buttons: search, theme, add. */
   .header-actions { flex-wrap: nowrap; gap: 6px; }
@@ -84,7 +80,7 @@ html, body { overflow-x: clip; max-width: 100%; }
 @media (max-width: 650px) {
   input, select, textarea { min-width: 0; max-width: 100%; }
   /* Safari's date and time pickers are wider than Chrome's: one per row on phones. */
-  .baby-form-row, .log-time-row, .item-dialog .row { grid-template-columns: 1fr !important; }
+  .log-time-row, .item-dialog .row { grid-template-columns: 1fr !important; }
 }
 /* Pull to refresh (installed app only; pull-refresh.js). */
 .pull-refresh { position:fixed; top:calc(var(--safe-top, 0px) + 8px); left:50%; z-index:25000; transform:translate(-50%, -48px); opacity:0; display:flex; align-items:center; gap:8px; padding:8px 14px; border-radius:999px; background:var(--card, #fffdf7); border:1px solid var(--border, #dcdfd2); box-shadow:0 6px 20px #26341d1f; font-size:12px; font-weight:600; color:var(--muted, #6f7766); pointer-events:none; }

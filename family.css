@@ -42,7 +42,7 @@
 [data-theme="dark"] .fc-event.owner-custom { background-color:#2b424b !important; color:#b8dce9 !important; }
 [data-theme="dark"] .event-overlap { background:#423823; color:#f4d499; border-color:#776445; }
 [data-theme="dark"] .frankie-tag { background:#503144; color:#f2bfd8; border-color:#80516d; }
-[data-theme="dark"] .fc { --fc-border-color:var(--border); --fc-neutral-bg-color:var(--soft); --fc-today-bg-color:#738c6525; --fc-page-bg-color:var(--card); }
+[data-theme="dark"] .fc { --fc-border-color:var(--border); --fc-neutral-bg-color:var(--soft); --fc-page-bg-color:var(--card); }
 [data-theme="dark"] .fc-event .fc-event-main { color:var(--event-ink,var(--text)) !important; }
 [data-theme="dark"] .fc .fc-daygrid-day-number { color:var(--text); }
 [data-theme="dark"] .fc .fc-day-today .fc-daygrid-day-number { color:#17241b; }
