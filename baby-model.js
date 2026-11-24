@@ -54,7 +54,19 @@ export function purrfectWindow({ sleeps = [], timer = null, timezone = 'America/
   };
   if (timer?.active) {
     const began = stamp(timer.start);
-    if (timer.paused || !Number.isFinite(began) || !isNight({start:began, end:began + MINUTE})) return empty('Sleeping now. A new window will appear after wake-up.');
+    if (timer.paused || !Number.isFinite(began)) return empty('Sleeping now. A new window will appear after wake-up.');
+    // Napping: how long her naps that started around this time of day usually lasted.
+    if (!isNight({start:began, end:began + MINUTE})) {
+      const at = clockOf(began, timezone);
+      const naps = merged.filter(sleep => !isNight(sleep)).map(sleep => ({minutes:(sleep.end - sleep.start) / MINUTE, clock:clockOf(sleep.start, timezone), day:localParts(sleep.start, timezone).day, end:sleep.end}))
+        .filter(sample => sample.minutes >= 10 && sample.minutes <= 240);
+      let selected = naps.filter(sample => Math.abs(sample.clock - at) <= 90), matchedTime = true;
+      if (selected.length < 3 || nightsOf(selected) < 2) selected = naps.filter(sample => Math.abs(sample.clock - at) <= 180);
+      if (selected.length < 3 || nightsOf(selected) < 2) { selected = naps; matchedTime = false; }
+      selected = selected.sort((a, b) => b.end - a.end).slice(0, 20);
+      if (selected.length < 3 || nightsOf(selected) < 2) return empty('Learning her naps: Hubert needs at least three logged naps across two days.');
+      return finish('wake', began, selected, matchedTime, {sleepStart:new Date(began).toISOString(), nap:true});
+    }
     // Night stretches, keyed by the evening they belong to (a 1 AM stretch counts toward the night before).
     const at = clockOf(began, timezone);
     const stretches = merged.filter(isNight).map(sleep => ({minutes:(sleep.end - sleep.start) / MINUTE, clock:clockOf(sleep.start, timezone), day:localParts(sleep.start - 6 * 3600000, timezone).day, end:sleep.end}))

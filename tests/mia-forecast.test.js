@@ -168,7 +168,8 @@ test('Hubert forecasts the next night wake-up from stretches that started around
   assert.equal(first.matchedTime, true); assert.equal(first.sleepStart, new Date(today + 22 * H).toISOString());
   const later = purrfectWindow({sleeps:iso([...nights, ...lateDay(0).slice(1), {start:today + 22 * H, end:today + 26 * H}]), timer:{active:true, start:new Date(today + 26.5 * H).toISOString()}, timezone:zone}, new Date(today + 27 * H));
   assert.equal(Date.parse(later.target), today + 31 * H); // the second stretch usually lasts 4h 30m → 7 AM
-  // A daytime nap on the timer still gets no forecast; too little night history says so.
-  assert.equal(purrfectWindow({sleeps, timer:{active:true, start:new Date(today + 13 * H).toISOString()}, timezone:zone}, new Date(today + 13.5 * H)).available, false);
+  // A daytime nap on the timer now gets a nap wake-up guess; too little night history says so.
+  const nap = purrfectWindow({sleeps, timer:{active:true, start:new Date(today + 13 * H).toISOString()}, timezone:zone}, new Date(today + 13.5 * H));
+  assert.equal(nap.available, true, nap.reason); assert.equal(nap.kind, 'wake'); assert.equal(nap.nap, true);
   assert.match(purrfectWindow({sleeps:iso(lateDay(0).slice(1)), timer:{active:true, start:new Date(today + 22 * H).toISOString()}, timezone:zone}, new Date(today + 23 * H)).reason, /night stretches/);
 });
