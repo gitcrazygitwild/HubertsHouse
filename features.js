@@ -19,6 +19,7 @@ import { initBathDays, memoryBathStore } from './bath-settings.js';
 import { initTrashDays, memoryTrashStore } from './trash-settings.js';
 import { initBirthdays } from './birthdays.js';
 import { demoMealStore } from './demo.js';
+import { initReminders } from './reminders-settings.js';
 
 const describe = error => String(error?.code || error?.name || 'error').replace(/^[a-z]+\//, '');
 
@@ -57,6 +58,7 @@ export function featureParts({ app = null, db = null, demo = false, startUpgrade
     ['Birthdays', () => initBirthdays(app, { ...(demo ? { demo:true } : {}), onChange:calendarChanged })],
     ['Bath days', () => initBathDays({ store:demo ? memoryBathStore() : settingsStore(db), onChange:bathChanged })],
     ['Trash days', () => initTrashDays({ store:demo ? memoryTrashStore() : trashStore(db), onChange:bathChanged })],
+    ['Reminders', () => initReminders(app, { demo })],
     ['Connections', () => initHealth({ store:demo ? memoryHealthStore(sampleHealth()) : healthStore(db) })]
   ];
 }

@@ -2,7 +2,7 @@
 .today-smart { display:flex; flex-direction:column; gap:12px; margin-bottom:16px; }
 .smart-add { position:relative; display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:10px; padding:6px 6px 6px 16px; border:1px solid var(--border); border-radius:16px; background:var(--card); box-shadow:0 6px 18px #0000000a; }
 .smart-add:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
-.smart-add input { border:0; background:transparent; color:var(--text); font:inherit; font-size:14px; min-width:0; padding:10px 0; outline:none; }
+.smart-add input { color:var(--text); font:inherit; font-size:14px; min-width:0; padding:10px 0; }
 .smart-add-spark { font-size:16px; }
 .smart-add .btn { min-height:38px; }
 .smart-add-preview { grid-column:1/-1; margin:0 0 4px 30px; font-size:11.5px; color:var(--muted); }
@@ -210,3 +210,9 @@ body[data-view]:not([data-view="today"]) .now-next { display:none !important; } 
 .app-links .app-link.icon-only { justify-content:center; gap:0; padding:7px; min-width:53px; }
 .app-links .app-link.icon-only:focus-visible { outline:3px solid #ab885b; outline-offset:2px; }
 @media (max-width:650px) { .app-links .app-link.icon-only { flex:none; padding:6px; min-width:46px; min-height:46px; } }
+
+/* Settings → Reminders on this phone (reminders-settings.js). */
+.push-choices { display:grid; gap:8px; margin:6px 0 12px; }
+.push-choice { display:flex; align-items:flex-start; gap:10px; padding:10px 12px; border:1px solid var(--border); border-radius:12px; background:var(--card); cursor:pointer; }
+.push-choice input { margin-top:3px; width:18px; height:18px; accent-color:var(--accent); }
+.push-choice strong { display:block; font-size:13.5px; } .push-choice small { display:block; color:var(--muted); font-size:12px; }

@@ -110,6 +110,7 @@ async function fixture(options = {}) {
   await module('trash-settings.js',['trashPanelHTML','memoryTrashStore','initTrashDays'],'const esc=escapeHTML;');
   await module('bath-settings.js',['bathPanelHTML','memoryBathStore','initBathDays'],'const esc=escapeHTML;');
   await module('birthdays.js',['sampleBirthdays','birthdayPanelHTML','initBirthdays'],'const esc=escapeHTML;');
+  await module('reminders-settings.js',['initReminders','remindersHTML','pushSupport','keyBytes']);
   await module('features.js',['startParts','featureParts','startFeatures','showStartupProblems','startupProblemText']);
   if (options.breakPart) { const real = w[options.breakPart]; w[options.breakPart] = () => { const e = new Error('broken on purpose'); e.code = 'invalid-argument'; throw e; }; w.__realPart = real; }
   await module('event-window.js',['connectEventWindow','initDateEditor','wireEventWindow','openEventModal','openTaskModal','persistMovedEvent','updateEventOverlap','defaultCalendar','drawDetailsWhere']);
@@ -947,5 +948,20 @@ test('asking the house a question in the quick-add box answers it instead of add
   assert.equal(doc.getElementById('quickAddPreview').textContent,'↵ Ask Hubert’s House');
   form.dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true})); await settle();
   assert.match(box.querySelector('.ask-a').textContent,/^Frankie has been awake for /);
+  assert.deepEqual(errors,[]);
+});
+
+test('Settings → Reminders on this phone: the preview explains it; each state says what to do', async t => {
+  const {dom,w,doc,errors}=await fixture(); t.after(() => dom.window.close());
+  const panel=doc.getElementById('remindersPanel');
+  assert.match(panel.textContent,/This preview doesn’t turn any on/); assert.equal(panel.querySelectorAll('[data-push-pref]').length,3);
+  assert.ok([...panel.querySelectorAll('[data-push-pref]')].every(box => box.disabled));
+  assert.match(w.remindersHTML({ supported:false, reason:'ios-tab' }),/Add to Home Screen/);
+  assert.match(w.remindersHTML({ supported:true, permission:'denied' }),/Settings → Notifications → Hubert’s House/);
+  assert.match(w.remindersHTML({ supported:true, permission:'default', subscribed:false }),/Turn on reminders/);
+  const on=w.remindersHTML({ supported:true, permission:'granted', subscribed:true, prefs:{ bins:true, bath:false, bottle:true } });
+  assert.match(on,/Send a test/); assert.match(on,/Turn off on this phone/); assert.match(on,/data-push-pref="bath"(?! checked)/);
+  assert.deepEqual([...w.keyBytes('AQID_-8')],[1,2,3,255,239]);
+  assert.equal(w.pushSupport({ navigator:{ userAgent:'iPhone', standalone:false }, matchMedia:() => ({ matches:false }) }).reason,'ios-tab');
   assert.deepEqual(errors,[]);
 });

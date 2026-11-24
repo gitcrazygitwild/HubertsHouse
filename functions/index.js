@@ -15,6 +15,7 @@ import { createLitterRobot, LitterRobotError } from './litter-robot.js';
 import { createPetLibro, PetLibroError } from './petlibro.js';
 import { createPublix, PublixError, DEFAULT_STORE } from './publix.js';
 import { createHealth } from './service-health.js';
+import { createPush, PushError } from './push.js';
 initializeApp();
 const db = getFirestore();
 const assignments = createAssignmentStore(db);
@@ -31,7 +32,7 @@ function endpoint(handler, extra = {}) {
     catch (error) {
       if (error instanceof HttpsError) throw error;
       if(error instanceof HuckleberryError && error.details?.service==='huckleberry') warn('Huckleberry request rejected',{operation:error.details.operation || 'authentication',reason:error.details.reason,...(error.details.httpStatus !== undefined ? {httpStatus:error.details.httpStatus} : {}),...(error.details.grpcCode !== undefined ? {grpcCode:error.details.grpcCode} : {})});
-      if (error instanceof CalendarError || error instanceof HuckleberryError || error instanceof NewsletterError || error instanceof SmartHomeError || error instanceof LitterRobotError || error instanceof PetLibroError || error instanceof PublixError) throw new HttpsError(error.code,error.message,error instanceof HuckleberryError ? error.details : undefined);
+      if (error instanceof CalendarError || error instanceof HuckleberryError || error instanceof NewsletterError || error instanceof SmartHomeError || error instanceof LitterRobotError || error instanceof PetLibroError || error instanceof PublixError || error instanceof PushError) throw new HttpsError(error.code,error.message,error instanceof HuckleberryError ? error.details : undefined);
       // Never log request bodies, credentials, calendar data, or raw provider errors.
       throw new HttpsError('unavailable','The connected service is temporarily unavailable. Try again shortly.');
     }
@@ -437,4 +438,26 @@ export const publix = endpoint(async (_uid, input = {}) => {
   if (input.action === 'deals') return { ...(await publixService.deals({ store:input.store || DEFAULT_STORE.number, force:input.force === true })), defaultStore:DEFAULT_STORE };
   if (input.action === 'stores') return { stores:await publixService.stores(input.zip) };
   throw new PublixError('invalid-argument', 'Choose a Publix action.');
+});
+
+// ---------- Phone reminders (Web Push) ----------
+// Settings → Reminders saves this phone; every 15 minutes the job sends what's due
+// (bins out tonight, bath night, Frankie's next bottle). See push.js.
+import { APP_URL } from './newsletter.js';
+const push = createPush({ db, subject:APP_URL });
+export const reminders = endpoint((uid, input) => push.handle(uid, input));
+export const pushReminders = onSchedule({ schedule:'*/15 * * * *', timeZone:HOUSE_TZ, region:'us-central1', secrets:[encryptionKey], timeoutSeconds:120, memory:'256MiB', cpu:'gcf_gen1', maxInstances:1 }, async () => {
+  process.env.TZ = HOUSE_TZ;
+  const result = await push.run({ load:async ({ wantBottle }) => {
+    const settings = (await db.doc('householdSettings/home').get().catch(() => null))?.data() || {};
+    let snapshot = null;
+    if (wantBottle) {
+      // The copy the app saves while it's open, if it's recent; otherwise one light Huckleberry read.
+      const saved = (await db.doc('privateBabySnapshots/household-home').get().catch(() => null))?.data();
+      if (saved?.bottles && Date.now() - Date.parse(saved.checkedAt) < 30 * 60000) snapshot = saved;
+      else { const [uid] = await activeMembers(); if (uid) snapshot = await withinTime(huckleberryHandler(uid, { action:'snapshot', light:true }), 25000).then(r => r.value || saved || null).catch(() => saved || null); }
+    }
+    return { trash:settings.trash ?? null, bathDays:settings.bathDays ?? null, snapshot };
+  } });
+  if (result.sent) info('Reminders sent', { sent:result.sent, phones:result.phones, due:result.due });
 });

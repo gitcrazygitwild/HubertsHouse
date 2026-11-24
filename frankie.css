@@ -20,7 +20,7 @@
 /* Frankie page */
 .frankie-eyebrow { color:var(--frankie-ink); }
 .frankie-actions { display:flex; gap:8px; flex-wrap:wrap; }
-.frankie-status { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:16px; }
+.frankie-status { display:grid; gap:12px; margin-bottom:16px; }
 .frankie-tile { display:flex; flex-direction:column; gap:4px; padding:14px 16px; border:1px solid var(--border); border-radius:16px; background:var(--card); }
 .frankie-tile span { font-size:11px; color:var(--muted); }
 .frankie-tile strong { font-family:var(--serif,Georgia,serif); font-weight:400; font-size:24px; line-height:1.2; }
@@ -94,7 +94,7 @@ rect.is-hovered.mark-night,rect.is-hovered.mark-nap { stroke:var(--card); stroke
 .score-table td.is-miss { color:var(--muted); }
 .score-table td.is-best { font-weight:700; }
 
-@media (max-width:900px) { .frankie-status { grid-template-columns:1fr 1fr; } .frankie-charts { grid-template-columns:1fr; } .score-grid { grid-template-columns:1fr; } }
+@media (max-width:900px) { .frankie-charts { grid-template-columns:1fr; } .score-grid { grid-template-columns:1fr; } }
 @media (max-width:520px) { .frankie-tile strong { font-size:20px; } .frankie-range-row { justify-content:flex-start; } }
 
 /* Daily jokes: the after-dark joke folds away until tapped. */
@@ -148,7 +148,6 @@ rect.is-hovered.mark-night,rect.is-hovered.mark-nap { stroke:var(--card); stroke
 @media (max-width:650px) { .link-row { align-items:flex-start; flex-direction:column; gap:8px; } }
 /* Cat challenges */
 .challenge-calls { margin:0 0 12px; padding:10px 14px; border-radius:12px; background:var(--soft); font-size:14px; }
-.morning-calls { grid-column:1 / -1; margin:2px 0 0; padding:10px 14px; border-radius:12px; background:var(--soft); font-size:13px; }
 .mack-excuse { display:block; margin-top:6px; font-style:italic; color:var(--muted); }
 /* Missed-nap recovery */
 .missed-naps { margin:14px 0; padding:12px 14px; border:1px dashed var(--border); border-radius:12px; }

@@ -81,6 +81,14 @@ Re-run the script whenever it gains a permission. The morning newsletter added C
 
 The digest is built from the same modules as the app: `scripts/share.mjs` copies them into `functions/shared/` before tests, builds and deploys (a Firebase `predeploy` step covers manual deploys too). `functions/shared/` is generated and not committed.
 
+### Phone reminders
+
+Settings → **Reminders on this phone** turns on notifications for bins out tonight (7 PM the evening before a pickup), bath night (5:30 PM) and Frankie's next bottle (about 20 minutes ahead, while she's awake). Each phone chooses its own.
+
+- On iPhone it works only in the home-screen app (iOS 16.4 or later): Share → Add to Home Screen, open it from there, then Settings → Reminders → Turn on reminders → Allow.
+- Nothing to set up on the server: the `reminders` function and the `pushReminders` job (every 15 minutes) deploy with the rest. The signing keys are created on first use in server-only `privateSettings/push`; phones are saved in server-only `privatePushSubscriptions`.
+- The bottle reminder uses the copy of Frankie's history the app saves while it's open, and makes one light Huckleberry read only when that copy is over 30 minutes old (and only if a phone wants bottle reminders).
+
 ## 4. Connect Apple Calendar in the app
 
 1. Sign in to Hubert’s House with a household account.
