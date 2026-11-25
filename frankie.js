@@ -101,7 +101,7 @@ export function challengeHTML(kind, score, timezone, upcoming = null) {
 // Mack's hat: how his pulled-from-a-hat guesses would have done (never in the competition).
 const HAT_KIND = { sleep:'next sleep', wake:'nap wake-up', morning:'morning' };
 export function hatHTML(score, timezone) {
-  if (!score.n) return '<p class="tiny muted">No hat pulls to score yet. Mack pulls one whenever SweetSpot goes quiet: while she sleeps, overnight, or when its last call has passed.</p>';
+  if (!score.n) return '<p class="tiny muted">No hat pulls to score yet. Mack pulls one whenever SweetSpot goes quiet: while she sleeps, overnight, when it has no call, or after its bedtime call passes.</p>';
   const miss = m => m === 0 ? 'spot on' : `${Math.abs(m)}m ${m > 0 ? 'early' : 'late'}`;
   const day = stamp => `${new Date(stamp).toLocaleDateString([], { weekday:'short', timeZone:timezone })} ${clock(stamp, timezone)}`;
   const versus = score.catsOnSame == null ? '' : score.hatOnSame <= score.catsOnSame ? 'Somehow, the hat is keeping up with Hubert and Mia.' : score.hatOnSame - score.catsOnSame <= 10 ? 'Not far behind Hubert and Mia, which worries them.' : 'Hubert and Mia are relieved.';
@@ -114,7 +114,7 @@ export function hatHTML(score, timezone) {
     </div>
     <p class="hat-verdict">${esc(versus)}${score.best ? ` Best pull: ${esc(HAT_KIND[score.best.kind])} on ${esc(day(score.best.actual))} (${esc(miss(score.best.error))}).` : ''}${score.worst && score.worst !== score.best ? ` Worst: ${esc(miss(score.worst.error))} on ${esc(day(score.worst.actual))}.` : ''}</p>
     <div class="score-table-wrap"><table class="score-table fit-table"><thead><tr><th>What happened</th><th>Hat said</th><th>Miss</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <p class="tiny muted">Whenever SweetSpot goes quiet (she’s asleep, it’s the night, or its last call passed while she was still up), Mack pulls a guess: the middle of Hubert’s and Mia’s calls, give or take up to 25 minutes, in steps of five. The same moment always pulls the same slip, so these are replayed from the last three weeks of logs. None of it counts in the challenges.</p>`;
+    <p class="tiny muted">Whenever SweetSpot goes quiet (she’s asleep, it’s the night, it has no call for this wake-up, or its bedtime call passed while she was still up; a nap call that passed doesn’t count, she’s just late), Mack pulls a guess: the middle of Hubert’s and Mia’s calls, give or take up to 25 minutes, in steps of five. The same moment always pulls the same slip, so these are replayed from the last three weeks of logs. None of it counts in the challenges.</p>`;
 }
 // Nap or night? One card per cat, the calls for the sleep coming up, then recent wake-ups.
 const NN = { night:'🌙 Night', nap:'😴 Nap' };

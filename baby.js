@@ -9,7 +9,7 @@ import { sampleHistory, samplePredictions } from './baby-sample.js';
 import { renderFrankie, initFrankie } from './frankie.js';
 import { renderHTML } from './dom.js';
 import { dayStripSVG, STRIP_LANES, CATS } from './day-strip.js';
-import { hatGuess, hatSeed } from './mack-hat.js';
+import { hatGuess, hatSeed, sweetspotQuiet } from './mack-hat.js';
 import { initNightMode } from './night-mode.js';
 import { initRecentLogs } from './recent-logs.js';
 import { initLogSheet } from './log-sheet.js';
@@ -130,7 +130,7 @@ function drawHome() {
   const outdated = Date.now() - Date.parse(snapshot.checkedAt) > 10 * 60000;
   // Mack's hat: when SweetSpot has nothing to say, Mack pulls a guess (never in the competition).
   const hat = safely('Mack’s hat', () => {
-    if (huck.available && !huck.expired && !huck.sleeping) return null;
+    if (!sweetspotQuiet(huck, snapshot.sleeps, zone(), Date.now())) return null; // SweetSpot has a call (or a nap call that passed: she's just late)
     const timer = snapshot.timer, began = timer?.active ? Date.parse(timer.start) : null, lastWake = Date.parse(snapshot.sleeps.at(-1)?.end);
     if (morning) { const bedtime = currentBedtime(snapshot.sleeps, timer, zone()); return { what:'morning wake-up', ...hatGuess({ bases:[morning.hubert?.target, morning.mia?.target], fallback:bedtime + 10.5 * 3600000, seed:hatSeed('night', bedtime), firedAt:bedtime }) }; }
     if (Number.isFinite(began)) return { what:'wake-up', ...hatGuess({ bases:[miaShown.available && miaShown.kind === 'wake' ? miaShown.target : null, own.available && own.kind === 'wake' ? own.target : null], fallback:began + 55 * 60000, seed:hatSeed('nap', began), firedAt:began }) };

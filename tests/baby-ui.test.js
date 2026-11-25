@@ -9,14 +9,14 @@ import {sweetspotEntry,sweetspotPatch,previousSweetspot,scorePredictions,recover
 import {logsHTML,describeLog,logKey} from '../baby-logs.js';
 import {currentBedtime,morningPicks,MACK_EXCUSE} from '../cat-challenges.js';
 import {dayStripSVG,STRIP_LANES,CATS} from '../day-strip.js';
-import {hatGuess,hatSeed} from '../mack-hat.js';
+import {hatGuess,hatSeed,sweetspotQuiet} from '../mack-hat.js';
 const settle = () => new Promise(resolve => setTimeout(resolve,20));
 const connection = {connected:true,selected:'child',children:[{id:'child',name:'Frankie'}],timezone:'America/New_York'};
 const snapshot = {childId:'child',name:'Frankie',checkedAt:new Date().toISOString(),sleeps:[],historyComplete:true,timer:{active:false},sweetspot:{time:null}};
 async function fixture(handler) {
   const dom = new JSDOM(await readFile(new URL('../index.html',import.meta.url),'utf8'),{url:'https://house.test/',runScripts:'outside-only',pretendToBeVisual:true}), w=dom.window, notices=[];
   w.setInterval=()=>0; w.HTMLDialogElement.prototype.showModal=function(){this.open=true;}; w.HTMLDialogElement.prototype.close=function(){this.open=false;};
-  Object.assign(w,{config:{huckleberryServiceEnabled:true},getFunctions:()=>({}),httpsCallable:()=>async data=>({data:await handler(data)}),esc:escapeHTML,renderHTML,dayStripSVG,STRIP_LANES,CATS,guessRounds,hatGuess,hatSeed,currentBedtime,morningPicks,MACK_EXCUSE,purrfectWindow,huckleberryPrediction,miaForecast,bottleForecast,averageCalls,sleepAwareBottle,sweetspotEntry,sweetspotPatch,previousSweetspot,scorePredictions,recoveredEntry,logsHTML,describeLog,logKey,renderFrankie:()=>{},initFrankie:()=>{},sampleHistory:()=>({sleeps:[],bottles:[]}),samplePredictions:()=>[],showNotice:value=>notices.push(value),showView:()=>{}});
+  Object.assign(w,{config:{huckleberryServiceEnabled:true},getFunctions:()=>({}),httpsCallable:()=>async data=>({data:await handler(data)}),esc:escapeHTML,renderHTML,dayStripSVG,STRIP_LANES,CATS,guessRounds,hatGuess,hatSeed,sweetspotQuiet,currentBedtime,morningPicks,MACK_EXCUSE,purrfectWindow,huckleberryPrediction,miaForecast,bottleForecast,averageCalls,sleepAwareBottle,sweetspotEntry,sweetspotPatch,previousSweetspot,scorePredictions,recoveredEntry,logsHTML,describeLog,logKey,renderFrankie:()=>{},initFrankie:()=>{},sampleHistory:()=>({sleeps:[],bottles:[]}),samplePredictions:()=>[],showNotice:value=>notices.push(value),showView:()=>{}});
   // The parts split out of baby.js load first, each in its own scope, exposing its init.
   for (const [file, name] of [['night-mode.js','initNightMode'],['recent-logs.js','initRecentLogs'],['log-sheet.js','initLogSheet'],['nap-recovery.js','initNapRecovery']]) {
     const part = (await readFile(new URL(`../${file}`,import.meta.url),'utf8')).replace(/^import[^\n]+\n/gm,'').replace(/\bexport /g,'');

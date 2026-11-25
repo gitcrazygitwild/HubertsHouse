@@ -1,5 +1,7 @@
 // Mack's hat: when Huckleberry's SweetSpot has nothing to say (she's asleep, it's the
-// night, or the last SweetSpot already passed), Mack pulls a guess out of a hat. It's
+// night, it has no call for this wake window, or its bedtime call passed), Mack pulls a
+// guess out of a hat. A nap call that passed while she was still up isn't "nothing to
+// say": SweetSpot called it, she's just late, so Mack stays quiet (see sweetspotQuiet). It's
 // somewhat sensible (the middle of Hubert's and Mia's calls) and somewhat random (up to
 // 25 minutes either way, in steps of five, because Mack can only count in fives).
 // The randomness is seeded by the moment, so a guess never changes on refresh and past
@@ -50,9 +52,22 @@ export function hatGuess({ bases = [], fallback = null, seed, firedAt = null } =
 }
 export const hatSeed = (kind, stamp) => `${kind}:${toStamp(stamp)}`;
 
+// Is SweetSpot quiet about her next sleep, so Mack may pull one? Not while it has a live
+// call. Asleep, or no call since her last sleep: quiet. A call that passed while she was
+// still awake: quiet only if it was for the night (a time past Frankie's evening line, or
+// before 5 AM), since after a bedtime call SweetSpot says nothing until morning.
+export function sweetspotQuiet(huck, sleeps = [], timezone = 'America/New_York', now = Date.now()) {
+  if (!huck?.available || huck.sleeping) return true;
+  if (!huck.expired) return false;
+  const time = toStamp(huck.time), latestEnd = Math.max(0, ...sleeps.map(s => toStamp(s.end)).filter(Number.isFinite));
+  if (!Number.isFinite(time) || time <= latestEnd) return true;
+  return passedCallWasNight(time, sleeps, timezone, now);
+}
+const passedCallWasNight = (time, sleeps, timezone, now) => sleepKind({ start:time, end:time + MINUTE }, timezone, nightLine(sleeps, timezone, now)) === 'night';
+
 // ---------- The hat's track record (never part of the competition) ----------
 // Replays every time the hat would have come out in the last `days` days:
-// - next sleep: a daytime wake-up with no SweetSpot saved, or whose SweetSpot passed while she was still awake;
+// - next sleep: a daytime wake-up with no SweetSpot saved, or whose bedtime SweetSpot passed while she was still awake;
 // - nap wake-up: every nap (SweetSpot never calls wake-ups);
 // - morning: every night (SweetSpot is silent overnight).
 // Each pull is compared with what happened, and with how Hubert and Mia did on the same call.
@@ -67,7 +82,8 @@ export function scoreHat(entries = [], sleeps = [], timer = null, timezone = 'Am
   for (const wake of [...new Set(sleeps.map(s => toStamp(s.end)))].filter(w => w >= since && w <= +now && isDaytimeWake(w, timezone, sleeps, line))) {
     const actual = actualSleepStart(wake, sleeps, timer); if (!actual) continue;
     const sweet = toStamp(saved.get(predictionId(wake))?.sweetspot?.target);
-    const fired = !Number.isFinite(sweet) ? wake : sweet < actual - MINUTE ? sweet : null;
+    // No SweetSpot for this wake-up: from the wake-up. Its call passed while she was up: only a bedtime call counts.
+    const fired = !Number.isFinite(sweet) ? wake : sweet < actual - MINUTE && passedCallWasNight(sweet, sleeps, timezone, now) ? sweet : null;
     if (fired == null) continue;
     const replay = replayGuesses(sleeps, wake, timezone, { bottles, birthdate });
     const hat = hatGuess({ bases:[replay.purrfect?.target, replay.mia?.target], seed:hatSeed('wake', wake), firedAt:fired });
