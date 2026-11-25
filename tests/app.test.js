@@ -43,6 +43,7 @@ async function fixture(options = {}) {
     const originalStore = w.demoStore;
     w.demoStore = () => ({ ...originalStore(), update: async () => { throw new Error('The connection interrupted this save.'); } });
   }
+  if(options.failItemAddMany){const original=w.demoStore;w.demoStore=()=>({...original(),addMany:async()=>{throw new Error('Could not save this list. Try again.');}});}
   await module('checklists.js',['checklistKey','eventChecklistKey','eventChecklistGroups']);
   await module('monitor-mode.js',['initMonitor']);
   await module('household.js',['initHousehold','updateHouseholdEvents','showNotice','showView','householdItems','addHouseholdItems'],'const esc=escapeHTML;');
@@ -964,4 +965,28 @@ test('Settings → Reminders on this phone: the preview explains it; each state 
   assert.deepEqual([...w.keyBytes('AQID_-8')],[1,2,3,255,239]);
   assert.equal(w.pushSupport({ navigator:{ userAgent:'iPhone', standalone:false }, matchMedia:() => ({ matches:false }) }).reason,'ios-tab');
   assert.deepEqual(errors,[]);
+});
+
+test('Life tools add reviewed groceries, reuse a checklist, and postpone with Undo',async t=>{
+ const {dom,w,doc,errors}=await fixture();t.after(()=>dom.window.close());
+ doc.getElementById('bulkGroceries').click();doc.getElementById('bulkGroceryText').value='Oat milk\nApples\nApples';doc.getElementById('bulkGroceryText').dispatchEvent(new w.Event('input'));
+ assert.match(doc.getElementById('bulkGroceryPreview').textContent,/1 to add · 2 already listed/);
+ doc.getElementById('bulkGroceryForm').dispatchEvent(new w.Event('submit',{cancelable:true}));await settle();
+ assert.equal(w.householdItems().filter(item=>item.kind==='grocery'&&item.title==='Apples').length,1);
+ doc.getElementById('shoppingMode').click();assert.equal(doc.getElementById('shoppingMode').getAttribute('aria-pressed'),'true');
+ doc.getElementById('reuseChecklist').click();doc.getElementById('checklistSource').value='0';doc.getElementById('checklistSource').dispatchEvent(new w.Event('change'));
+ assert.equal(doc.getElementById('standaloneChecklistName').value,'Little plans copy');
+ doc.getElementById('standaloneChecklistForm').dispatchEvent(new w.Event('submit',{cancelable:true}));await settle();
+ const copy=w.householdItems().find(item=>item.list==='Little plans copy');assert.ok(copy);assert.equal(copy.completed,false);
+ const before=w.householdItems().find(item=>item.id==='d1');doc.querySelector('[data-postpone-item="d1"]').click();await settle();
+ assert.notEqual(w.householdItems().find(item=>item.id==='d1').due,before.due);doc.querySelector('#notice button').click();await settle();
+ assert.equal(w.householdItems().find(item=>item.id==='d1').due,before.due);assert.equal(errors.length,0);
+});
+
+test('bulk grocery errors remain visible and keep the draft available for retry',async t=>{
+ const {dom,w,doc}=await fixture({failItemAddMany:true});t.after(()=>dom.window.close());
+ doc.getElementById('bulkGroceries').click();doc.getElementById('bulkGroceryText').value='Bananas';doc.getElementById('bulkGroceryText').dispatchEvent(new w.Event('input'));
+ doc.getElementById('bulkGroceryForm').dispatchEvent(new w.Event('submit',{cancelable:true}));await settle();
+ assert.equal(doc.getElementById('bulkGroceryDialog').open,true);assert.match(doc.getElementById('bulkGroceryError').textContent,/Could not save/);
+ assert.equal(doc.getElementById('bulkGroceryText').value,'Bananas');assert.equal(doc.getElementById('saveBulkGroceries').disabled,false);
 });

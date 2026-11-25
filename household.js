@@ -1,13 +1,15 @@
-import { dateKey, dueLabel, completionPatch, validateItem, escapeHTML as esc, OWNERS, CATEGORIES, filterTaskItems, guessAisle } from './household-model.js';
+import { dateKey, dueLabel, completionPatch, validateItem, escapeHTML as esc, OWNERS, CATEGORIES, filterTaskItems, guessAisle, groceryBatch, postponeItemPatch } from './household-model.js';
 import { eventsOnDay, localDate, eventEnd } from './calendar-model.js';
 import { renderHTML } from './dom.js';
 import { eventChecklistGroups, eventChecklistKey } from './checklists.js';
+import { calendarClashes } from './event-planning.js';
 import { initMonitor } from './monitor-mode.js';
 const $ = id => document.getElementById(id);
 let store, items = [], events = [], currentKind = 'chore', taskFocus = 'all', openEvent, newEvent, viewChanged, onData;
 let noticeTimer, monitor, activeView = 'today';
 let getEventRecords=()=>[],saveEventChecklist,editEventChecklist,taskSource='all';
-const pendingChecklists=new Set();
+const pendingChecklists=new Set(), postponing=new Set();
+let shoppingMode=false, bulkSaving=false, reusableLists=[];
 const titles = { today: 'Today at home', calendar: 'Your calendar, all together.', life: 'Life, handled.', settings: 'Your house, your way', frankie: 'Frankie', devices: 'Smart home' };
 // Chores and groceries live together on the Life page; the old names open its tabs.
 const LIFE_TABS = { tasks: 'todos', todos: 'todos', groceries: 'groceries', meals: 'meals' };
@@ -66,7 +68,7 @@ export function initHousehold(options) {
   }));
   $('taskSearch').addEventListener('input', render);
   $('taskSource').addEventListener('change',()=>{taskSource=$('taskSource').value;render();});
-  $('newChecklist').addEventListener('click',()=>{$('standaloneChecklistForm').reset();$('standaloneChecklistError').textContent='';$('standaloneChecklistDialog').showModal();$('standaloneChecklistName').focus();});
+  $('newChecklist').addEventListener('click',()=>{$('checklistSourceField').hidden=true;$('standaloneChecklistForm').reset();$('standaloneChecklistError').textContent='';$('standaloneChecklistDialog').showModal();$('standaloneChecklistName').focus();});
   $('cancelStandaloneChecklist').addEventListener('click',()=>$('standaloneChecklistDialog').close());
   $('standaloneChecklistForm').addEventListener('submit',async event=>{
     event.preventDefault();const button=$('saveStandaloneChecklist');button.disabled=true;$('standaloneChecklistError').textContent='';
@@ -92,6 +94,31 @@ export function initHousehold(options) {
     try { await store.remove(item); $('itemDialog').close(); showNotice(`Deleted “${item.title}”.`, store.restore ? { label:'Undo', run:async () => { await store.restore(item); showNotice(`“${item.title}” is back.`); } } : undefined); }
     catch (e) { $('itemError').textContent = friendlyError(e); } finally { $('deleteItem').disabled = false; }
   });
+  $('shoppingMode').addEventListener('click',()=>{shoppingMode=!shoppingMode;render();});
+  $('bulkGroceries').addEventListener('click',()=>{$('bulkGroceryForm').reset();$('bulkGroceryError').textContent='';previewGroceries();$('bulkGroceryDialog').showModal();$('bulkGroceryText').focus();});
+  $('cancelBulkGroceries').addEventListener('click',()=>$('bulkGroceryDialog').close());
+  $('bulkGroceryText').addEventListener('input',()=>{$('bulkGroceryError').textContent='';previewGroceries();});
+  $('bulkGroceryForm').addEventListener('submit',async event=>{
+    event.preventDefault();if(bulkSaving)return;bulkSaving=true;$('saveBulkGroceries').disabled=true;
+    try {
+      const {additions,skipped}=groceryBatch($('bulkGroceryText').value,items);
+      if(!additions.length){previewGroceries();return;}
+      await store.addMany(additions);$('bulkGroceryDialog').close();showNotice(`Added ${additions.length} groceries${skipped.length?`; skipped ${skipped.length} already listed`:''}.`);
+    }catch(error){$('bulkGroceryError').textContent=friendlyError(error);}finally{bulkSaving=false;previewGroceries();}
+  });
+  $('reuseChecklist').addEventListener('click',()=>{
+    const grouped=new Map();
+    items.filter(item=>item.kind==='task').forEach(item=>{const name=item.list||'Everyday checklist';if(!grouped.has(name))grouped.set(name,[]);grouped.get(name).push(item.title);});
+    reusableLists=[...grouped].map(([name,lines])=>({name,lines})).concat(eventChecklistGroups(getEventRecords()).map(group=>({name:group.title,lines:group.items.map(item=>item.text)})));
+    const select=$('checklistSource');select.replaceChildren(new Option('Choose a checklist…',''));
+    reusableLists.forEach((list,i)=>select.add(new Option(`${list.name} · ${list.lines.length} items`,String(i))));
+    $('standaloneChecklistForm').reset();$('standaloneChecklistError').textContent='';$('checklistSourceField').hidden=false;
+    $('standaloneChecklistDialog').showModal();select.focus();
+  });
+  $('checklistSource').addEventListener('change',()=>{
+    const list=reusableLists[Number($('checklistSource').value)];if($('checklistSource').value===''||!list)return;
+    $('standaloneChecklistName').value=`${list.name} copy`.slice(0,80);$('standaloneChecklistItems').value=list.lines.join('\n');
+  });
   $('quickGroceryForm').addEventListener('submit', async e => {
     e.preventDefault(); const input = $('quickGrocery'); const title = input.value.trim(); if (!title) return;
     const button = e.currentTarget.querySelector('button'); button.disabled = true;
@@ -106,6 +133,8 @@ export function initHousehold(options) {
     try { await store.removeMany(bought); showNotice('Bought items cleared.'); } catch (e) { showNotice(friendlyError(e)); } finally { $('clearBought').disabled = false; }
   });
   document.querySelector('.house-main').addEventListener('click', e => {
+    const later=e.target.closest('[data-postpone-item]');
+    if(later){postponeItem(later.dataset.postponeItem);return;}
     const checklist=e.target.closest('[data-edit-event-checklist]');if(checklist)editEventChecklist?.(checklist.dataset.editEventChecklist);
     const remove = e.target.closest('[data-delete-item]'); if (remove) { removeGrocery(remove.dataset.deleteItem); return; }
     const edit = e.target.closest('[data-edit-item]'); if (edit) editItem(items.find(x => x.id === edit.dataset.editItem));
@@ -206,15 +235,35 @@ async function saveItem(e) {
     $('itemDialog').close(); showNotice('Saved for the household.');
   } catch (error) { $('itemError').textContent = friendlyError(error); } finally { $('saveItem').disabled = false; }
 }
+function previewGroceries() {
+  try { const result=groceryBatch($('bulkGroceryText').value,items);$('bulkGroceryPreview').textContent=`${result.additions.length} to add · ${result.skipped.length} already listed. ${result.additions.map(item=>item.title).join(' · ')}`;$('saveBulkGroceries').disabled=bulkSaving||!result.additions.length; }
+  catch(error){$('bulkGroceryPreview').textContent=error.message;$('saveBulkGroceries').disabled=true;}
+}
+async function postponeItem(id){
+  const item=items.find(row=>row.id===id);if(!item||postponing.has(id))return;
+  postponing.add(id);render();
+  try {const before={due:item.due||'',anchorDay:item.anchorDay||null};const updated=await store.update(item,postponeItemPatch(item));showNotice(`“${item.title}” moved to tomorrow.`,{label:'Undo',run:()=>store.update(updated,before)});}
+  catch(error){showNotice(friendlyError(error));}finally{postponing.delete(id);render();}
+}
+function renderClashes(){
+  const clashes=calendarClashes(events);
+  $('calendarClashCount').textContent=clashes.length ? `${clashes.length} potential clash${clashes.length===1?'':'es'} · next 7 days` : 'Check for calendar clashes · next 7 days';
+  renderHTML($('calendarClashList'),clashes.length?clashes.slice(0,12).map(({a,b})=>{
+    const when=localDate(b.start).toLocaleString([],{weekday:'short',hour:'numeric',minute:'2-digit'});
+    const link=event=>`<button class="text-link" type="button" data-open-event="${esc(event.extendedProps?.sourceId||event.id)}" data-occ="${esc(localDate(event.start).toISOString())}">${esc(event.title)}</button>`;
+    return `<div class="calendar-clash-row"><strong>${esc(when)}</strong><span>${link(a)} overlaps ${link(b)}</span></div>`;
+  }).join('')+(clashes.length>12?'<p class="muted">Showing the first 12 pairs.</p>':''):'<p class="muted">No overlapping timed plans for the same person in the loaded calendar. All-day plans are left out.</p>');
+}
 function itemHTML(item) {
+  const later=item.kind!=='grocery'&&!item.completed&&item.due&&item.due<=dateKey()?`<button class="item-postpone" type="button" data-postpone-item="${esc(item.id)}" aria-label="Move ${esc(item.title)} to tomorrow" ${postponing.has(item.id)?'disabled':''}>Tomorrow</button>`:'';
   const due = dueLabel(item); const sub = item.kind === 'grocery' ? esc(item.quantity || 'Tap to edit details') : `${item.due < dateKey() && item.due ? '<span class="overdue">' : '<span>'}${esc(due)}</span>${item.cadence !== 'none' ? `<span>↻ ${esc(item.cadence)}</span>` : ''}`;
-  return `<div class="item-row ${item.withFrankie ? 'with-frankie ' : ''}${item.completed ? 'done' : ''}"${item.kind === 'grocery' ? ` data-swipe-item="${esc(item.id)}"` : ''}><input type="checkbox" class="item-check" data-complete="${esc(item.id)}" aria-label="${esc(item.completed ? 'Uncheck' : 'Complete')} ${esc(item.title)}" ${item.completed ? 'checked' : ''} /><div class="item-copy"><button type="button" class="item-edit" data-edit-item="${esc(item.id)}">${esc(item.title)}</button><div class="item-meta">${sub}</div></div>${item.kind !== 'grocery' ? `<span class="owner-tag ${esc(item.owner)}">${esc(OWNERS[item.owner] || 'Both')}${item.withFrankie ? ' + Frankie' : ''}</span>` : `<button type="button" class="item-delete" data-delete-item="${esc(item.id)}" aria-label="Remove ${esc(item.title)}" title="Remove">×</button>`}</div>`;
+  return `<div class="item-row ${item.withFrankie ? 'with-frankie ' : ''}${item.completed ? 'done' : ''}"${item.kind === 'grocery' ? ` data-swipe-item="${esc(item.id)}"` : ''}><input type="checkbox" class="item-check" data-complete="${esc(item.id)}" aria-label="${esc(item.completed ? 'Uncheck' : 'Complete')} ${esc(item.title)}" ${item.completed ? 'checked' : ''} /><div class="item-copy"><button type="button" class="item-edit" data-edit-item="${esc(item.id)}">${esc(item.title)}</button><div class="item-meta">${sub}</div></div>${item.kind !== 'grocery' ? `<span class="owner-tag ${esc(item.owner)}">${esc(OWNERS[item.owner] || 'Both')}${item.withFrankie ? ' + Frankie' : ''}</span>` : `<button type="button" class="item-delete" data-delete-item="${esc(item.id)}" aria-label="Remove ${esc(item.title)}" title="Remove">×</button>`}${later}</div>`;
 }
 function empty(title, detail) { return `<div class="empty-state"><strong>${esc(title)}</strong>${esc(detail)}</div>`; }
 function groupsHTML(list, key, sortKeys) {
   const groups = new Map(); for (const item of list) { const name = key(item); if (!groups.has(name)) groups.set(name, []); groups.get(name).push(item); }
   const keys = [...groups.keys()]; if (sortKeys) keys.sort((a,b) => sortKeys.indexOf(a) - sortKeys.indexOf(b));
-  return keys.map(name => `<section class="list-group"><h3>${esc(name)}<span>${groups.get(name).length} item${groups.get(name).length === 1 ? '' : 's'}</span></h3>${groups.get(name).map(itemHTML).join('')}</section>`).join('');
+  return keys.map(name => shoppingMode && name==='In the basket' && groups.get(name).every(item=>item.kind==='grocery') ? `<details class="list-group shopping-basket"><summary>In the basket · ${groups.get(name).length} items</summary>${groups.get(name).map(itemHTML).join('')}</details>` : `<section class="list-group"><h3>${esc(name)}<span>${groups.get(name).length} item${groups.get(name).length === 1 ? '' : 's'}</span></h3>${groups.get(name).map(itemHTML).join('')}</section>`).join('');
 }
 function eventGroupHTML(group,visible) {
   const record=group.record,done=record.checklist.filter(item=>item.done).length,disabled=pendingChecklists.has(group.key)?'disabled':'';
@@ -223,6 +272,7 @@ function eventGroupHTML(group,visible) {
 function render() {
   if (!$('homeAgenda')) return;
   onData?.(events, items);
+  renderClashes();
   const today = dateKey(), now = new Date();
   const pending = items.filter(x => !x.completed && x.kind !== 'grocery');
   const due = pending.filter(x => !x.due || x.due <= today);
@@ -246,7 +296,7 @@ function render() {
   const doneToday = allTasks.filter(x => x.lastCompletedAt && dateKey(new Date(x.lastCompletedAt)) === today).length;
   $('tasksProgress').textContent = `${doneToday} taken care of today · ${tasks.length} shown · ${allTasks.filter(x => !x.completed).length} still to do`;
   const isChecklist=currentKind==='task';
-  $('newChecklist').hidden=!isChecklist;$('taskSourceWrap').hidden=!isChecklist;
+  $('newChecklist').hidden=!isChecklist;$('reuseChecklist').hidden=!isChecklist;$('taskSourceWrap').hidden=!isChecklist;
   $('taskGroups').hidden=isChecklist && taskSource==='events';
   renderHTML($('taskGroups'), tasks.length ? groupsHTML(tasks, x => x.completed ? 'Completed' : isChecklist ? x.list || 'Everyday checklist' : x.due && x.due < today ? 'Needs a little love' : x.due === today ? 'For today' : x.due ? 'Coming up' : 'Anytime') : isChecklist ? empty('Your own little lists.', 'Create a checklist for cleaning the shower, packing, or anything else. No event needed.') : taskFocus !== 'all' || $('taskSearch').value.trim() ? empty('No matches here.', 'Try a different timing filter or clear your search.') : empty('All clear here.', 'Add a chore to share the load.'));
   $('eventChecklistSection').hidden=!isChecklist || taskSource==='standalone';
@@ -260,6 +310,11 @@ function render() {
   const count = (id, n) => { const el = $(id); if (el) el.textContent = n ? String(n) : ''; };
   count('lifeTodoCount', due.length); count('lifeGroceryCount', groceries.filter(x => !x.completed).length);
   $('groceryCount').textContent = `${groceries.filter(x => !x.completed).length} to pick up · ${groceries.filter(x => x.completed).length} in the basket`;
+  $('life-groceries').classList.toggle('shopping-mode',shoppingMode);
+  $('shoppingMode').setAttribute('aria-pressed',String(shoppingMode));
+  $('shoppingMode').textContent=shoppingMode?'Exit shopping mode':'Start shopping';
+  const left=groceries.filter(item=>!item.completed).length;
+  $('shoppingProgress').hidden=!shoppingMode;$('shoppingProgress').textContent=left?`${left} left to pick up. Bought items are tucked away below.`:'Everything is in the basket. Nice work!';
   $('clearBought').disabled = !groceries.some(x => x.completed);
   renderHTML($('groceryGroups'), groceries.length ? groupsHTML([...groceries].sort((a,b) => Number(a.completed) - Number(b.completed) || a.title.localeCompare(b.title)), x => x.completed ? 'In the basket' : x.category && x.category !== 'Other' ? x.category : guessAisle(x.title), [...CATEGORIES, 'In the basket']) : empty('The list is ready when you are.', 'Add the first thing you need. It’ll be here on your next store run.'));
 }

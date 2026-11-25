@@ -16,3 +16,14 @@ test('a removed, hidden or read-only preferred calendar falls back to the househ
  assert.equal(preferredCalendar('apple',calendars),'apple');
  for(const key of ['readonly','hidden','deleted',null]) assert.equal(preferredCalendar(key,calendars),'household');
 });
+
+test('clashes respect adults and Frankie, exclude all-day reminders, and allow touching times',async()=>{
+ const {calendarClashes}=await import('../event-planning.js');
+ const event=(id,owner,start,end,withFrankie=false)=>({id,start:`2026-11-25T${start}:00`,end:`2026-11-25T${end}:00`,extendedProps:{owner,withFrankie}});
+ const a=event('a','hanry','10:00','11:00'),b=event('b','karena','10:30','11:30'),now=new Date('2026-11-25T09:00:00');
+ assert.equal(calendarClashes([a,b],now).length,0);
+ assert.equal(calendarClashes([{...a,extendedProps:{owner:'hanry',withFrankie:true}},{...b,extendedProps:{owner:'karena',withFrankie:true}}],now).length,1);
+ assert.equal(calendarClashes([a,event('b','both','11:00','12:00')],now).length,0);
+ assert.equal(calendarClashes([a,{...b,allDay:true}],now).length,0);
+ assert.equal(calendarClashes([a,event('b','both','10:30','11:30')],now).length,1);
+});

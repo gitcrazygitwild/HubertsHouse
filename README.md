@@ -99,3 +99,13 @@ Apple app-specific passwords are sent over HTTPS to the private backend, encrypt
 Calendar and Huckleberry functions use fractional CPU, zero minimum instances, concurrency one, and at most one instance **per function**. The Artifact Registry build repository deletes deployment images older than one day. These reduce usage; they are **not a hard dollar cap**. Firebase/Google Cloud billing budgets still need to be managed in the billing console.
 
 Weather classification and SVG geometry live in `weather-shared.js`, with an identical copy in Miateorology's `assets/weather-shared.js`. Update both together. Forecast icons describe today's daily Richmond outlook, not a live observation.
+
+### Everyday list and calendar tools
+
+- **Start shopping** on Life → Groceries enlarges checkboxes and folds bought items into an expandable basket, with the remaining count kept visible. It uses the same shared list.
+- **Paste a list** previews up to 100 grocery lines, skips repeated names and existing unchecked items, guesses aisles, and saves the additions together. Existing quantities are left intact.
+- **Reuse a checklist** on Life → To-dos → Checklists copies standalone or event checklists into a new, editable list of unchecked steps. It never resets or changes the original event/list.
+- **Tomorrow** on due or overdue chores/checklist items postpones them with Undo, preserving repeating chores' original monthly anchor. Saving and Undo use the existing version checks.
+- **Calendar clashes** on Calendar lists overlapping timed plans in the next seven local days for the same adult, shared plans, or Frankie. Click a plan to inspect it. It checks loaded events, excludes all-day reminders, and never moves plans automatically.
+
+These tools require no new services, permissions, or data migration. Preview mode keeps their writes in sample data.
