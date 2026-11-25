@@ -100,3 +100,18 @@
 .home-holiday.home-trash, .day-birthday.day-trash { background:#e9eee0; color:#4b5d3a; }
 .home-holiday.home-trash small, .day-birthday.day-trash small { opacity:.75; font-size:.85em; }
 :root[data-theme="dark"] .home-holiday.home-trash, :root[data-theme="dark"] .day-birthday.day-trash { background:#2c3a25; color:#d6e5c6; }
+
+/* Everyday list tools keep their controls in Life, and calendar clashes in Calendar. */
+.grocery-tools { flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.shopping-progress { padding: 14px 18px; border-radius: 12px; background: var(--soft, #e7eee3); font-weight: 600; }
+.shopping-mode .item-row:not(.done) { min-height: 76px; }
+.shopping-mode .item-check { width: 28px; height: 28px; flex-shrink: 0; }
+.shopping-mode .item-row.done { opacity: .55; }
+.shopping-mode #groceryGroups .item-row:not(.done) .item-edit { font-size: 18px; }
+.item-postpone { border: 1px solid var(--border, #d9dfd4); border-radius: 9px; padding: 8px; font: inherit; font-size: 11px; background: transparent; color: inherit; cursor: pointer; }
+.item-postpone:disabled { opacity: .5; cursor: wait; }
+.calendar-clashes { margin: 10px 0 16px; padding: 12px 16px; border: 1px solid var(--border, #d9dfd4); border-radius: 12px; }
+.calendar-clashes summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+.calendar-clash-row { display: grid; grid-template-columns: 110px 1fr; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border, #d9dfd4); font-size: 13px; }
+#bulkGroceryPreview { overflow-wrap: anywhere; max-height: 140px; overflow-y: auto; }
+@media(max-width:600px) { .calendar-clash-row { grid-template-columns: 1fr; gap: 4px; } .item-postpone { font-size: 10px; padding: 7px 5px; } }

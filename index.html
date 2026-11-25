@@ -183,7 +183,8 @@
               <div id="calendarGrid"></div>
               <div class="calendar-caption"><span id="calendarRangeSummary" role="status"></span><span>Drag across days to make a plan <span aria-hidden="true">→</span></span></div>
             </div>
-            <div class="calendar-search-area">
+            <details class="calendar-clashes"><summary id="calendarClashCount">Check for calendar clashes · next 7 days</summary><div id="calendarClashList"></div></details>
+              <div class="calendar-search-area">
     <div class="search-row-wrap search-wrap">
       <div class="search-row">
         <div class="search-shell">
@@ -328,7 +329,7 @@
       <section id="view-life" class="house-view hidden" aria-label="Life">
         <div class="life-tabs" role="tablist" aria-label="Life"><button type="button" role="tab" id="lifeTab-todos" data-life-tab="todos" aria-controls="life-todos" aria-selected="true">To-dos<span id="lifeTodoCount" class="life-count"></span></button><button type="button" role="tab" id="lifeTab-groceries" data-life-tab="groceries" aria-controls="life-groceries" aria-selected="false">Groceries<span id="lifeGroceryCount" class="life-count"></span></button><button type="button" role="tab" id="lifeTab-meals" data-life-tab="meals" aria-controls="life-meals" aria-selected="false">Meals<span id="lifeMealCount" class="life-count"></span></button></div>
         <div id="life-todos" class="life-panel" role="tabpanel" aria-labelledby="lifeTab-todos">
-        <div class="view-intro"><div><h2>A little help goes a long way.</h2><p>Your chores, your own checklists, and the little things behind every plan.</p></div><div class="list-create-actions"><button id="newChecklist" type="button" class="btn btn-primary" hidden>＋ New checklist</button><button type="button" class="btn" data-add-kind="chore">＋ Add a chore</button></div></div>
+        <div class="view-intro"><div><h2>A little help goes a long way.</h2><p>Your chores, your own checklists, and the little things behind every plan.</p></div><div class="list-create-actions"><button id="reuseChecklist" type="button" class="btn" hidden>Reuse a checklist</button><button id="newChecklist" type="button" class="btn btn-primary" hidden>＋ New checklist</button><button type="button" class="btn" data-add-kind="chore">＋ Add a chore</button></div></div>
         <div class="list-toolbar"><div class="segmented" role="group" aria-label="List type"><button type="button" data-kind="chore" class="active">Chores</button><button type="button" data-kind="task">Checklists</button></div><label class="inline-field">For <select id="houseOwner"><option value="all">Everyone</option><option value="hanry">hanry</option><option value="karena">Karena</option><option value="both">Both</option></select></label><label class="check"><input id="showCompleted" type="checkbox" /> Show completed</label></div>
         <div class="task-focus-bar"><div class="task-focus-options" role="group" aria-label="Task timing"><button type="button" data-task-focus="all" aria-pressed="true">All</button><button type="button" data-task-focus="today" aria-pressed="false">Today</button><button type="button" data-task-focus="overdue" aria-pressed="false">Overdue</button><button type="button" data-task-focus="anytime" aria-pressed="false">Anytime</button></div><label class="task-search"><span class="sr-only">Search chores and checklists</span><input id="taskSearch" type="search" placeholder="Find a chore or checklist…" autocomplete="off" /></label><button id="resetTaskFilters" type="button" class="text-link" hidden>Reset</button></div>
         <label id="taskSourceWrap" class="inline-field" hidden>Show <select id="taskSource"><option value="all">All checklists</option><option value="standalone">Standalone lists</option><option value="events">Event checklists</option></select></label>
@@ -337,6 +338,7 @@
         </div>
         <div id="life-groceries" class="life-panel" role="tabpanel" aria-labelledby="lifeTab-groceries" hidden>
         <div class="view-intro"><div><h2>Something good in the making.</h2><p>One shared list, from the kitchen to the store.</p></div><button type="button" class="btn btn-primary" data-add-kind="grocery">＋ Add groceries</button></div>
+        <div class="list-toolbar grocery-tools"><button id="shoppingMode" type="button" class="btn" aria-pressed="false">Start shopping</button><button id="bulkGroceries" type="button" class="btn">Paste a list</button></div><p id="shoppingProgress" class="shopping-progress" role="status" hidden></p>
         <form id="quickGroceryForm" class="quick-add"><label class="sr-only" for="quickGrocery">Add a grocery item</label><span aria-hidden="true">＋</span><input id="quickGrocery" placeholder="We need… milk, bread, or something nice" maxlength="180" required /><button class="btn btn-primary" type="submit">Add to list</button></form>
         <div class="list-toolbar"><span id="groceryCount" class="muted"></span><div class="spacer"></div><button id="clearBought" type="button" class="btn">Clear bought items</button></div><div id="groceryGroups"></div>
         </div>
@@ -609,9 +611,14 @@
     </div>
   </div>
 
+  <dialog id="bulkGroceryDialog" class="item-dialog" aria-labelledby="bulkGroceryTitle"><form id="bulkGroceryForm">
+    <span class="eyebrow">ONE LIST, LESS TYPING</span><h2 id="bulkGroceryTitle">Paste your groceries.</h2><p class="muted">One item per line. We’ll skip repeats and anything already on your unchecked list.</p>
+    <label class="field"><span>Up to 100 items</span><textarea id="bulkGroceryText" rows="7" maxlength="20000" required placeholder="Milk&#10;Bananas&#10;Cat treats"></textarea></label>
+    <p id="bulkGroceryError" class="form-error" role="alert"></p><p id="bulkGroceryPreview" class="tiny" role="status"></p><div class="modal-actions"><button id="cancelBulkGroceries" class="btn" type="button">Cancel</button><button id="saveBulkGroceries" class="btn btn-primary" type="submit">Add items</button></div>
+  </form></dialog>
   <dialog id="standaloneChecklistDialog" class="item-dialog" aria-labelledby="standaloneChecklistTitle"><form id="standaloneChecklistForm">
     <span class="eyebrow">SMALL STEPS, SHARED</span><h2 id="standaloneChecklistTitle">A list of its own.</h2><p class="tiny muted">No calendar event needed. Add one step per line.</p>
-    <label class="field"><span>Checklist name</span><input id="standaloneChecklistName" placeholder="Clean shower" maxlength="80" required /></label>
+    <label class="field" id="checklistSourceField" hidden><span>Start from an existing checklist</span><select id="checklistSource"></select><small>Creates fresh unchecked items. Your original list stays as it is.</small></label><label class="field"><span>Checklist name</span><input id="standaloneChecklistName" placeholder="Clean shower" maxlength="80" required /></label>
     <label class="field"><span>Items · one per line</span><textarea id="standaloneChecklistItems" rows="5" placeholder="Spray the tiles&#10;Scrub the grout&#10;Rinse and dry" required></textarea></label>
     <div class="row"><label class="field"><span>Who’s on it?</span><select id="standaloneChecklistOwner"><option value="both">Together</option><option value="hanry">hanry</option><option value="karena">Karena</option></select></label><label class="field"><span>Due · optional</span><input id="standaloneChecklistDue" type="date" /></label></div>
     <p id="standaloneChecklistError" class="form-error" role="alert"></p><div class="modal-actions"><button id="cancelStandaloneChecklist" type="button" class="btn">Cancel</button><button id="saveStandaloneChecklist" type="submit" class="btn btn-primary">Create checklist</button></div>

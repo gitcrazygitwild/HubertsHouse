@@ -79,3 +79,23 @@ export function guessAisle(title = '') {
   const text = String(title).toLowerCase();
   return AISLES.find(([, pattern]) => pattern.test(text))?.[0] || 'Other';
 }
+
+// Review pasted lines before adding; an existing unchecked item counts as already listed.
+export function groceryBatch(text, items = []) {
+  const lines=String(text).split(/\r?\n/).map(line=>line.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, '').trim()).filter(Boolean);
+  if(lines.length>100)throw new Error('Paste up to 100 items at a time.');
+  const key=text=>text.normalize('NFKC').replace(/\s+/g,' ').trim().toLocaleLowerCase();
+  const seen=new Set(items.filter(item=>item.kind==='grocery'&&!item.completed).map(item=>key(item.title)));
+  const additions=[],skipped=[];
+  for(const title of lines){
+    if(title.length>180)throw new Error('Keep each item under 180 characters.');
+    if(seen.has(key(title))){skipped.push(title);continue;}
+    seen.add(key(title)); additions.push(validateItem({kind:'grocery',title,owner:'both',due:'',cadence:'none',category:guessAisle(title),quantity:'',list:'',completed:false}));
+  }
+  return {additions,skipped};
+}
+export function postponeItemPatch(item, now = new Date()) {
+  const tomorrow=new Date(now);tomorrow.setDate(tomorrow.getDate()+1);
+  // Preserve the original monthly anchor and do not mark the chore complete.
+  return {due:dateKey(tomorrow),anchorDay:item.anchorDay || (item.kind==='chore'&&item.cadence==='monthly'&&item.due ? parseDay(item.due).getDate() : null)};
+}
