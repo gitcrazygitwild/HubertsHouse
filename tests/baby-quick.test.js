@@ -35,7 +35,7 @@ test('diapers and sleep', () => {
 test('calendar plans with Frankie stay calendar plans', () => {
   assert.equal(parseBabyLog('Frankie swim class Tue 3pm', now), null);
   assert.equal(parseBabyLog('Pediatrician Tue 3pm with Frankie', now), null);
-  assert.equal(parseBabyLog('bottle 4oz', now), null); // must name Frankie
+  assert.equal(parseBabyLog('bottle 4oz', now).kind, 'bottle'); // every word is log vocabulary, so no name needed
   assert.ok(parseQuickAdd('Frankie swim class Tue 3pm', now));
 });
 
@@ -43,4 +43,27 @@ test('previews read naturally', () => {
   assert.match(describeBabyLog(parseBabyLog('frankie bottle 10:30AM 4oz formula', now), 'en-US'), /🍼 Bottle for Frankie · 10:30 AM · 4 oz Formula/);
   assert.match(describeBabyLog(parseBabyLog('frankie bottle', now), 'en-US'), /same as last bottle/);
   assert.match(describeBabyLog(parseBabyLog('frankie nap 1-2:15pm', now), 'en-US'), /Finished sleep for Frankie · 1:00 PM – 2:15 PM · 75 min/);
+});
+
+test('quick Frankie logs without naming her: amounts, diapers, naps, down and up — but plans stay plans', async () => {
+  const { parseBabyLog } = await import('../quick-add.js');
+  const now = new Date(2026, 10, 27, 14, 30), hm = d => [d.getHours(), d.getMinutes()];
+  const log = text => parseBabyLog(text, now);
+  assert.deepEqual([log('4oz').kind, log('4oz').amount], ['bottle', 4]);
+  assert.deepEqual([log('fed 3.5 at 1:10').amount, ...hm(log('fed 3.5 at 1:10').start)], [3.5, 13, 10]);
+  assert.deepEqual([log('ate 4oz 20 min ago').amount, ...hm(log('ate 4oz 20 min ago').start)], [4, 14, 10]);
+  assert.equal(log('she drank 3').amount, 3);
+  assert.equal(log('4 oz formula').bottleType, 'Formula');
+  assert.equal(log('wet').mode, 'pee'); assert.equal(log('poop').mode, 'poo'); assert.equal(log('pee and poop').mode, 'both');
+  assert.deepEqual(hm(log('wet diaper 2:05').start), [14, 5]);
+  const nap = log('nap 12:30-1:45'); assert.equal(nap.kind, 'sleep-log'); assert.deepEqual([...hm(nap.start), ...hm(nap.end)], [12, 30, 13, 45]);
+  assert.equal(log('napped 45 min').kind, 'sleep-log');
+  assert.deepEqual([log('down at 2:10').kind, ...hm(log('down at 2:10').start)], ['sleep-start', 14, 10]);
+  assert.equal(log("she's down").kind, 'sleep-start'); assert.equal(log('asleep').kind, 'sleep-start');
+  assert.deepEqual([log('up 2:20').kind, ...hm(log('up 2:20').start)], ['sleep-stop', 14, 20]);
+  assert.equal(log("she's up").kind, 'sleep-stop'); assert.equal(log('woke up').kind, 'sleep-stop');
+  assert.equal(log('pumped left 2 right 2.5').kind, 'pump');
+  // Anything else in the text means it's a plan (or nothing).
+  for (const plan of ['Feed Hubert 9-9:05', 'Nap time Sat 3pm', 'dinner 7pm', 'pick up from daycare 3pm', 'Frankie pick up from daycare 3pm', 'up early meeting 7am', 'down payment tue', 'wet paint on porch', 'Frankie swim class Tue 3pm'])
+    assert.equal(log(plan), null, plan);
 });

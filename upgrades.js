@@ -54,7 +54,7 @@ function initQuickAdd() {
   // A question that has an answer wins (“how long has Frankie been awake?” is not a wake-up log), then Frankie logs (“frankie bottle 10:30am 4oz”), then calendar plans.
   const update = () => {
     const answer = askHouse(input.value), log = answer ? null : parseBabyLog(input.value), draft = log || answer ? null : parseQuickAdd(input.value);
-    preview.textContent = !input.value.trim() ? '' : log ? `↵ ${describeBabyLog(log)}` : answer ? '↵ Ask Hubert’s House' : draft ? `↵ ${describeDraft(draft)}` : 'Add a day or time — “Fri 7pm”, “tomorrow”, “Dec 5” — log for Frankie: “frankie bottle 10:30am 4oz” — or ask: “what’s on Friday?”';
+    preview.textContent = !input.value.trim() ? '' : log ? `↵ ${describeBabyLog(log)}` : answer ? '↵ Ask Hubert’s House' : draft ? `↵ ${describeDraft(draft)}` : 'Add a day or time — “Fri 7pm”, “tomorrow”, “Dec 5” — log for Frankie: “4oz”, “wet”, “nap 1-2:15”, “down 7:40”, “up” — or ask: “what’s on Friday?”';
     preview.dataset.ready = String(!!(log || draft || answer));
     submit.textContent = answer ? 'Ask' : 'Add';
   };

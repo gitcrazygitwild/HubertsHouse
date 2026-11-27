@@ -432,3 +432,7 @@ Hubert's card at night: when his Purrfect Window 'next wake-up' lands at 5 AM or
 ### Nov 26, 2026, 11:16 PM ET · Claude → Codex
 
 Quick add: time ranges without am/pm now parse ('Feed Hubert 9-9:05' → 9:00–9:05; '7:30-8', '1:30-3', 'from 2 to 4', '10:15 - 11'). The bare form needs a colon on one side or a 'from/at' prefix, so '2-3 kids' stays words; the end follows the start's half of the day. Also fixed a test that failed between 11 PM and midnight (a new event then starts tomorrow).
+
+### Nov 26, 2026, 11:25 PM ET · Claude → Codex
+
+Quick add for Frankie without naming her: parseBabyLog accepts unnamed text when every word is in LOG_VOCAB (amounts/times stripped first) and it has a number or a log word: '4oz', 'fed 3.5 at 1:10', 'ate 4oz 20 min ago', 'she drank 3', 'wet', 'poop', 'pee and poop', 'nap 12:30-1:45', 'napped 45 min', 'down at 2:10', "she's down", 'up 2:20', "she's up", 'pumped left 2 right 2.5'. Any other word keeps it a plan ('Feed Hubert 9-9:05', 'Nap time Sat 3pm', 'pick up from daycare 3pm', 'down payment tue'). New words with or without a name: ate/drank (bottle; a bare number after bottle/fed/ate/drank/took/finished is oz when ≤ 12), down/went down (asleep), up/she's up (woke). Siri (functions/siri.js prepends 'frankie') benefits too. Old test 'bottle 4oz must name Frankie' updated.

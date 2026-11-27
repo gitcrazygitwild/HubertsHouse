@@ -103,7 +103,7 @@ const WHO = /\b(frankie|frankies|frankie's|baby|karena|karena's)\b|🍼/i;
 // Pumping: "pumped", "pump", "pumping", but not "a bottle of pumped milk" (that's a bottle).
 const PUMP = /\bpump(?:ed|ing|s)?\b/i, FEED = /\b(bottles?|fed|feeds?|feeding|drank|drink)\b|🍼/i;
 const SIDE_AMOUNT = '(\\d+(?:\\.\\d+)?)\\s*(oz|ounces?|ml)?';
-const LOG_WORDS = { bottle:/\b(bottles?|fed|feeds?|feeding|ounces?|oz|ml)\b|\d\s?(oz|ml)\b|🍼/i, diaper:/\b(diapers?|nappy|changed?|poo+p?y?|pee|wet|dirty|dry|blowout)\b/i, sleep:/\b(nap|napped|naps|slept|sleep|sleeping|asleep|woke|wakes?|awake|down for)\b/i };
+const LOG_WORDS = { bottle:/\b(bottles?|fed|feeds?|feeding|ounces?|oz|ml|ate|drank)\b|\d\s?(oz|ml)\b|🍼/i, diaper:/\b(diapers?|nappy|changed?|poo+p?y?|pee|wet|dirty|dry|blowout)\b/i, sleep:/\b(nap|napped|naps|napping|slept|sleep|sleeping|asleep|woke|wakes?|awake|down for|went down)\b|\b(?:she'?s|is|was|got) (?:up|down)\b|^\s*(?:frankie|baby)?\s*(?:up|down)\b/i };
 const MILK = [[/\bformula\b/i, 'Formula'], [/\b(breast ?milk|breast|bm|pumped|expressed)\b/i, 'Breast Milk'], [/\bcow'?s?( milk)?\b/i, 'Cow Milk'], [/\bsoy\b/i, 'Soy Milk']];
 // Logs are about the past: pick the most recent matching moment at or before
 // now (+5 min of slack). Without am/pm, both 3:15am and 3:15pm are candidates.
@@ -117,9 +117,20 @@ function clockToDate(hour, minute, meridiem, now) {
   const best = candidates.sort((x, y) => y - x)[0];
   return +best > +now ? new Date(now) : best;
 }
+// Without a name ("4oz", "wet", "nap 1:30-3", "down 7:40", "up 6:30"), text is a Frankie log
+// only when every word is log vocabulary, so "Feed Hubert 9-9:05" or "Nap time Sat 3pm" stay plans.
+const LOG_VOCAB = new Set(('frankie frankies baby she shes her is was just now ago had has a an the at of some and plus with from to until til for on in '
+  + 'bottle bottles fed feed feeding ate drank drink took finished oz ounce ounces ml formula breast breastmilk milk pumped expressed bm '
+  + 'diaper diapers nappy change changed poop poo poopy pooped pee peed wet dirty dry blowout both '
+  + 'nap napped naps napping slept sleep sleeping asleep fell went down woke wake wakes awake up got since '
+  + 'am pm p min mins minute minutes hr hrs hour hours h m left right l r side pump pumping karena karenas last same as another').split(' '));
 export function parseBabyLog(text, now = new Date()) {
-  const raw = String(text || '');
-  if (!WHO.test(raw)) return null;
+  const raw = String(text || ''), named = WHO.test(raw);
+  if (!named) {
+    const words = raw.toLowerCase().replace(/[’']/g, '').replace(/\d+(?:\.\d+)?(?:oz|ml|am|pm|a|p|m|h)?/g, ' ').match(/[a-z]+/g) || [];
+    if ((!words.length && !/\d\s?(oz|ml)\b/i.test(raw)) || !words.every(word => LOG_VOCAB.has(word))) return null;
+    if (!/\d|\b(bottle|fed|feed|ate|drank|diaper|nappy|poo+p?y?|pooped|pee|peed|wet|dirty|dry|blowout|nap|napped|slept|asleep|woke|awake|down|up|pump(?:ed|ing)?)\b/i.test(raw)) return null;
+  }
   const kind = PUMP.test(raw) && !FEED.test(raw) ? 'pump' : LOG_WORDS.diaper.test(raw) && !LOG_WORDS.bottle.test(raw) ? 'diaper' : LOG_WORDS.bottle.test(raw) ? 'bottle' : LOG_WORDS.diaper.test(raw) ? 'diaper' : LOG_WORDS.sleep.test(raw) ? 'sleep' : null;
   if (!kind) return null;
   let rest = ` ${raw} `;
@@ -152,7 +163,7 @@ export function parseBabyLog(text, now = new Date()) {
   if (start) result.start = start;
   if (kind === 'bottle') {
     const milk = MILK.find(([pattern]) => pattern.test(raw)); if (milk) result.bottleType = milk[1];
-    if (!amount && (match = rest.match(/\bbottle (?:of )?(\d+(?:\.\d+)?)\b/i)) && Number(match[1]) <= 12) { result.amount = Number(match[1]); result.units = 'oz'; }
+    if (!amount && (match = rest.match(/\b(?:bottle|fed|ate|drank|took|finished)(?: her)? (?:of )?(\d+(?:\.\d+)?)\b/i)) && Number(match[1]) <= 12) { result.amount = Number(match[1]); result.units = 'oz'; }
   }
   if (kind === 'diaper') {
     const dirty = /\b(poo+p?y?|dirty|blowout|bm)\b/i.test(raw), wet = /\b(pee|wet)\b/i.test(raw);
@@ -161,7 +172,7 @@ export function parseBabyLog(text, now = new Date()) {
   if (kind === 'sleep') {
     if (end) { result.kind = 'sleep-log'; result.end = end; }
     else if (minutes) { result.kind = 'sleep-log'; if (start) result.end = new Date(+result.start + minutes * 60000); else { result.end = new Date(now); result.start = new Date(+now - minutes * 60000); } }
-    else if (/\b(woke|wakes?|awake|up from)\b/i.test(raw)) result.kind = 'sleep-stop';
+    else if (/\b(woke|wakes?|awake|up from)\b|\b(?:she'?s|is|was|got) up\b|^\s*(?:frankie|baby)?\s*up\b/i.test(raw)) result.kind = 'sleep-stop';
     else if (/\b(asleep|down for|went down|sleeping|nap(?:ping)? now|fell)\b/i.test(raw) || !start) result.kind = 'sleep-start';
     else result.kind = 'sleep-start';
   }
