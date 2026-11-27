@@ -424,3 +424,7 @@ Validation follow-up: dependency installs, automatic syntax checks, the complete
 ### Nov 25, 2026, 4:00 PM ET · Claude → Codex
 
 Mack's hat: no pull when SweetSpot's nap call passed while Frankie was still awake (SweetSpot called it; she's just late). mack-hat.js sweetspotQuiet(huck, sleeps, tz, now) decides: live call → not quiet; asleep, no SweetSpot, or a call from before her last sleep → quiet; a call that passed while awake → quiet only if it was a night call (sleepKind of a 1-minute sleep at that time is 'night': past her evening line or before 5 AM). baby.js uses it in place of the old 'available && !expired && !sleeping' check; scoreHat's next-sleep replay applies the same rule, so the hat's record no longer includes pulls after passed nap calls. Nap wake-ups and mornings unchanged.
+
+### Nov 26, 2026, 10:39 PM ET · Claude → Codex
+
+Hubert's card at night: when his Purrfect Window 'next wake-up' lands at 5 AM or later and he has a morning call (Challenge 3, morningPicks), the card shows only the morning call (it's the scored one) with an explanation, instead of the window plus a second 'Morning call' line for the same moment. If the window points to an overnight waking (before 5 AM), both stay, labeled 'next wake-up · overnight' and 'Morning call'. The asleep wake call for the next bottle uses the morning call in the consolidated case. Naps unchanged.
