@@ -138,3 +138,17 @@ test('Recent logs load when opened, edit through the log window and delete after
   assert.deepEqual({...calls.filter(call => call.action === 'change').at(-1).entry}, {change:'delete',kind:'diaper',id:'d1',version:'6.000000001'});
   assert.ok(notices.includes('Deleted from Huckleberry.'));
 });
+
+test('asleep for the night: Hubert shows one morning guess, not a window and a different morning call', async t => {
+  const tz = process.env.TZ; process.env.TZ = 'America/New_York'; t.after(() => { process.env.TZ = tz; });
+  const DAY = 86400000, bed = new Date(); bed.setHours(21, 19, 0, 0); if (+bed > Date.now()) bed.setDate(bed.getDate() - 1);
+  const sleeps = [];
+  for (let d = 14; d >= 1; d--) { const start = +bed - d * DAY - 4 * 60000; sleeps.push({ start:new Date(start).toISOString(), end:new Date(start + 11 * 3600000).toISOString() }); }
+  const night = { ...snapshot, checkedAt:new Date().toISOString(), sleeps, bottles:[], timer:{ active:true, start:bed.toISOString() } };
+  const {dom,doc} = await fixture(async data => data.action === 'status' ? connection : data.action === 'snapshot' ? night : {}); t.after(() => dom.window.close());
+  await settle(); await settle();
+  const card = doc.querySelector('#babyPredictions .purr-nap');
+  assert.match(card.textContent, /morning wake-up/);
+  assert.doesNotMatch(card.textContent, /Morning call:/, 'one guess for the morning, not two');
+  assert.match(card.textContent, /counts in the morning wake-up challenge/);
+});
