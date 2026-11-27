@@ -50,9 +50,18 @@ export function parseQuickAdd(text, now = new Date()) {
   // Time and duration
   let start = null, end = null;
   const range = take(/\b(?:from |at )?(\d{1,2})(?::(\d{2}))? ?(am|pm|a|p)? ?(?:-|–|to|until|til) ?(\d{1,2})(?::(\d{2}))? ?(am|pm|a|p)\b/i);
+  // A range without am/pm ("9-9:05", "7:30-8", "from 2 to 4"): needs a colon or a "from/at" so a plain "2-3" isn't read as a time.
+  const bare = range ? null : take(/(?:\b(?:from|at) (\d{1,2})(?::(\d{2}))?|\b(\d{1,2})(?::(\d{2}))?(?=\s*(?:-|–|to|until|til)\s*\d{1,2}:\d{2})|\b(\d{1,2}):(\d{2}))\s*(?:-|–|to|until|til)\s*(\d{1,2})(?::(\d{2}))?\b/i);
   if (range) {
     const endTime = to24(range[4], range[5], range[6], context), startTime = to24(range[1], range[2], range[3] || (Number(range[1]) <= Number(range[4]) || Number(range[1]) === 12 ? range[6] : null), context);
     start = startTime; end = endTime;
+  } else if (bare) {
+    const h1 = bare[1] ?? bare[3] ?? bare[5], m1 = bare[2] ?? bare[4] ?? bare[6];
+    start = to24(h1, m1, null, context); end = to24(bare[7], bare[8], null, context);
+    // The end follows the start's half of the day: "9-9:05" is 9:00–9:05, "11-1" is 11–1.
+    const s0 = start.h * 60 + start.m; let e0 = end.h * 60 + end.m;
+    if (e0 <= s0 && Number(bare[7]) < 12 && (end.h + 12) * 60 + end.m > s0 && end.h + 12 < 24) end = { h:end.h + 12, m:end.m };
+    else if (e0 - s0 > 12 * 60 && end.h >= 12) end = { h:end.h - 12, m:end.m };
   } else if ((match = take(/\b(?:at |@ ?)?(\d{1,2})(?::(\d{2}))? ?(am|pm|a\.m\.|p\.m\.|a|p)\b/i)) || (match = take(/\b(?:at |@ ?)(\d{1,2})(?::(\d{2}))?\b/i)) || (match = take(/\b(\d{1,2}):(\d{2})\b/))) {
     start = to24(match[1], match[2], match[3]?.replaceAll('.', '').toLowerCase(), context);
   } else if ((match = take(/\b(?:at )?(noon|midnight)\b/i))) start = { h:PARTS[match[1].toLowerCase()], m:0 };

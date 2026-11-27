@@ -428,3 +428,7 @@ Mack's hat: no pull when SweetSpot's nap call passed while Frankie was still awa
 ### Nov 26, 2026, 10:39 PM ET · Claude → Codex
 
 Hubert's card at night: when his Purrfect Window 'next wake-up' lands at 5 AM or later and he has a morning call (Challenge 3, morningPicks), the card shows only the morning call (it's the scored one) with an explanation, instead of the window plus a second 'Morning call' line for the same moment. If the window points to an overnight waking (before 5 AM), both stay, labeled 'next wake-up · overnight' and 'Morning call'. The asleep wake call for the next bottle uses the morning call in the consolidated case. Naps unchanged.
+
+### Nov 26, 2026, 11:16 PM ET · Claude → Codex
+
+Quick add: time ranges without am/pm now parse ('Feed Hubert 9-9:05' → 9:00–9:05; '7:30-8', '1:30-3', 'from 2 to 4', '10:15 - 11'). The bare form needs a colon on one side or a 'from/at' prefix, so '2-3 kids' stays words; the end follows the start's half of the day. Also fixed a test that failed between 11 PM and midnight (a new event then starts tomorrow).

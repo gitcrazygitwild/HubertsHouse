@@ -34,3 +34,18 @@ test('dates in several formats, all-day plans and next week', () => {
 test('the preview reads naturally', () => {
   assert.match(describeDraft(parseQuickAdd('Swim class sat 9:30am with Frankie and Karena', now), 'en-US'), /Swim class · Sat, Nov 21 · 9:30 AM – 10:30 AM · Karena \+ Frankie/);
 });
+
+test('time ranges without am/pm: "Feed Hubert 9-9:05" is 9:00–9:05, not 9:05 with "9-" left in the title', () => {
+  const late = new Date(2026, 10, 26, 23, 9); // Thursday 11:09 PM
+  const end = d => [d.end.getHours(), d.end.getMinutes()];
+  const feed = parseQuickAdd('Feed Hubert 9-9:05', late);
+  assert.equal(feed.title, 'Feed Hubert'); assert.deepEqual(at(feed), [11, 27, 9, 0]); assert.deepEqual(end(feed), [9, 5]);
+  const call = parseQuickAdd('call mom 7:30-8', late); assert.equal(call.title, 'Call mom'); assert.deepEqual([at(call)[2], at(call)[3], ...end(call)], [7, 30, 8, 0]);
+  const nap = parseQuickAdd('nap 1:30-3', late); assert.deepEqual([at(nap)[2], at(nap)[3], ...end(nap)], [13, 30, 15, 0]);
+  const soccer = parseQuickAdd('soccer from 2 to 4', late); assert.deepEqual([at(soccer)[2], ...end(soccer)], [14, 16, 0]);
+  const vet = parseQuickAdd('vet 10:15 - 11', late); assert.equal(vet.title, 'Vet'); assert.deepEqual([at(vet)[2], at(vet)[3], ...end(vet)], [10, 15, 11, 0]);
+  // A plain "2-3" with no colon or "from" stays words.
+  assert.equal(parseQuickAdd('2-3 kids party sat', late).title, '2-3 kids party');
+  // The am/pm forms still work.
+  const dinner = parseQuickAdd('dinner fri 7-9pm', late); assert.deepEqual([at(dinner)[2], ...end(dinner)], [19, 21, 0]);
+});
