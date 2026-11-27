@@ -800,7 +800,9 @@ test('event window: day chips, a clock to drag, the extras folded away', async t
   doc.getElementById('quickEvent').click(); await settle();
   const days=[...doc.querySelectorAll('#eventDays [data-event-date]')];
   assert.equal(days.length, 14); assert.equal(days[0].textContent, 'Today'); assert.equal(days[1].textContent, 'Tomorrow');
-  assert.equal(days[0].getAttribute('aria-pressed'), 'true', 'a new event starts today');
+  // A new event starts at the next full hour: today, or tomorrow when that's after 11 PM.
+  const startsTomorrow=new Date().getHours()===23;
+  assert.equal(days[startsTomorrow ? 1 : 0].getAttribute('aria-pressed'), 'true', 'a new event starts at the next hour');
   days[2].click(); await settle();
   const picked=new Date(); picked.setDate(picked.getDate()+2);
   assert.equal(doc.getElementById('evtStartDate').value, `${picked.getFullYear()}-${String(picked.getMonth()+1).padStart(2,'0')}-${String(picked.getDate()).padStart(2,'0')}`);
